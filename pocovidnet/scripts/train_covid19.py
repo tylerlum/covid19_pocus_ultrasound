@@ -205,11 +205,10 @@ print(f'Model summary {model.summary()}')
 
 # train the head of the network
 print('Starting training model...')
-H = model.fit_generator(
+H = model.fit(
     trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE),
-    steps_per_epoch=len(trainX) // BATCH_SIZE,
+    batch_size=BATCH_SIZE,
     validation_data=(testX, testY),
-    validation_steps=len(testX) // BATCH_SIZE,
     epochs=EPOCHS,
     callbacks=[earlyStopping, mcp_save, reduce_lr_loss, metrics]
 )
@@ -245,13 +244,12 @@ print(f'Saving COVID-19 detector model on {MODEL_DIR} data...')
 model.save(os.path.join(MODEL_DIR, 'last_epoch'), save_format='h5')
 
 # plot the training loss and accuracy
-N = EPOCHS
 plt.style.use('ggplot')
 plt.figure()
-plt.plot(np.arange(0, N), H.history['loss'], label='train_loss')
-plt.plot(np.arange(0, N), H.history['val_loss'], label='val_loss')
-plt.plot(np.arange(0, N), H.history['accuracy'], label='train_acc')
-plt.plot(np.arange(0, N), H.history['val_accuracy'], label='val_acc')
+plt.plot(np.arange(0, len(H.history['loss'])), H.history['loss'], label='train_loss')
+plt.plot(np.arange(0, len(H.history['val_loss'])), H.history['val_loss'], label='val_loss')
+plt.plot(np.arange(0, len(H.history['accuracy'])), H.history['accuracy'], label='train_acc')
+plt.plot(np.arange(0, len(H.history['val_accuracy'])), H.history['val_accuracy'], label='val_acc')
 plt.title('Training Loss and Accuracy on COVID-19 Dataset')
 plt.xlabel('Epoch #')
 plt.ylabel('Loss/Accuracy')
