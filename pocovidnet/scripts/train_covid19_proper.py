@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from imutils import paths
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
 from tensorflow.keras.callbacks import (
     EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
@@ -248,12 +248,22 @@ print(
     )
 )
 
+report = classification_report(
+    testY.argmax(axis=1), predIdxs, target_names=lb.classes_, output_dict=True
+)
+reportDf = pd.DataFrame(report).transpose()
+reportDf.to_csv(os.path.join(MODEL_DIR, 'report.csv'))
+
 # compute the confusion matrix and and use it to derive the raw
 # accuracy, sensitivity, and specificity
 print('confusion matrix:')
 cm = confusion_matrix(testY.argmax(axis=1), predIdxs)
 # show the confusion matrix, accuracy, sensitivity, and specificity
 print(cm)
+
+cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=lb.classes_)
+cmDisplay.plot()
+plt.savefig(os.path.join(MODEL_DIR, 'confusion_matrix.png'))
 
 # serialize the model to disk
 print(f'Saving COVID-19 detector model on {MODEL_DIR} data...')
