@@ -231,39 +231,53 @@ H = model.fit(
 
 # make predictions on the testing set
 print('Evaluating network...')
-predIdxs = model.predict(testX, batch_size=BATCH_SIZE)
+validationPredIdxs = model.predict(validationX, batch_size=BATCH_SIZE)
+testPredIdxs = model.predict(testX, batch_size=BATCH_SIZE)
 
 # CSV: save predictions for inspection:
-df = pd.DataFrame(predIdxs)
-df.to_csv(os.path.join(MODEL_DIR, "_preds_last_epoch.csv"))
+def savePredictionsToCSV(predIdxs, csvFilename, directory=MODEL_DIR):
+    df = pd.DataFrame(predIdxs)
+    df.to_csv(os.path.join(directory, csvFilename))
+savePredictionsToCSV(validationPredIdxs, "validation_preds_last_epoch.csv")
+savePredictionsToCSV(testPredIdxs, "test_preds_last_epoch.csv")
 
 # for each image in the testing set we need to find the index of the
 # label with corresponding largest predicted probability
-predIdxs = np.argmax(predIdxs, axis=1)
-
-print('classification report sklearn:')
-print(
-    classification_report(
-        testY.argmax(axis=1), predIdxs, target_names=lb.classes_
-    )
-)
-
-report = classification_report(
-    testY.argmax(axis=1), predIdxs, target_names=lb.classes_, output_dict=True
-)
-reportDf = pd.DataFrame(report).transpose()
-reportDf.to_csv(os.path.join(MODEL_DIR, 'report.csv'))
+validationPredIdxs = np.argmax(validationPredIdxs, axis=1)
+testPredIdxs = np.argmax(testPredIdxs, axis=1)
 
 # compute the confusion matrix and and use it to derive the raw
 # accuracy, sensitivity, and specificity
-print('confusion matrix:')
-cm = confusion_matrix(testY.argmax(axis=1), predIdxs)
-# show the confusion matrix, accuracy, sensitivity, and specificity
-print(cm)
+def printAndSaveClassificationReport(y, predIdxs, classes, reportFilename, directory=MODEL_DIR):
+    print(f'classification report sklearn for {reportFilename}')
+    print(
+        classification_report(
+            y.argmax(axis=1), predIdxs, target_names=classes
+        )
+    )
 
-cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=lb.classes_)
-cmDisplay.plot()
-plt.savefig(os.path.join(MODEL_DIR, 'confusion_matrix.png'))
+    report = classification_report(
+        y.argmax(axis=1), predIdxs, target_names=classes, output_dict=True
+    )
+    reportDf = pd.DataFrame(report).transpose()
+    reportDf.to_csv(os.path.join(directory, reportFilename))
+
+printAndSaveClassificationReport(validationY, validationPredIdxs, lb.classes_, "validationReport.csv")
+printAndSaveClassificationReport(testY, testPredIdxs, lb.classes_, "testReport.csv")
+
+def printAndSaveConfusionMatrix(y, predIdxs, classes, confusionMatrixFilename, directory=MODEL_DIR):
+    print(f'confusion matrix for {confusionMatrixFilename}')
+
+    cm = confusion_matrix(y.argmax(axis=1), predIdxs)
+    # show the confusion matrix, accuracy, sensitivity, and specificity
+    print(cm)
+
+    cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
+    cmDisplay.plot()
+    plt.savefig(os.path.join(directory, confusionMatrixFilename))
+
+printAndSaveConfusionMatrix(validationY, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
+printAndSaveConfusionMatrix(testY, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
 # serialize the model to disk
 print(f'Saving COVID-19 detector model on {MODEL_DIR} data...')
