@@ -105,5 +105,17 @@ print('Class mappings are:', lb.classes_)
 
 
 logits = model.predict(data)
-print(f"logits = {logits}")
-print(f"labels = {labels}")
+def accuracy(logits, labels):
+    correct = np.sum(np.argmax(labels, axis=1) == np.argmax(logits, axis=1))
+    total = labels.shape[0]
+    return correct / total
+print(f"Accuracy = {accuracy(logits, labels)}")
+
+NUM_RUNS = 2
+all_logits = np.zeros((NUM_RUNS, labels.shape[0], labels.shape[1]))
+for i in range(NUM_RUNS):
+    logits = model.predict(data)
+    all_logits[i, :, :] = logits
+
+average_logits = np.mean(all_logits, axis=0)
+print(f"New accuracy = {accuracy(average_logits, labels)}")
