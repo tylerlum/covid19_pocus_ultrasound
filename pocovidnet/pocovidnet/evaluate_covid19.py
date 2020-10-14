@@ -8,6 +8,7 @@ import numpy as np
 
 from pocovidnet import MODEL_FACTORY
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import tensorflow as tf
 
 DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 NUM_FOLDS = 5
@@ -75,6 +76,12 @@ class Evaluator(object):
             (num_classes=num_classes, mc_dropout=mc_dropout)
             for _ in range(len(self.weights_paths))
         ]
+        # Set weights for each model
+        for model in self.models:
+            saved_model = tf.keras.models.load_model(os.path.join(weights_dir, "last_epoch"))
+            weights = saved_model.get_weights()
+            model.set_weights(weights)
+
         self.mc_dropout = mc_dropout
         self.augmentor = ImageDataGenerator(
             rotation_range=10,
@@ -84,13 +91,6 @@ class Evaluator(object):
             width_shift_range=0.1,
             height_shift_range=0.1
         )
-
-        # restore weights
-        try:
-            for model, path in zip(self.models, self.weights_paths):
-                model.load_weights(path)
-        except Exception:
-            raise Exception('Error in model restoring.')
 
         print(f'Model restored. Class mappings are {self.class_mappings}')
 

@@ -3,7 +3,7 @@ import os
 
 import cv2
 import matplotlib
-matplotlib.use('TkAgg')
+# matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import tensorflow as tf
 

@@ -80,6 +80,7 @@ class GradCAM:
                 image_weight, heatmap, heatmap_weight, 0
             ), cv2.COLOR_BGR2RGB
         )
+
         overlay = cv2.resize(overlay, FINAL_RES)
         if return_map:
             return overlay, cam
@@ -106,7 +107,6 @@ class GradCAM:
         )
 
     @staticmethod
-    @tf.function
     def get_gradients_and_filters(model, images, layer_name, class_index):
         """
         Generate guided gradients and convolutional outputs with an inference.
