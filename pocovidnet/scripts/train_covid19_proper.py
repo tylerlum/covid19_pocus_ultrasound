@@ -9,6 +9,7 @@ import tensorflow as tf
 from imutils import paths
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
+from sklearn.utils import class_weight
 from tensorflow.keras.callbacks import (
     EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 )
@@ -152,6 +153,12 @@ validationX = validation_data
 validationY = validation_labels
 testX = test_data
 testY = test_labels
+def countLabels(testY):
+    labelFrequencies = [0, 0, 0]
+    for y in testY:
+        labelFrequencies[np.argmax(y)] += 1
+    return labelFrequencies
+print(f"labelFrequencies = {countLabels(testY)}")
 print('Class mappings are:', lb.classes_)
 
 # initialize the training data augmentation object
@@ -163,6 +170,19 @@ trainAug = ImageDataGenerator(
     width_shift_range=0.1,
     height_shift_range=0.1
 )
+
+myFlow = trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE)
+i = 0
+nums = [0, 0, 0]
+for X in myFlow:
+    for something in X:
+        print(something.shape)
+        for labelVector in y:
+            nums[np.argmax(labelVector)]+= 1
+    i+=1
+    print(i)
+    if i > 20000000:
+        break
 
 # Load the VGG16 network
 model = MODEL_FACTORY[MODEL_ID](
