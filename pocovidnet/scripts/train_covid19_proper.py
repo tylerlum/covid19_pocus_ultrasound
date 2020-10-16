@@ -2,6 +2,7 @@ import argparse
 import os
 
 import cv2
+import random
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -153,12 +154,6 @@ validationX = validation_data
 validationY = validation_labels
 testX = test_data
 testY = test_labels
-def countLabels(testY):
-    labelFrequencies = [0, 0, 0]
-    for y in testY:
-        labelFrequencies[np.argmax(y)] += 1
-    return labelFrequencies
-print(f"labelFrequencies = {countLabels(testY)}")
 print('Class mappings are:', lb.classes_)
 
 # initialize the training data augmentation object
@@ -171,18 +166,60 @@ trainAug = ImageDataGenerator(
     height_shift_range=0.1
 )
 
-myFlow = trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE)
-i = 0
-nums = [0, 0, 0]
-for X in myFlow:
-    for something in X:
-        print(something.shape)
-        for labelVector in y:
-            nums[np.argmax(labelVector)]+= 1
-    i+=1
-    print(i)
-    if i > 20000000:
-        break
+myFlow = trainAug.flow(trainX, trainY, batch_size=1),
+def my_balanced_generator(augFlow, num_classes, batch_size):
+    def get_balanced_frequency(num_classes, batch_size):
+        class_frequency = [0] * num_classes
+        for i in range(batch_size):
+            class_num = random.randrange(0, num_classes)
+            class_frequency[class_num] += 1
+        return class_frequency
+
+    data, labels = [], []
+    while True:
+        class_frequency = get_balanced_frequency(num_classes, batch_size)
+        num_found = 0
+        for XY in augFlow:
+            print(num_found)
+            print(class_frequency)
+            if num_found >= batch_size:
+                break
+            for x, y in XY:
+                # print(f"{x[0].shape}")
+                # print(f"{y[0].shape}")
+                class_num = np.argmax(y[0])
+                print(f"class_num = {class_num}")
+                print(f"class_frequency[class_num] = {class_frequency[class_num]}")
+                print(f"num_found = {num_found}")
+                if class_frequency[class_num] > 0:
+                    data.append(x[0])
+                    labels.append(y[0])
+                    class_frequency[class_num] -= 1
+                    num_found += 1
+        yield np.array(data), np.array(labels)
+
+
+
+
+balanced_generator = my_balanced_generator(myFlow, num_classes=len(lb.classes_), batch_size=BATCH_SIZE)
+
+for batch in balanced_generator:
+    print("HERE")
+    print(batch.shape)
+
+#i = 0
+#nums = [0, 0, 0]
+#for X in myFlow:
+#    for x, y in X:
+#        print(f"{x.shape}")
+#        print(f"{y.shape}")
+#        for labelVector in y:
+#            nums[np.argmax(labelVector)]+= 1
+#            print(nums)
+#        print("HELLO")
+#    i+=1
+#    if i > 20:
+#        break
 
 # Load the VGG16 network
 model = MODEL_FACTORY[MODEL_ID](
