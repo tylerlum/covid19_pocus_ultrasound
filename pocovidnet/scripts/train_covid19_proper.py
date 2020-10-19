@@ -44,6 +44,7 @@ ap.add_argument('-id', '--model_id', type=str, default='vgg_base')
 ap.add_argument('-ls', '--log_softmax', type=bool, default=False)
 ap.add_argument('-n', '--model_name', type=str, default='test')
 ap.add_argument('-hs', '--hidden_size', type=int, default=64)
+ap.add_argument('-nm', '--num_models', type=int, default=1)
 args = vars(ap.parse_args())
 
 # Initialize hyperparameters
@@ -60,6 +61,7 @@ TRAINABLE_BASE_LAYERS = args['trainable_base_layers']
 IMG_WIDTH, IMG_HEIGHT = args['img_width'], args['img_height']
 LOG_SOFTMAX = args['log_softmax']
 HIDDEN_SIZE = args['hidden_size']
+NUM_MODELS = args['num_models']
 
 # Check if model class exists
 if MODEL_ID not in MODEL_FACTORY.keys():
@@ -150,12 +152,9 @@ trainX, trainY = train_data, train_labels
 validationX, validationY = validation_data, validation_labels
 testX, testY = test_data, test_labels
 
-oversampledTrainX, oversampledTrainY = oversample(trainX, trainY)
-undersampledValidationX, undersampledValidationY = undersample(validationX, validationY)
-undersampledTestX, undersampledTestY = undersample(testX, testY)
-print(f"Previously had {trainX.shape[0]} training samples, but now oversampled to: {oversampledTrainX.shape[0]}")
-print(f"Previously had {validationX.shape[0]} validation samples, but now undersampled to: {undersampledValidationX.shape[0]}")
-print(f"Previously had {testX.shape[0]} test samples, but now undersampled to: {undersampledTestX.shape[0]}")
+oversampledTrainX, oversampledTrainY = oversample(trainX, trainY, printText="training")
+undersampledValidationX, undersampledValidationY = undersample(validationX, validationY, printText="validation")
+undersampledTestX, undersampledTestY = undersample(testX, testY, printText="testing")
 trainX, trainY = oversampledTrainX, oversampledTrainY
 validationX, validationY = undersampledValidationX, undersampledValidationY
 testX, testY = undersampledTestX, undersampledTestY
@@ -167,141 +166,149 @@ trainAug = ImageDataGenerator(
     rotation_range=10,
     fill_mode='nearest',
     horizontal_flip=True,
-    vertical_flip=True,
+    vertical_flip=False,
     width_shift_range=0.1,
     height_shift_range=0.1
 )
 
-# Load the VGG16 network
-model = MODEL_FACTORY[MODEL_ID](
-    input_size=(IMG_WIDTH, IMG_HEIGHT, 3),
-    num_classes=num_classes,
-    trainable_layers=TRAINABLE_BASE_LAYERS,
-    log_softmax=LOG_SOFTMAX,
-    hidden_size=HIDDEN_SIZE
-)
+for i in range(NUM_MODELS):
+    print(f"Training model {i}")
+    print("====================================")
+    this_model_dir = os.path.join(MODEL_DIR, f'model-{i}')
+    if not os.path.exists(this_model_dir):
+        os.makedirs(this_model_dir)
 
-# Define callbacks
-earlyStopping = EarlyStopping(
-    monitor='val_loss',
-    patience=20,
-    verbose=1,
-    mode='min',
-    restore_best_weights=True
-)
 
-mcp_save = ModelCheckpoint(
-    os.path.join(MODEL_DIR, f'validation-fold-{VALIDATION_FOLD}_test-fold-{TEST_FOLD}' + '_epoch-{epoch:02d}'),
-    save_best_only=True,
-    monitor='val_accuracy',
-    mode='max',
-    verbose=1
-)
-reduce_lr_loss = ReduceLROnPlateau(
-    monitor='val_loss',
-    factor=0.1,
-    patience=7,
-    verbose=1,
-    epsilon=1e-4,
-    mode='min'
-)
-# To show balanced accuracy
-metrics = Metrics((validationX, validationY), model)
+    # Load the VGG16 network
+    model = MODEL_FACTORY[MODEL_ID](
+        input_size=(IMG_WIDTH, IMG_HEIGHT, 3),
+        num_classes=num_classes,
+        trainable_layers=TRAINABLE_BASE_LAYERS,
+        log_softmax=LOG_SOFTMAX,
+        hidden_size=HIDDEN_SIZE
+    )
 
-# compile model
-print('Compiling model...')
-opt = Adam(lr=LR, decay=LR / EPOCHS)
-loss = (
-    tf.keras.losses.CategoricalCrossentropy() if not LOG_SOFTMAX else (
-        lambda labels, targets: tf.reduce_mean(
-            tf.reduce_sum(
-                -1 * tf.math.multiply(tf.cast(labels, tf.float32), targets),
-                axis=1
+    # Define callbacks
+    earlyStopping = EarlyStopping(
+        monitor='val_loss',
+        patience=20,
+        verbose=1,
+        mode='min',
+        restore_best_weights=True
+    )
+
+    mcp_save = ModelCheckpoint(
+        os.path.join(this_model_dir, 'epoch-{epoch:02d}'),
+        save_best_only=True,
+        monitor='val_accuracy',
+        mode='max',
+        verbose=1
+    )
+    reduce_lr_loss = ReduceLROnPlateau(
+        monitor='val_loss',
+        factor=0.1,
+        patience=7,
+        verbose=1,
+        epsilon=1e-4,
+        mode='min'
+    )
+    # To show balanced accuracy
+    metrics = Metrics((validationX, validationY), model)
+
+    # compile model
+    print('Compiling model...')
+    opt = Adam(lr=LR, decay=LR / EPOCHS)
+    loss = (
+        tf.keras.losses.CategoricalCrossentropy() if not LOG_SOFTMAX else (
+            lambda labels, targets: tf.reduce_mean(
+                tf.reduce_sum(
+                    -1 * tf.math.multiply(tf.cast(labels, tf.float32), targets),
+                    axis=1
+                )
             )
         )
     )
-)
 
-model.compile(loss=loss, optimizer=opt, metrics=['accuracy'])
+    model.compile(loss=loss, optimizer=opt, metrics=['accuracy'])
 
-print(f'Model has {model.count_params()} parameters')
-print(f'Model summary {model.summary()}')
+    print(f'Model has {model.count_params()} parameters')
+    print(f'Model summary {model.summary()}')
 
-# train the head of the network
-print('Starting training model...')
-H = model.fit(
-    trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE),
-    batch_size=BATCH_SIZE,
-    validation_data=(validationX, validationY),
-    epochs=EPOCHS,
-    callbacks=[earlyStopping, mcp_save, reduce_lr_loss, metrics]
-)
+    # train the head of the network
+    print('Starting training model...')
+    H = model.fit(
+        trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE),
+        batch_size=BATCH_SIZE,
+        validation_data=(validationX, validationY),
+        epochs=EPOCHS,
+        callbacks=[earlyStopping, mcp_save, reduce_lr_loss, metrics]
+    )
 
-# make predictions on the testing set
-print('Evaluating network...')
-validationPredIdxs = model.predict(validationX, batch_size=BATCH_SIZE)
-testPredIdxs = model.predict(testX, batch_size=BATCH_SIZE)
+    # make predictions on the testing set
+    print('Evaluating network...')
+    validationPredIdxs = model.predict(validationX, batch_size=BATCH_SIZE)
+    testPredIdxs = model.predict(testX, batch_size=BATCH_SIZE)
 
-# CSV: save predictions for inspection:
-def savePredictionsToCSV(predIdxs, csvFilename, directory=MODEL_DIR):
-    df = pd.DataFrame(predIdxs)
-    df.to_csv(os.path.join(directory, csvFilename))
-savePredictionsToCSV(validationPredIdxs, "validation_preds_last_epoch.csv")
-savePredictionsToCSV(testPredIdxs, "test_preds_last_epoch.csv")
+    # CSV: save predictions for inspection:
+    def savePredictionsToCSV(predIdxs, csvFilename, directory=this_model_dir):
+        df = pd.DataFrame(predIdxs)
+        df.to_csv(os.path.join(directory, csvFilename))
+    savePredictionsToCSV(validationPredIdxs, "validation_preds_last_epoch.csv")
+    savePredictionsToCSV(testPredIdxs, "test_preds_last_epoch.csv")
 
-# for each image in the testing set we need to find the index of the
-# label with corresponding largest predicted probability
-validationPredIdxs = np.argmax(validationPredIdxs, axis=1)
-testPredIdxs = np.argmax(testPredIdxs, axis=1)
+    # for each image in the testing set we need to find the index of the
+    # label with corresponding largest predicted probability
+    validationPredIdxs = np.argmax(validationPredIdxs, axis=1)
+    testPredIdxs = np.argmax(testPredIdxs, axis=1)
 
-# compute the confusion matrix and and use it to derive the raw
-# accuracy, sensitivity, and specificity
-def printAndSaveClassificationReport(y, predIdxs, classes, reportFilename, directory=MODEL_DIR):
-    print(f'classification report sklearn for {reportFilename}')
-    print(
-        classification_report(
-            y.argmax(axis=1), predIdxs, target_names=classes
+    # compute the confusion matrix and and use it to derive the raw
+    # accuracy, sensitivity, and specificity
+    def printAndSaveClassificationReport(y, predIdxs, classes, reportFilename, directory=this_model_dir):
+        print(f'classification report sklearn for {reportFilename}')
+        print(
+            classification_report(
+                y.argmax(axis=1), predIdxs, target_names=classes
+            )
         )
-    )
 
-    report = classification_report(
-        y.argmax(axis=1), predIdxs, target_names=classes, output_dict=True
-    )
-    reportDf = pd.DataFrame(report).transpose()
-    reportDf.to_csv(os.path.join(directory, reportFilename))
+        report = classification_report(
+            y.argmax(axis=1), predIdxs, target_names=classes, output_dict=True
+        )
+        reportDf = pd.DataFrame(report).transpose()
+        reportDf.to_csv(os.path.join(directory, reportFilename))
 
-printAndSaveClassificationReport(validationY, validationPredIdxs, lb.classes_, "validationReport.csv")
-printAndSaveClassificationReport(testY, testPredIdxs, lb.classes_, "testReport.csv")
+    printAndSaveClassificationReport(validationY, validationPredIdxs, lb.classes_, "validationReport.csv")
+    printAndSaveClassificationReport(testY, testPredIdxs, lb.classes_, "testReport.csv")
 
-def printAndSaveConfusionMatrix(y, predIdxs, classes, confusionMatrixFilename, directory=MODEL_DIR):
-    print(f'confusion matrix for {confusionMatrixFilename}')
+    def printAndSaveConfusionMatrix(y, predIdxs, classes, confusionMatrixFilename, directory=this_model_dir):
+        print(f'confusion matrix for {confusionMatrixFilename}')
 
-    cm = confusion_matrix(y.argmax(axis=1), predIdxs)
-    # show the confusion matrix, accuracy, sensitivity, and specificity
-    print(cm)
+        cm = confusion_matrix(y.argmax(axis=1), predIdxs)
+        # show the confusion matrix, accuracy, sensitivity, and specificity
+        print(cm)
 
-    cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
-    cmDisplay.plot()
-    plt.savefig(os.path.join(directory, confusionMatrixFilename))
+        cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
+        cmDisplay.plot()
+        plt.savefig(os.path.join(directory, confusionMatrixFilename))
 
-printAndSaveConfusionMatrix(validationY, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
-printAndSaveConfusionMatrix(testY, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
+    printAndSaveConfusionMatrix(validationY, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
+    printAndSaveConfusionMatrix(testY, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
-# serialize the model to disk
-print(f'Saving COVID-19 detector model on {MODEL_DIR} data...')
-model.save(os.path.join(MODEL_DIR, 'last_epoch'), save_format='h5')
+    # serialize the model to disk
+    print(f'Saving COVID-19 detector model on {this_model_dir} data...')
+    model.save(os.path.join(this_model_dir, 'last_epoch'), save_format='h5')
 
-# plot the training loss and accuracy
-plt.style.use('ggplot')
-plt.figure()
-plt.plot(np.arange(0, len(H.history['loss'])), H.history['loss'], label='train_loss')
-plt.plot(np.arange(0, len(H.history['val_loss'])), H.history['val_loss'], label='val_loss')
-plt.plot(np.arange(0, len(H.history['accuracy'])), H.history['accuracy'], label='train_acc')
-plt.plot(np.arange(0, len(H.history['val_accuracy'])), H.history['val_accuracy'], label='val_acc')
-plt.title('Training Loss and Accuracy on COVID-19 Dataset')
-plt.xlabel('Epoch #')
-plt.ylabel('Loss/Accuracy')
-plt.legend(loc='lower left')
-plt.savefig(os.path.join(MODEL_DIR, 'loss.png'))
+    # plot the training loss and accuracy
+    plt.style.use('ggplot')
+    plt.figure()
+    plt.plot(np.arange(0, len(H.history['loss'])), H.history['loss'], label='train_loss')
+    plt.plot(np.arange(0, len(H.history['val_loss'])), H.history['val_loss'], label='val_loss')
+    plt.plot(np.arange(0, len(H.history['accuracy'])), H.history['accuracy'], label='train_acc')
+    plt.plot(np.arange(0, len(H.history['val_accuracy'])), H.history['val_accuracy'], label='val_acc')
+    plt.title('Training Loss and Accuracy on COVID-19 Dataset')
+    plt.xlabel('Epoch #')
+    plt.ylabel('Loss/Accuracy')
+    plt.legend(loc='lower left')
+    plt.savefig(os.path.join(this_model_dir, 'loss.png'))
 
 print('Done, shuttting down!')
