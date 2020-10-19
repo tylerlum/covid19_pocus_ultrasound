@@ -1,6 +1,51 @@
 import numpy as np
 from sklearn.metrics import balanced_accuracy_score
+from sklearn.utils import resample, shuffle
 from tensorflow.keras.callbacks import Callback
+import random
+
+
+def undersample(X, Y, randomState=0):
+    # Separate datapoints by label
+    classes = np.unique(np.argmax(Y, axis=1))
+    indicesByClass = [np.where(np.argmax(Y, axis=1) == cls) for cls in classes]
+    datapointsList = [X[indices] for indices in indicesByClass]
+    labelsList = [Y[indices] for indices in indicesByClass]
+
+    # Resample each class with the same # of samples as the class with least samples
+    minimumNumClass = min([labels.shape[0] for labels in labelsList])
+    finalDatapointsList, finalLabelsList = [], []
+    for datapoints, labels in zip(datapointsList, labelsList):
+        undersampledX, undersampledY = resample(datapoints, labels, n_samples=minimumNumClass, replace=False, random_state=randomState)
+        finalDatapointsList.append(undersampledX)
+        finalLabelsList.append(undersampledY)
+    finalUndersampledX, finalUndersampledY = np.concatenate(finalDatapointsList), np.concatenate(finalLabelsList)
+
+    # Shuffle the array
+    shuffledX, shuffledY = shuffle(finalUndersampledX, finalUndersampledY, random_state=randomState)
+
+    return shuffledX, shuffledY
+
+
+def oversample(X, Y, randomState=0):
+    # Separate datapoints by label
+    classes = np.unique(np.argmax(Y, axis=1))
+    indicesByClass = [np.where(np.argmax(Y, axis=1) == cls) for cls in classes]
+    datapointsList = [X[indices] for indices in indicesByClass]
+    labelsList = [Y[indices] for indices in indicesByClass]
+
+    # Resample each class with the same # of samples as the class with most samples
+    maximumNumClass = max([labels.shape[0] for labels in labelsList])
+    finalDatapointsList, finalLabelsList = [], []
+    for datapoints, labels in zip(datapointsList, labelsList):
+        oversampledX, oversampledY = resample(datapoints, labels, n_samples=maximumNumClass, replace=True, random_state=randomState)
+        finalDatapointsList.append(oversampledX)
+        finalLabelsList.append(oversampledY)
+    finalOversampledX, finalOversampledY = np.concatenate(finalDatapointsList), np.concatenate(finalLabelsList)
+
+    # Shuffle the array
+    shuffledX, shuffledY = shuffle(finalOversampledX, finalOversampledY, random_state=randomState)
+    return shuffledX, shuffledY
 
 
 # A class to show balanced accuracy.
@@ -52,3 +97,4 @@ def fix_layers(model, num_flex_layers: int = 1):
             layer.trainable = False
 
     return model
+

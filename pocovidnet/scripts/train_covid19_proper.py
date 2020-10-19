@@ -17,7 +17,7 @@ from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import to_categorical
 
 from pocovidnet import MODEL_FACTORY
-from pocovidnet.utils import Metrics
+from pocovidnet.utils import Metrics, undersample, oversample
 
 # Suppress logging
 tf.get_logger().setLevel('ERROR')
@@ -146,12 +146,20 @@ if num_classes == 2:
     validation_labels = to_categorical(validation_labels, num_classes=num_classes)
     test_labels = to_categorical(test_labels, num_classes=num_classes)
 
-trainX = train_data
-trainY = train_labels
-validationX = validation_data
-validationY = validation_labels
-testX = test_data
-testY = test_labels
+trainX, trainY = train_data, train_labels
+validationX, validationY = validation_data, validation_labels
+testX, testY = test_data, test_labels
+
+oversampledTrainX, oversampledTrainY = oversample(trainX, trainY)
+undersampledValidationX, undersampledValidationY = undersample(validationX, validationY)
+undersampledTestX, undersampledTestY = undersample(testX, testY)
+print(f"Previously had {trainX.shape[0]} training samples, but now oversampled to: {oversampledTrainX.shape[0]}")
+print(f"Previously had {validationX.shape[0]} validation samples, but now undersampled to: {undersampledValidationX.shape[0]}")
+print(f"Previously had {testX.shape[0]} test samples, but now undersampled to: {undersampledTestX.shape[0]}")
+trainX, trainY = oversampledTrainX, oversampledTrainY
+validationX, validationY = undersampledValidationX, undersampledValidationY
+testX, testY = undersampledTestX, undersampledTestY
+
 print('Class mappings are:', lb.classes_)
 
 # initialize the training data augmentation object
