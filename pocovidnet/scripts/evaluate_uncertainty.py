@@ -1,4 +1,5 @@
 import tensorflow as tf
+import matplotlib.pyplot as plt
 import os
 import cv2
 import argparse
@@ -114,7 +115,8 @@ def create_mc_model(model, dropProb=0.5):
 
 # Get dataset
 data, labels = get_dataset()
-data, labels = np.array([data[0]]), np.array([labels[0]])
+# start_idx, end_idx = 10, 14
+# data, labels = np.array(data[start_idx:end_idx]), np.array(labels[start_idx:end_idx])
 
 # Setup model
 if MC_DROPOUT:
@@ -188,6 +190,7 @@ if DEEP_ENSEMBLE:
     indices_of_prediction = np.argmax(average_logits, axis=1)
     uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
     print(f"labels = {labels}")
+    print(f"average_logits = {average_logits}")
     print(f"all_logits = {all_logits}")
     print(f"accuracies = {accuracies}")
     print(f"average_logits = {average_logits}")
@@ -199,3 +202,15 @@ if DEEP_ENSEMBLE:
     print(f"Combined accuracy of deep ensemble models = {accuracy(average_logits, labels)}")
     print(f"Average uncertainty in deep ensemble prediction = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
 
+    # Plot accuracy vs uncertainty
+    correct = (np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1))
+    print(f"correct.shape = {correct.shape}")
+    print(f"uncertainty_in_prediction.shape = {uncertainty_in_prediction.shape}")
+    plt.style.use('ggplot')
+    plt.figure()
+    plt.scatter(uncertainty_in_prediction, correct, label='accuracy')
+    plt.title('Accuracy vs. Uncertainty')
+    plt.xlabel('Uncertainty')
+    plt.ylabel('Accuracy')
+    plt.legend(loc='lower left')
+    plt.savefig("MYIMAGE.png")
