@@ -5,7 +5,7 @@ from tensorflow.keras.callbacks import Callback
 import random
 
 
-def undersample(X, Y, randomState=0):
+def undersample(X, Y, randomState=0, printText=""):
     # Separate datapoints by label
     classes = np.unique(np.argmax(Y, axis=1))
     indicesByClass = [np.where(np.argmax(Y, axis=1) == cls) for cls in classes]
@@ -24,10 +24,11 @@ def undersample(X, Y, randomState=0):
     # Shuffle the array
     shuffledX, shuffledY = shuffle(finalUndersampledX, finalUndersampledY, random_state=randomState)
 
+    print(f"Previously had {X.shape[0]} {printText} samples, but now undersampled to: {shuffledX.shape[0]}")
     return shuffledX, shuffledY
 
 
-def oversample(X, Y, randomState=0):
+def oversample(X, Y, randomState=0, printText=""):
     # Separate datapoints by label
     classes = np.unique(np.argmax(Y, axis=1))
     indicesByClass = [np.where(np.argmax(Y, axis=1) == cls) for cls in classes]
@@ -45,6 +46,7 @@ def oversample(X, Y, randomState=0):
 
     # Shuffle the array
     shuffledX, shuffledY = shuffle(finalOversampledX, finalOversampledY, random_state=randomState)
+    print(f"Previously had {X.shape[0]} {printText} samples, but now oversampled to: {shuffledX.shape[0]}")
     return shuffledX, shuffledY
 
 
