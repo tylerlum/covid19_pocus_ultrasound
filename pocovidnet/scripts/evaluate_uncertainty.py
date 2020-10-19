@@ -203,12 +203,13 @@ if DEEP_ENSEMBLE:
     print(f"Average uncertainty in deep ensemble prediction = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
 
     # Plot accuracy vs uncertainty
-    correct = (np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1))
-    print(f"correct.shape = {correct.shape}")
-    print(f"uncertainty_in_prediction.shape = {uncertainty_in_prediction.shape}")
+    correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
+    correctness = correct_labels - np.max(average_logits, axis=1)
+    # print(f"correct.shape = {correct.shape}")
+    # print(f"uncertainty_in_prediction.shape = {uncertainty_in_prediction.shape}")
     plt.style.use('ggplot')
     plt.figure()
-    plt.scatter(uncertainty_in_prediction, correct, label='accuracy')
+    plt.scatter(uncertainty_in_prediction, correctness, label='accuracy')
     plt.title('Accuracy vs. Uncertainty')
     plt.xlabel('Uncertainty')
     plt.ylabel('Accuracy')
