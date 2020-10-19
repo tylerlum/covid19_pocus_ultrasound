@@ -59,7 +59,7 @@ def get_dataset():
         image = cv2.resize(image, (IMG_WIDTH, IMG_HEIGHT))
 
         # update the data and labels lists, respectively
-        if train_test == str(FOLD):
+        if train_test != str(FOLD):
             labels.append(label)
             data.append(image)
 
