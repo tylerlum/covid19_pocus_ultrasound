@@ -132,8 +132,12 @@ if MC_DROPOUT:
         all_logits[i, :, :] = logits
 
     average_logits = np.mean(all_logits, axis=0)
+    std_dev_logits = np.std(all_logits, axis=0)
+    indices_of_prediction = np.argmax(average_logits, axis=1)
+    uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
     print(f"Mean accuracy of individual mc models = {sum(accuracies)/len(accuracies)}")
     print(f"Combined accuracy of mc models = {accuracy(average_logits, labels)}")
+    print(f"Average uncertainty in mc model predictions = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
 
 if TEST_TIME_AUGMENTATION:
     model = tf.keras.models.load_model(os.path.join(MODEL_DIR, MODEL_FILE))
@@ -158,8 +162,12 @@ if TEST_TIME_AUGMENTATION:
         all_logits[i, :, :] = logits
 
     average_logits = np.mean(all_logits, axis=0)
+    std_dev_logits = np.std(all_logits, axis=0)
+    indices_of_prediction = np.argmax(average_logits, axis=1)
+    uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
     print(f"Mean accuracy of individual tta models = {sum(accuracies)/len(accuracies)}")
     print(f"Combined accuracy of tta models = {accuracy(average_logits, labels)}")
+    print(f"Average uncertainty in tta predictions = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
 
 if DEEP_ENSEMBLE:
     num_models = len(os.listdir(os.path.join(MODEL_DIR)))
@@ -174,5 +182,10 @@ if DEEP_ENSEMBLE:
         all_logits[i, :, :] = logits
 
     average_logits = np.mean(all_logits, axis=0)
+    std_dev_logits = np.std(all_logits, axis=0)
+    indices_of_prediction = np.argmax(average_logits, axis=1)
+    uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
     print(f"Mean accuracy of individual deep ensemble models = {sum(accuracies)/len(accuracies)}")
     print(f"Combined accuracy of deep ensemble models = {accuracy(average_logits, labels)}")
+    print(f"Average uncertainty in deep ensemble prediction = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
+
