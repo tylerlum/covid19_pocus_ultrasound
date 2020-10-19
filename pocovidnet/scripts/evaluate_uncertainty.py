@@ -114,6 +114,7 @@ def create_mc_model(model, dropProb=0.5):
 
 # Get dataset
 data, labels = get_dataset()
+data, labels = np.array([data[0]]), np.array([labels[0]])
 
 # Setup model
 if MC_DROPOUT:
@@ -132,7 +133,7 @@ if MC_DROPOUT:
         all_logits[i, :, :] = logits
 
     average_logits = np.mean(all_logits, axis=0)
-    std_dev_logits = np.std(all_logits, axis=0)
+    std_dev_logits = np.std(all_logits, axis=0, ddof=1)
     indices_of_prediction = np.argmax(average_logits, axis=1)
     uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
     print(f"Mean accuracy of individual mc models = {sum(accuracies)/len(accuracies)}")
@@ -162,7 +163,7 @@ if TEST_TIME_AUGMENTATION:
         all_logits[i, :, :] = logits
 
     average_logits = np.mean(all_logits, axis=0)
-    std_dev_logits = np.std(all_logits, axis=0)
+    std_dev_logits = np.std(all_logits, axis=0, ddof=1)
     indices_of_prediction = np.argmax(average_logits, axis=1)
     uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
     print(f"Mean accuracy of individual tta models = {sum(accuracies)/len(accuracies)}")
@@ -175,6 +176,7 @@ if DEEP_ENSEMBLE:
     all_logits = np.zeros((num_models, labels.shape[0], labels.shape[1]))
     accuracies = []
     model_filenames = [os.path.join(MODEL_DIR, f"model-{i}", MODEL_FILE) for i in range(num_models)]
+    print(f"model_filenames = {model_filenames}")
     for i, model_filename in enumerate(model_filenames):
         one_model = tf.keras.models.load_model(model_filename)
         logits = one_model.predict(data)
@@ -182,9 +184,17 @@ if DEEP_ENSEMBLE:
         all_logits[i, :, :] = logits
 
     average_logits = np.mean(all_logits, axis=0)
-    std_dev_logits = np.std(all_logits, axis=0)
+    std_dev_logits = np.std(all_logits, axis=0, ddof=1)
     indices_of_prediction = np.argmax(average_logits, axis=1)
     uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
+    print(f"labels = {labels}")
+    print(f"all_logits = {all_logits}")
+    print(f"accuracies = {accuracies}")
+    print(f"average_logits = {average_logits}")
+    print(f"std_dev_logits = {std_dev_logits}")
+    print(f"indices_of_prediction = {indices_of_prediction}")
+    print(f"uncertainty_in_prediction = {uncertainty_in_prediction}")
+
     print(f"Mean accuracy of individual deep ensemble models = {sum(accuracies)/len(accuracies)}")
     print(f"Combined accuracy of deep ensemble models = {accuracy(average_logits, labels)}")
     print(f"Average uncertainty in deep ensemble prediction = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
