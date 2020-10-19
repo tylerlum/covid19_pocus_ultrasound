@@ -1,43 +1,51 @@
 import numpy as np
 from sklearn.metrics import balanced_accuracy_score
-from sklearn.utils import resample
+from sklearn.utils import resample, shuffle
 from tensorflow.keras.callbacks import Callback
 import random
 
 
-def unison_shuffled_copies(a, b):
-    assert len(a) == len(b)
-    p = np.random.permutation(len(a))
-    return a[p], b[p]
-
 def undersample(X, Y, randomState=0):
     # Separate datapoints by label
     classes = np.unique(np.argmax(Y, axis=1))
-    datapointsList = []
-    labelsList = []
-    for cls in classes:
-        indices = np.where(np.argmax(Y, axis=1) == cls)
-        labelsList.append(Y[indices])
-        datapointsList.append(X[indices])
+    indicesByClass = [np.where(np.argmax(Y, axis=1) == cls) for cls in classes]
+    datapointsList = [X[indices] for indices in indicesByClass]
+    labelsList = [Y[indices] for indices in indicesByClass]
 
-    # Calculate which class has the fewest samples
+    # Resample each class with the same # of samples as the class with least samples
     minimumNumClass = min([labels.shape[0] for labels in labelsList])
     finalDatapointsList, finalLabelsList = [], []
     for datapoints, labels in zip(datapointsList, labelsList):
-        undersampledX, undersampledY = resample(datapoints, labels, n_samples=minimumNumClass, replace=True, random_state=randomState)
+        undersampledX, undersampledY = resample(datapoints, labels, n_samples=minimumNumClass, replace=False, random_state=randomState)
         finalDatapointsList.append(undersampledX)
         finalLabelsList.append(undersampledY)
+    finalUndersampledX, finalUndersampledY = np.concatenate(finalDatapointsList), np.concatenate(finalLabelsList)
 
-    output1, output2 = np.concatenate(finalDatapointsList), np.concatenate(finalLabelsList)
-
-    shuffledX, shuffledY = unison_shuffled_copies(output1, output2)
+    # Shuffle the array
+    shuffledX, shuffledY = shuffle(finalUndersampledX, finalUndersampledY, random_state=randomState)
 
     return shuffledX, shuffledY
 
 
 def oversample(X, Y, randomState=0):
-    oversampledX, oversampledY = resample(X, Y, n_samples=n, replace=False, random_state=randomState)
-    return oversampledX, oversampledY
+    # Separate datapoints by label
+    classes = np.unique(np.argmax(Y, axis=1))
+    indicesByClass = [np.where(np.argmax(Y, axis=1) == cls) for cls in classes]
+    datapointsList = [X[indices] for indices in indicesByClass]
+    labelsList = [Y[indices] for indices in indicesByClass]
+
+    # Resample each class with the same # of samples as the class with most samples
+    maximumNumClass = max([labels.shape[0] for labels in labelsList])
+    finalDatapointsList, finalLabelsList = [], []
+    for datapoints, labels in zip(datapointsList, labelsList):
+        oversampledX, oversampledY = resample(datapoints, labels, n_samples=maximumNumClass, replace=True, random_state=randomState)
+        finalDatapointsList.append(oversampledX)
+        finalLabelsList.append(oversampledY)
+    finalOversampledX, finalOversampledY = np.concatenate(finalDatapointsList), np.concatenate(finalLabelsList)
+
+    # Shuffle the array
+    shuffledX, shuffledY = shuffle(finalOversampledX, finalOversampledY, random_state=randomState)
+    return shuffledX, shuffledY
 
 
 # A class to show balanced accuracy.
