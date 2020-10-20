@@ -158,135 +158,136 @@ def plot_rar_vs_rer(accuracies, uncertainty_in_prediction, start_of_filename=Non
     plt.ylabel('Remaining Accuracy Rate (RAR)')
     plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
 
-# Setup output dir
-datestring = date.today().strftime("%b-%d-%Y") + "_" + datetime.now().strftime('%H-%M-%S')
-FINAL_OUTPUT_DIR = os.path.join(OUTPUT_DIR, f"Data-{DATA_DIR}__Model-{MODEL_DIR}__Fold-{FOLD}__".replace('/', '|') + datestring)
-if not os.path.exists(FINAL_OUTPUT_DIR):
-    os.makedirs(FINAL_OUTPUT_DIR)
+if __name__ == "__main__":
+    # Setup output dir
+    datestring = date.today().strftime("%b-%d-%Y") + "_" + datetime.now().strftime('%H-%M-%S')
+    FINAL_OUTPUT_DIR = os.path.join(OUTPUT_DIR, f"{__file__}__Data-{DATA_DIR}__Model-{MODEL_DIR}__Fold-{FOLD}__MC-{MC_DROPOUT}__TTA-{TEST_TIME_AUGMENTATION}__ENSEMBLE-{DEEP_ENSEMBLE}__".replace('/', '|') + datestring)
+    if not os.path.exists(FINAL_OUTPUT_DIR):
+        os.makedirs(FINAL_OUTPUT_DIR)
 
-# Get dataset
-data, labels = get_dataset()
+    # Get dataset
+    data, labels = get_dataset()
 
-# Consider shrinking dataset for easier understanding
-# start_idx, end_idx = 10, 14
-# data, labels = np.array(data[start_idx:end_idx]), np.array(labels[start_idx:end_idx])
+    # Consider shrinking dataset for easier understanding
+    # start_idx, end_idx = 10, 14
+    # data, labels = np.array(data[start_idx:end_idx]), np.array(labels[start_idx:end_idx])
 
-# Setup model
-if MC_DROPOUT:
-    NUM_MC_DROPOUT_RUNS = 20
-    print(f"Running {NUM_MC_DROPOUT_RUNS} runs of MC Dropout")
-    print("========================")
+    # Setup model
+    if MC_DROPOUT:
+        NUM_MC_DROPOUT_RUNS = 20
+        print(f"Running {NUM_MC_DROPOUT_RUNS} runs of MC Dropout")
+        print("========================")
 
-    # Create MC model
-    model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
-    print(f"Looking for model at {model_path}")
-    model = tf.keras.models.load_model(model_path)
-    mc_model = create_mc_model(model)
+        # Create MC model
+        model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
+        print(f"Looking for model at {model_path}")
+        model = tf.keras.models.load_model(model_path)
+        mc_model = create_mc_model(model)
 
-    # Compute logits
-    all_logits = np.zeros((NUM_MC_DROPOUT_RUNS, labels.shape[0], labels.shape[1]))
-    accuracies = []
-    for i in range(NUM_MC_DROPOUT_RUNS):
-        logits = mc_model.predict(data)
-        accuracies.append(accuracy(logits, labels))
-        all_logits[i, :, :] = logits
+        # Compute logits
+        all_logits = np.zeros((NUM_MC_DROPOUT_RUNS, labels.shape[0], labels.shape[1]))
+        accuracies = []
+        for i in range(NUM_MC_DROPOUT_RUNS):
+            logits = mc_model.predict(data)
+            accuracies.append(accuracy(logits, labels))
+            all_logits[i, :, :] = logits
 
-    # Compute average, variance, and uncertainty of logits
-    average_logits = np.mean(all_logits, axis=0)
-    std_dev_logits = np.std(all_logits, axis=0, ddof=1)
-    indices_of_prediction = np.argmax(average_logits, axis=1)
-    uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
-    print(f"Mean accuracy of individual mc models = {sum(accuracies)/len(accuracies)}")
-    print(f"Combined accuracy of mc models = {accuracy(average_logits, labels)}")
-    print(f"Average uncertainty in mc model predictions = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
+        # Compute average, variance, and uncertainty of logits
+        average_logits = np.mean(all_logits, axis=0)
+        std_dev_logits = np.std(all_logits, axis=0, ddof=1)
+        indices_of_prediction = np.argmax(average_logits, axis=1)
+        uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
+        print(f"Mean accuracy of individual mc models = {sum(accuracies)/len(accuracies)}")
+        print(f"Combined accuracy of mc models = {accuracy(average_logits, labels)}")
+        print(f"Average uncertainty in mc model predictions = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
 
-    # Plot accuracy vs uncertainty
-    correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
-    l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
-    plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="mc_dropout")
+        # Plot accuracy vs uncertainty
+        correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
+        l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
+        plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="mc_dropout")
 
-    # Plot RAR vs RER
-    prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
-    plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="mc_dropout")
+        # Plot RAR vs RER
+        prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
+        plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="mc_dropout")
 
-if TEST_TIME_AUGMENTATION:
-    NUM_TEST_TIME_AUGMENTATION_RUNS = 20
-    print(f"Running {NUM_TEST_TIME_AUGMENTATION_RUNS} runs of Test Time Augmentation")
-    print("========================")
+    if TEST_TIME_AUGMENTATION:
+        NUM_TEST_TIME_AUGMENTATION_RUNS = 20
+        print(f"Running {NUM_TEST_TIME_AUGMENTATION_RUNS} runs of Test Time Augmentation")
+        print("========================")
 
-    # Setup model with augmentation output
-    model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
-    print(f"Looking for model at {model_path}")
-    model = tf.keras.models.load_model(model_path)
-    augmentation = ImageDataGenerator(
-        rotation_range=10,
-        fill_mode='nearest',
-        horizontal_flip=True,
-        vertical_flip=False,
-        width_shift_range=0.1,
-        height_shift_range=0.1
-    )
-    augmented_image_generator = augmentation.flow(data, labels, shuffle=False, batch_size=1)
+        # Setup model with augmentation output
+        model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
+        print(f"Looking for model at {model_path}")
+        model = tf.keras.models.load_model(model_path)
+        augmentation = ImageDataGenerator(
+            rotation_range=10,
+            fill_mode='nearest',
+            horizontal_flip=True,
+            vertical_flip=False,
+            width_shift_range=0.1,
+            height_shift_range=0.1
+        )
+        augmented_image_generator = augmentation.flow(data, labels, shuffle=False, batch_size=1)
 
-    # Compute logits
-    all_logits = np.zeros((NUM_TEST_TIME_AUGMENTATION_RUNS, labels.shape[0], labels.shape[1]))
-    accuracies = []
-    for i in range(NUM_TEST_TIME_AUGMENTATION_RUNS):
-        logits = model.predict(augmented_image_generator, steps=data.shape[0])
-        accuracies.append(accuracy(logits, labels))
-        all_logits[i, :, :] = logits
+        # Compute logits
+        all_logits = np.zeros((NUM_TEST_TIME_AUGMENTATION_RUNS, labels.shape[0], labels.shape[1]))
+        accuracies = []
+        for i in range(NUM_TEST_TIME_AUGMENTATION_RUNS):
+            logits = model.predict(augmented_image_generator, steps=data.shape[0])
+            accuracies.append(accuracy(logits, labels))
+            all_logits[i, :, :] = logits
 
-    # Compute average, variance, and uncertainty of logits
-    average_logits = np.mean(all_logits, axis=0)
-    std_dev_logits = np.std(all_logits, axis=0, ddof=1)
-    indices_of_prediction = np.argmax(average_logits, axis=1)
-    uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
-    print(f"Mean accuracy of individual tta models = {sum(accuracies)/len(accuracies)}")
-    print(f"Combined accuracy of tta models = {accuracy(average_logits, labels)}")
-    print(f"Average uncertainty in tta predictions = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
+        # Compute average, variance, and uncertainty of logits
+        average_logits = np.mean(all_logits, axis=0)
+        std_dev_logits = np.std(all_logits, axis=0, ddof=1)
+        indices_of_prediction = np.argmax(average_logits, axis=1)
+        uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
+        print(f"Mean accuracy of individual tta models = {sum(accuracies)/len(accuracies)}")
+        print(f"Combined accuracy of tta models = {accuracy(average_logits, labels)}")
+        print(f"Average uncertainty in tta predictions = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
 
-    # Plot accuracy vs uncertainty
-    correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
-    l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
-    plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="test_time_augmentation")
+        # Plot accuracy vs uncertainty
+        correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
+        l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
+        plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="test_time_augmentation")
 
-    # Plot RAR vs RER
-    prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
-    plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="test_time_augmentation")
+        # Plot RAR vs RER
+        prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
+        plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="test_time_augmentation")
 
-if DEEP_ENSEMBLE:
-    # Find paths to models
-    print("Starting Deep Ensemble")
-    print("========================")
-    print(f"Looking in {MODEL_DIR}")
-    num_models = len(os.listdir(MODEL_DIR))
-    model_filenames = [os.path.join(MODEL_DIR, f"model-{i}", MODEL_FILE) for i in range(num_models)]
-    print(f"Found {num_models} items. Looking at {model_filenames}")
+    if DEEP_ENSEMBLE:
+        # Find paths to models
+        print("Starting Deep Ensemble")
+        print("========================")
+        print(f"Looking in {MODEL_DIR}")
+        num_models = len(os.listdir(MODEL_DIR))
+        model_filenames = [os.path.join(MODEL_DIR, f"model-{i}", MODEL_FILE) for i in range(num_models)]
+        print(f"Found {num_models} items. Looking at {model_filenames}")
 
-    # Compute logits
-    all_logits = np.zeros((num_models, labels.shape[0], labels.shape[1]))
-    accuracies = []
-    for i, model_filename in enumerate(model_filenames):
-        one_model = tf.keras.models.load_model(model_filename)
-        logits = one_model.predict(data)
-        accuracies.append(accuracy(logits, labels))
-        all_logits[i, :, :] = logits
+        # Compute logits
+        all_logits = np.zeros((num_models, labels.shape[0], labels.shape[1]))
+        accuracies = []
+        for i, model_filename in enumerate(model_filenames):
+            one_model = tf.keras.models.load_model(model_filename)
+            logits = one_model.predict(data)
+            accuracies.append(accuracy(logits, labels))
+            all_logits[i, :, :] = logits
 
-    # Compute average, variance, and uncertainty of logits
-    average_logits = np.mean(all_logits, axis=0)
-    std_dev_logits = np.std(all_logits, axis=0, ddof=1)
-    indices_of_prediction = np.argmax(average_logits, axis=1)
-    uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
+        # Compute average, variance, and uncertainty of logits
+        average_logits = np.mean(all_logits, axis=0)
+        std_dev_logits = np.std(all_logits, axis=0, ddof=1)
+        indices_of_prediction = np.argmax(average_logits, axis=1)
+        uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
 
-    print(f"Mean accuracy of individual deep ensemble models = {sum(accuracies)/len(accuracies)}")
-    print(f"Combined accuracy of deep ensemble models = {accuracy(average_logits, labels)}")
-    print(f"Average uncertainty in deep ensemble prediction = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
+        print(f"Mean accuracy of individual deep ensemble models = {sum(accuracies)/len(accuracies)}")
+        print(f"Combined accuracy of deep ensemble models = {accuracy(average_logits, labels)}")
+        print(f"Average uncertainty in deep ensemble prediction = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
 
-    # Plot accuracy vs uncertainty
-    correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
-    l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
-    plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="deep_ensemble")
+        # Plot accuracy vs uncertainty
+        correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
+        l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
+        plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="deep_ensemble")
 
-    # Plot RAR vs RER
-    prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
-    plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="deep_ensemble")
+        # Plot RAR vs RER
+        prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
+        plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="deep_ensemble")
