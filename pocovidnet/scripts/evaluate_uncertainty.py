@@ -11,6 +11,7 @@ from imutils import paths
 import numpy as np
 from pocovidnet.utils import undersample
 
+
 IMG_WIDTH, IMG_HEIGHT = 224, 224
 
 # Construct the argument parser and parse the arguments
@@ -204,14 +205,14 @@ if DEEP_ENSEMBLE:
 
     # Plot accuracy vs uncertainty
     correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
-    correctness = correct_labels - np.max(average_logits, axis=1)
+    correctness = np.absolute(correct_labels - np.max(average_logits, axis=1))
     # print(f"correct.shape = {correct.shape}")
     # print(f"uncertainty_in_prediction.shape = {uncertainty_in_prediction.shape}")
     plt.style.use('ggplot')
     plt.figure()
-    plt.scatter(uncertainty_in_prediction, correctness, label='accuracy')
-    plt.title('Accuracy vs. Uncertainty')
+    plt.scatter(uncertainty_in_prediction, correctness, label='L1 Loss')
+    plt.title('L1 Loss vs. Uncertainty')
     plt.xlabel('Uncertainty')
-    plt.ylabel('Accuracy')
+    plt.ylabel('L1 Loss')
     plt.legend(loc='lower left')
-    plt.savefig("MYIMAGE.png")
+    plt.savefig("MYIMAGE2.png")
