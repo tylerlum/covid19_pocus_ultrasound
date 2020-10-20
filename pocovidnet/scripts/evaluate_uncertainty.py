@@ -10,6 +10,8 @@ from keras.preprocessing.image import ImageDataGenerator
 from imutils import paths
 import numpy as np
 from pocovidnet.utils import undersample
+from datetime import datetime
+from datetime import date
 
 
 IMG_WIDTH, IMG_HEIGHT = 224, 224
@@ -19,11 +21,12 @@ ap = argparse.ArgumentParser()
 ap.add_argument(
     '-d', '--data_dir', required=True, help='path to input dataset'
 )
-ap.add_argument('-n', '--model_file', required=True, type=str, default='last_epoch')
-ap.add_argument('-m', '--model_dir', required=True, type=str, default='models/')
+ap.add_argument('-m', '--model_dir', required=True, type=str)
+ap.add_argument('-n', '--model_file', required=True, type=str)
 ap.add_argument(
-    '-f', '--fold', type=int, default='0', help='evaluate on this fold'
+    '-f', '--fold', required=True, type=int, default='0', help='evaluate on this fold'
 )
+ap.add_argument('-o', '--output_dir', type=str, default='outputs/')
 ap.add_argument('-a', '--mc_dropout', type=bool, default=False)
 ap.add_argument('-b', '--test_time_augmentation', type=bool, default=False)
 ap.add_argument('-c', '--deep_ensemble', type=bool, default=False)
@@ -33,6 +36,7 @@ args = vars(ap.parse_args())
 DATA_DIR = args['data_dir']
 MODEL_DIR = args['model_dir']
 MODEL_FILE = args['model_file']
+OUTPUT_DIR = args['output_dir']
 FOLD = args['fold']
 MC_DROPOUT = args['mc_dropout']
 TEST_TIME_AUGMENTATION = args['test_time_augmentation']
@@ -60,7 +64,7 @@ def get_dataset():
         image = cv2.resize(image, (IMG_WIDTH, IMG_HEIGHT))
 
         # update the data and labels lists, respectively
-        if train_test != str(FOLD):
+        if train_test == str(FOLD):
             labels.append(label)
             data.append(image)
 
@@ -114,27 +118,52 @@ def create_mc_model(model, dropProb=0.5):
   return mc_model
 
 
+def plot_loss_vs_uncertainty(loss, uncertainty, start_of_filename=None):
+    output_filename = "loss_vs_uncertainty.png"
+    if start_of_filename is not None:
+        output_filename = start_of_filename + "_" + output_filename
+    plt.style.use('ggplot')
+    plt.figure()
+    plt.scatter(uncertainty, loss)
+    plt.title('L1 Loss vs. Uncertainty')
+    plt.xlabel('Uncertainty')
+    plt.ylabel('L1 Loss')
+    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
+
+# Setup output dir
+datestring = date.today().strftime("%b-%d-%Y") + "_" + datetime.now().strftime('%H-%M-%S')
+FINAL_OUTPUT_DIR = os.path.join(OUTPUT_DIR, datestring)
+if not os.path.exists(FINAL_OUTPUT_DIR):
+    os.makedirs(FINAL_OUTPUT_DIR)
+
 # Get dataset
 data, labels = get_dataset()
+
+# Consider shrinking dataset for easier understanding
 # start_idx, end_idx = 10, 14
 # data, labels = np.array(data[start_idx:end_idx]), np.array(labels[start_idx:end_idx])
 
 # Setup model
 if MC_DROPOUT:
-    model = tf.keras.models.load_model(os.path.join(MODEL_DIR, MODEL_FILE))
+    NUM_MC_DROPOUT_RUNS = 20
+    print(f"Running {NUM_MC_DROPOUT_RUNS} runs of MC Dropout")
+    print("========================")
+
+    # Create MC model
+    model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
+    print(f"Looking for model at {model_path}")
+    model = tf.keras.models.load_model(model_path)
     mc_model = create_mc_model(model)
 
-    logits = model.predict(data)
-    print(f"Accuracy of deterministic = {accuracy(logits, labels)}")
-
-    NUM_RUNS = 20
-    all_logits = np.zeros((NUM_RUNS, labels.shape[0], labels.shape[1]))
+    # Compute logits
+    all_logits = np.zeros((NUM_MC_DROPOUT_RUNS, labels.shape[0], labels.shape[1]))
     accuracies = []
-    for i in range(NUM_RUNS):
+    for i in range(NUM_MC_DROPOUT_RUNS):
         logits = mc_model.predict(data)
         accuracies.append(accuracy(logits, labels))
         all_logits[i, :, :] = logits
 
+    # Compute average, variance, and uncertainty of logits
     average_logits = np.mean(all_logits, axis=0)
     std_dev_logits = np.std(all_logits, axis=0, ddof=1)
     indices_of_prediction = np.argmax(average_logits, axis=1)
@@ -143,13 +172,21 @@ if MC_DROPOUT:
     print(f"Combined accuracy of mc models = {accuracy(average_logits, labels)}")
     print(f"Average uncertainty in mc model predictions = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
 
-if TEST_TIME_AUGMENTATION:
-    model = tf.keras.models.load_model(os.path.join(MODEL_DIR, MODEL_FILE))
-    NUM_RUNS = 20
-    all_logits = np.zeros((NUM_RUNS, labels.shape[0], labels.shape[1]))
-    accuracies = []
+    # Plot accuracy vs uncertainty
+    correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
+    l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
 
-    # initialize the data augmentation object
+    plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="mc_dropout")
+
+if TEST_TIME_AUGMENTATION:
+    NUM_TEST_TIME_AUGMENTATION_RUNS = 20
+    print(f"Running {NUM_TEST_TIME_AUGMENTATION_RUNS} runs of Test Time Augmentation")
+    print("========================")
+
+    # Setup model with augmentation output
+    model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
+    print(f"Looking for model at {model_path}")
+    model = tf.keras.models.load_model(model_path)
     augmentation = ImageDataGenerator(
         rotation_range=10,
         fill_mode='nearest',
@@ -160,11 +197,15 @@ if TEST_TIME_AUGMENTATION:
     )
     augmented_image_generator = augmentation.flow(data, labels, shuffle=False, batch_size=1)
 
-    for i in range(NUM_RUNS):
+    # Compute logits
+    all_logits = np.zeros((NUM_TEST_TIME_AUGMENTATION_RUNS, labels.shape[0], labels.shape[1]))
+    accuracies = []
+    for i in range(NUM_TEST_TIME_AUGMENTATION_RUNS):
         logits = model.predict(augmented_image_generator, steps=data.shape[0])
         accuracies.append(accuracy(logits, labels))
         all_logits[i, :, :] = logits
 
+    # Compute average, variance, and uncertainty of logits
     average_logits = np.mean(all_logits, axis=0)
     std_dev_logits = np.std(all_logits, axis=0, ddof=1)
     indices_of_prediction = np.argmax(average_logits, axis=1)
@@ -173,31 +214,35 @@ if TEST_TIME_AUGMENTATION:
     print(f"Combined accuracy of tta models = {accuracy(average_logits, labels)}")
     print(f"Average uncertainty in tta predictions = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
 
-if DEEP_ENSEMBLE:
-    num_models = len(os.listdir(os.path.join(MODEL_DIR)))
+    # Plot accuracy vs uncertainty
+    correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
+    l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
 
+    plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="test_time_augmentation")
+
+if DEEP_ENSEMBLE:
+    # Find paths to models
+    print("Starting Deep Ensemble")
+    print("========================")
+    print(f"Looking in {MODEL_DIR}")
+    num_models = len(os.listdir(MODEL_DIR))
+    model_filenames = [os.path.join(MODEL_DIR, f"model-{i}", MODEL_FILE) for i in range(num_models)]
+    print(f"Found {num_models} items. Looking at {model_filenames}")
+
+    # Compute logits
     all_logits = np.zeros((num_models, labels.shape[0], labels.shape[1]))
     accuracies = []
-    model_filenames = [os.path.join(MODEL_DIR, f"model-{i}", MODEL_FILE) for i in range(num_models)]
-    print(f"model_filenames = {model_filenames}")
     for i, model_filename in enumerate(model_filenames):
         one_model = tf.keras.models.load_model(model_filename)
         logits = one_model.predict(data)
         accuracies.append(accuracy(logits, labels))
         all_logits[i, :, :] = logits
 
+    # Compute average, variance, and uncertainty of logits
     average_logits = np.mean(all_logits, axis=0)
     std_dev_logits = np.std(all_logits, axis=0, ddof=1)
     indices_of_prediction = np.argmax(average_logits, axis=1)
     uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
-    print(f"labels = {labels}")
-    print(f"average_logits = {average_logits}")
-    print(f"all_logits = {all_logits}")
-    print(f"accuracies = {accuracies}")
-    print(f"average_logits = {average_logits}")
-    print(f"std_dev_logits = {std_dev_logits}")
-    print(f"indices_of_prediction = {indices_of_prediction}")
-    print(f"uncertainty_in_prediction = {uncertainty_in_prediction}")
 
     print(f"Mean accuracy of individual deep ensemble models = {sum(accuracies)/len(accuracies)}")
     print(f"Combined accuracy of deep ensemble models = {accuracy(average_logits, labels)}")
@@ -205,14 +250,6 @@ if DEEP_ENSEMBLE:
 
     # Plot accuracy vs uncertainty
     correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
-    correctness = np.absolute(correct_labels - np.max(average_logits, axis=1))
-    # print(f"correct.shape = {correct.shape}")
-    # print(f"uncertainty_in_prediction.shape = {uncertainty_in_prediction.shape}")
-    plt.style.use('ggplot')
-    plt.figure()
-    plt.scatter(uncertainty_in_prediction, correctness, label='L1 Loss')
-    plt.title('L1 Loss vs. Uncertainty')
-    plt.xlabel('Uncertainty')
-    plt.ylabel('L1 Loss')
-    plt.legend(loc='lower left')
-    plt.savefig("MYIMAGE2.png")
+    l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
+
+    plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="deep_ensemble")
