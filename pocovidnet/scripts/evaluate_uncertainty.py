@@ -130,6 +130,19 @@ def plot_loss_vs_uncertainty(loss, uncertainty, start_of_filename=None):
     plt.ylabel('L1 Loss')
     plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
 
+
+def plot_rar_vs_rer(all_logits, start_of_filename=None):
+    output_filename = "rar_vs_rer.png"
+    if start_of_filename is not None:
+        output_filename = start_of_filename + "_" + output_filename
+    plt.style.use('ggplot')
+    plt.figure()
+    plt.scatter(uncertainty, loss)
+    plt.title('RAR vs. RER')
+    plt.xlabel('Remaining Error Rate (RER)')
+    plt.ylabel('Remaining Accuracy Rate (RAR)')
+    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
+
 # Setup output dir
 datestring = date.today().strftime("%b-%d-%Y") + "_" + datetime.now().strftime('%H-%M-%S')
 FINAL_OUTPUT_DIR = os.path.join(OUTPUT_DIR, datestring)
@@ -251,5 +264,34 @@ if DEEP_ENSEMBLE:
     # Plot accuracy vs uncertainty
     correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
     l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
-
     plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="deep_ensemble")
+
+    def get_rar_and_rer(certainties, accuracies):
+        num_samples = accuracies.shape[0]
+
+        num_certain_and_incorrect = sum(certainties * ~accuracies)
+        num_certain_and_correct = sum(certainties * accuracies)
+
+        return num_certain_and_correct/num_samples, num_certain_and_incorrect/num_samples
+
+    accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
+    certainties = uncertainty_in_prediction < 0.1
+    print(f"accuracies.shape = {accuracies.shape}")
+    print(f"certainties.shape = {certainties.shape}")
+    print(f"accuracies = {accuracies}")
+    print(f"certainties = {certainties}")
+    rar, rer = get_rar_and_rer(certainties, accuracies)
+    print(f"rar = {rar}")
+    print(f"rer = {rer}")
+
+    certainties = uncertainty_in_prediction < 0.05
+    rar, rer = get_rar_and_rer(certainties, accuracies)
+    print(f"rar = {rar}")
+    print(f"rer = {rer}")
+
+    certainties = uncertainty_in_prediction < 0.2
+    rar, rer = get_rar_and_rer(certainties, accuracies)
+    print(f"rar = {rar}")
+    print(f"rer = {rer}")
+
+    plot_rar_vs_rer(all_logits, start_of_filename="deep_ensemble")
