@@ -67,16 +67,16 @@ for classe in os.listdir(DATA_DIR):
     # construct dict of file to fold mapping
     inner_dict = {}
     # consider images and videos separately
+    frequency_by_fold = [0] * NUM_FOLDS
     for k, uni in enumerate([uni_videos, uni_images]):
-        unique_files = np.unique(uni)
-        # s is number of files in one split
-        s = len(unique_files) // NUM_FOLDS
-        for i in range(NUM_FOLDS):
-            for f in unique_files[i * s:(i + 1) * s]:
-                inner_dict[f] = i
-        # distribute the rest randomly
-        for f in unique_files[NUM_FOLDS * s:]:
-            inner_dict[f] = np.random.choice(np.arange(5))
+        unique_files, unique_counts = np.unique(uni, return_counts=True)
+        sortedIndices = (-unique_counts).argsort()
+        unique_files = unique_files[sortedIndices]
+        unique_counts = unique_counts[sortedIndices]
+        for file_, count_ in zip(unique_files, unique_counts):
+            index_of_min = frequency_by_fold.index(min(frequency_by_fold))
+            frequency_by_fold[index_of_min] += count_
+            inner_dict[file_] = index_of_min
 
     copy_dict[classe] = inner_dict
     for in_file in os.listdir(os.path.join(DATA_DIR, classe)):
