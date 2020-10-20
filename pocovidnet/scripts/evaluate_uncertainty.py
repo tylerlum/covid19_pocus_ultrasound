@@ -14,36 +14,6 @@ from datetime import datetime
 from datetime import date
 
 
-IMG_WIDTH, IMG_HEIGHT = 224, 224
-
-# Construct the argument parser and parse the arguments
-ap = argparse.ArgumentParser()
-ap.add_argument(
-    '-d', '--data_dir', required=True, help='path to input dataset'
-)
-ap.add_argument('-m', '--model_dir', required=True, type=str)
-ap.add_argument('-n', '--model_file', required=True, type=str)
-ap.add_argument(
-    '-f', '--fold', required=True, type=int, default='0', help='evaluate on this fold'
-)
-ap.add_argument('-o', '--output_dir', type=str, default='outputs/')
-ap.add_argument('-a', '--mc_dropout', type=bool, default=False)
-ap.add_argument('-b', '--test_time_augmentation', type=bool, default=False)
-ap.add_argument('-c', '--deep_ensemble', type=bool, default=False)
-args = vars(ap.parse_args())
-
-# Initialize hyperparameters
-DATA_DIR = args['data_dir']
-MODEL_DIR = args['model_dir']
-MODEL_FILE = args['model_file']
-OUTPUT_DIR = args['output_dir']
-FOLD = args['fold']
-MC_DROPOUT = args['mc_dropout']
-TEST_TIME_AUGMENTATION = args['test_time_augmentation']
-DEEP_ENSEMBLE = args['deep_ensemble']
-
-print(f'Evaluating with: {args}')
-
 def get_dataset():
     # Get data
     data, labels = [], []
@@ -159,6 +129,36 @@ def plot_rar_vs_rer(accuracies, uncertainty_in_prediction, start_of_filename=Non
     plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
 
 if __name__ == "__main__":
+    IMG_WIDTH, IMG_HEIGHT = 224, 224
+
+    # Construct the argument parser and parse the arguments
+    ap = argparse.ArgumentParser()
+    ap.add_argument(
+        '-d', '--data_dir', required=True, help='path to input dataset'
+    )
+    ap.add_argument('-m', '--model_dir', required=True, type=str)
+    ap.add_argument('-n', '--model_file', required=True, type=str)
+    ap.add_argument(
+        '-f', '--fold', required=True, type=int, help='evaluate on this fold'
+    )
+    ap.add_argument('-o', '--output_dir', type=str, default='outputs/')
+    ap.add_argument('-a', '--mc_dropout', type=bool, default=False)
+    ap.add_argument('-b', '--test_time_augmentation', type=bool, default=False)
+    ap.add_argument('-c', '--deep_ensemble', type=bool, default=False)
+    args = vars(ap.parse_args())
+
+    # Initialize hyperparameters
+    DATA_DIR = args['data_dir']
+    MODEL_DIR = args['model_dir']
+    MODEL_FILE = args['model_file']
+    FOLD = args['fold']
+    OUTPUT_DIR = args['output_dir']
+    MC_DROPOUT = args['mc_dropout']
+    TEST_TIME_AUGMENTATION = args['test_time_augmentation']
+    DEEP_ENSEMBLE = args['deep_ensemble']
+
+    print(f'Evaluating with: {args}')
+
     # Setup output dir
     datestring = date.today().strftime("%b-%d-%Y") + "_" + datetime.now().strftime('%H-%M-%S')
     FINAL_OUTPUT_DIR = os.path.join(OUTPUT_DIR, f"{__file__}__Data-{DATA_DIR}__Model-{MODEL_DIR}__Fold-{FOLD}__MC-{MC_DROPOUT}__TTA-{TEST_TIME_AUGMENTATION}__ENSEMBLE-{DEEP_ENSEMBLE}__".replace('/', '|') + datestring)
