@@ -203,8 +203,11 @@ if MC_DROPOUT:
     # Plot accuracy vs uncertainty
     correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
     l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
-
     plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="mc_dropout")
+
+    # Plot RAR vs RER
+    prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
+    plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="mc_dropout")
 
 if TEST_TIME_AUGMENTATION:
     NUM_TEST_TIME_AUGMENTATION_RUNS = 20
@@ -245,8 +248,11 @@ if TEST_TIME_AUGMENTATION:
     # Plot accuracy vs uncertainty
     correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
     l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
-
     plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="test_time_augmentation")
+
+    # Plot RAR vs RER
+    prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
+    plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="test_time_augmentation")
 
 if DEEP_ENSEMBLE:
     # Find paths to models
@@ -281,5 +287,6 @@ if DEEP_ENSEMBLE:
     l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
     plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="deep_ensemble")
 
+    # Plot RAR vs RER
     prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
     plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="deep_ensemble")
