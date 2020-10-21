@@ -12,20 +12,22 @@ def undersample(X, Y, randomState=0, printText=""):
     datapointsList = [X[indices] for indices in indicesByClass]
     labelsList = [Y[indices] for indices in indicesByClass]
 
-    # Resample each class with the same # of samples as the class with least samples
+    # Resample each class with the same # of samples as the class with most samples
     minimumNumClass = min([labels.shape[0] for labels in labelsList])
-    finalDatapointsList, finalLabelsList = [], []
+    finalUndersampledX, finalUndersampledY = np.zeros(minimumNumClass*len(classes), X.shape[1], X.shape[2], X.shape[3]), np.zeros(minimumNumClass*len(classes), Y.shape[1])
+    currentIndex = 0
     for datapoints, labels in zip(datapointsList, labelsList):
         undersampledX, undersampledY = resample(datapoints, labels, n_samples=minimumNumClass, replace=False, random_state=randomState)
-        finalDatapointsList.append(undersampledX)
-        finalLabelsList.append(undersampledY)
-    finalUndersampledX, finalUndersampledY = np.concatenate(finalDatapointsList), np.concatenate(finalLabelsList)
+        nextCurrentIndex = currentIndex + minimumNumClass
+        finalUndersampledX[currentIndex:nextCurrentIndex] = undersampledX
+        finalUndersampledY[currentIndex:nextCurrentIndex] = undersampledY
+        currentIndex = nextCurrentIndex
 
     # Shuffle the array
-    shuffledX, shuffledY = shuffle(finalUndersampledX, finalUndersampledY, random_state=randomState)
+    finalUndersampledX, finalUndersampledY = shuffle(finalUndersampledX, finalUndersampledY, random_state=randomState)
 
-    print(f"Previously had {X.shape[0]} {printText} samples, but now undersampled to: {shuffledX.shape[0]}")
-    return shuffledX, shuffledY
+    print(f"Previously had {X.shape[0]} {printText} samples, but now undersampled to: {finalUndersampledX.shape[0]}")
+    return finalUndersampledX, finalUndersampledY
 
 
 def oversample(X, Y, randomState=0, printText=""):
@@ -37,17 +39,19 @@ def oversample(X, Y, randomState=0, printText=""):
 
     # Resample each class with the same # of samples as the class with most samples
     maximumNumClass = max([labels.shape[0] for labels in labelsList])
-    finalDatapointsList, finalLabelsList = [], []
+    finalOversampledX, finalOversampledY = np.zeros(maximumNumClass*len(classes), X.shape[1], X.shape[2], X.shape[3]), np.zeros(maximumNumClass*len(classes), Y.shape[1])
+    currentIndex = 0
     for datapoints, labels in zip(datapointsList, labelsList):
         oversampledX, oversampledY = resample(datapoints, labels, n_samples=maximumNumClass, replace=True, random_state=randomState)
-        finalDatapointsList.append(oversampledX)
-        finalLabelsList.append(oversampledY)
-    finalOversampledX, finalOversampledY = np.concatenate(finalDatapointsList), np.concatenate(finalLabelsList)
+        nextCurrentIndex = currentIndex + maximumNumClass
+        finalOversampledX[currentIndex:nextCurrentIndex] = oversampledX
+        finalOversampledY[currentIndex:nextCurrentIndex] = oversampledY
+        currentIndex = nextCurrentIndex
 
     # Shuffle the array
-    shuffledX, shuffledY = shuffle(finalOversampledX, finalOversampledY, random_state=randomState)
-    print(f"Previously had {X.shape[0]} {printText} samples, but now oversampled to: {shuffledX.shape[0]}")
-    return shuffledX, shuffledY
+    finalOversampledX, finalOversampledY = shuffle(finalOversampledX, finalOversampledY, random_state=randomState)
+    print(f"Previously had {X.shape[0]} {printText} samples, but now oversampled to: {finalOversampledX.shape[0]}")
+    return finalOversampledX, finalOversampledY
 
 
 # A class to show balanced accuracy.

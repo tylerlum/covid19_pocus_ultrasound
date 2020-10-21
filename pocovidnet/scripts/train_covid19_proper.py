@@ -148,16 +148,9 @@ if num_classes == 2:
     validation_labels = to_categorical(validation_labels, num_classes=num_classes)
     test_labels = to_categorical(test_labels, num_classes=num_classes)
 
-trainX, trainY = train_data, train_labels
-validationX, validationY = validation_data, validation_labels
-testX, testY = test_data, test_labels
-
-oversampledTrainX, oversampledTrainY = oversample(trainX, trainY, printText="training")
-undersampledValidationX, undersampledValidationY = undersample(validationX, validationY, printText="validation")
-undersampledTestX, undersampledTestY = undersample(testX, testY, printText="testing")
-trainX, trainY = oversampledTrainX, oversampledTrainY
-validationX, validationY = undersampledValidationX, undersampledValidationY
-testX, testY = undersampledTestX, undersampledTestY
+trainX, trainY = oversample(train_data, train_labels, printText="training")
+validationX, validationY = undersample(validation_data, validation_labels, printText="validation")
+testX, testY = undersample(test_data, test_labels, printText="testing")
 
 print('Class mappings are:', lb.classes_)
 
