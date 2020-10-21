@@ -129,19 +129,19 @@ assert len(set(train_labels)) == len(set(validation_labels)), (
 train_data = np.array(train_data) / 255.0
 validation_data = np.array(validation_data) / 255.0
 test_data = np.array(test_data) / 255.0
-train_labels_text = np.array(train_labels)
-validation_labels_text = np.array(validation_labels)
-test_labels_text = np.array(test_labels)
+train_labels = np.array(train_labels)
+validation_labels = np.array(validation_labels)
+test_labels = np.array(test_labels)
 
 num_classes = len(set(train_labels))
 
 # perform one-hot encoding on the labels
 lb = LabelBinarizer()
-lb.fit(train_labels_text)
+lb.fit(train_labels)
 
-train_labels = lb.transform(train_labels_text)
-validation_labels = lb.transform(validation_labels_text)
-test_labels = lb.transform(test_labels_text)
+train_labels = lb.transform(train_labels)
+validation_labels = lb.transform(validation_labels)
+test_labels = lb.transform(test_labels)
 
 if num_classes == 2:
     train_labels = to_categorical(train_labels, num_classes=num_classes)
@@ -151,6 +151,7 @@ if num_classes == 2:
 trainX, trainY = oversample(train_data, train_labels, printText="training")
 validationX, validationY = undersample(validation_data, validation_labels, printText="validation")
 testX, testY = undersample(test_data, test_labels, printText="testing")
+del train_data, train_labels, validation_data, validation_labels, test_data, test_labels
 
 print('Class mappings are:', lb.classes_)
 
