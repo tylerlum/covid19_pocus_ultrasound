@@ -174,7 +174,7 @@ if __name__ == "__main__":
 
     # Setup model
     if MC_DROPOUT:
-        NUM_MC_DROPOUT_RUNS = 20
+        NUM_MC_DROPOUT_RUNS = 50
         print(f"Running {NUM_MC_DROPOUT_RUNS} runs of MC Dropout")
         print("========================")
 
@@ -211,7 +211,7 @@ if __name__ == "__main__":
         plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="mc_dropout")
 
     if TEST_TIME_AUGMENTATION:
-        NUM_TEST_TIME_AUGMENTATION_RUNS = 20
+        NUM_TEST_TIME_AUGMENTATION_RUNS = 50
         print(f"Running {NUM_TEST_TIME_AUGMENTATION_RUNS} runs of Test Time Augmentation")
         print("========================")
 
