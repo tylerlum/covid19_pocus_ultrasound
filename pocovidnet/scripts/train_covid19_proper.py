@@ -191,13 +191,13 @@ for i in range(NUM_MODELS):
         restore_best_weights=True
     )
 
-    mcp_save = ModelCheckpoint(
-        os.path.join(this_model_dir, 'epoch-{epoch:02d}'),
-        save_best_only=True,
-        monitor='val_accuracy',
-        mode='max',
-        verbose=1
-    )
+#    mcp_save = ModelCheckpoint(
+#        os.path.join(this_model_dir, 'epoch-{epoch:02d}'),
+#        save_best_only=True,
+#        monitor='val_accuracy',
+#        mode='max',
+#        verbose=1
+#    )
     reduce_lr_loss = ReduceLROnPlateau(
         monitor='val_loss',
         factor=0.1,
@@ -235,7 +235,8 @@ for i in range(NUM_MODELS):
         batch_size=BATCH_SIZE,
         validation_data=(validationX, validationY),
         epochs=EPOCHS,
-        callbacks=[earlyStopping, mcp_save, reduce_lr_loss, metrics]
+        callbacks=[earlyStopping, reduce_lr_loss, metrics]
+        # callbacks=[earlyStopping, mcp_save, reduce_lr_loss, metrics]
     )
 
     # make predictions on the testing set
