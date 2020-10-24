@@ -235,8 +235,10 @@ for i in range(NUM_MODELS):
         batch_size=BATCH_SIZE,
         validation_data=(validationX, validationY),
         epochs=EPOCHS,
-        callbacks=[earlyStopping, reduce_lr_loss, metrics]
+        callbacks=[earlyStopping, reduce_lr_loss, metrics],
         # callbacks=[earlyStopping, mcp_save, reduce_lr_loss, metrics]
+        use_multiprocessing=True,
+        workers=3,
     )
 
     # make predictions on the testing set
