@@ -128,6 +128,47 @@ def plot_rar_vs_rer(accuracies, uncertainty_in_prediction, start_of_filename=Non
     plt.ylabel('Remaining Accuracy Rate (RAR)')
     plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
 
+
+def save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=10, start_of_filename=None):
+    certain_and_incorrects, certain_and_corrects, uncertains = [], [], []
+    for i, (l1_loss, uncertainty) in enumerate(zip(l1_loss_of_prediction, uncertainty_in_prediction)):
+        incorrect = l1_loss > 0.90
+        correct = l1_loss < 0.05
+        certain = uncertainty < 0.07
+        uncertain = uncertainty > 0.20
+        if certain and incorrect:
+            certain_and_incorrects.append(i)
+        if certain and correct:
+            certain_and_corrects.append(i)
+        if uncertain:
+            uncertains.append(i)
+
+    print(f"len(certain_and_incorrects) = {len(certain_and_incorrects)}")
+    print(f"len(certain_and_corrects) = {len(certain_and_corrects)}")
+    print(f"len(uncertains) = {len(uncertains)}")
+
+    for n, index in enumerate(certain_and_incorrects):
+        print(f"n = {n} certain_and_incorrects")
+        if n > 10:
+            break
+        plt.imshow(data[index])
+        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"mc-dropout__certain-incorrect__index-{index}__label-{labels[index]}__uncertainty-{uncertainty_in_prediction[index]}__l1-loss-{l1_loss_of_prediction[index]}.png"))
+    for n, index in enumerate(certain_and_corrects):
+        print(f"n = {n} certain_and_corrects")
+        if n > 10:
+            break
+        plt.imshow(data[index])
+        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"mc-dropout__certain-correct__index-{index}__label-{labels[index]}__uncertainty-{uncertainty_in_prediction[index]}__l1-loss-{l1_loss_of_prediction[index]}.png"))
+    for n, index in enumerate(uncertains):
+        print(f"n = {n} uncertains")
+        if n > 10:
+            break
+        plt.imshow(data[index])
+        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"mc-dropout__uncertain__index-{index}__label-{labels[index]}__uncertainty-{uncertainty_in_prediction[index]}__l1-loss-{l1_loss_of_prediction[index]}.png"))
+
+
+
+
 if __name__ == "__main__":
     IMG_WIDTH, IMG_HEIGHT = 224, 224
 
@@ -205,43 +246,6 @@ if __name__ == "__main__":
         correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
         l1_loss_of_prediction = np.absolute(correct_labels - np.max(average_logits, axis=1))
         plot_loss_vs_uncertainty(l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="mc_dropout")
-        certain_and_incorrects, certain_and_corrects, uncertains = [], [], []
-        for i, (l1_loss, uncertainty) in enumerate(zip(l1_loss_of_prediction, uncertainty_in_prediction)):
-            incorrect = l1_loss > 0.90
-            correct = l1_loss < 0.05
-            certain = uncertainty < 0.07
-            uncertain = uncertainty > 0.20
-            if certain and incorrect:
-                print(f"On index {i} found certain and incorrect")
-                certain_and_incorrects.append(i)
-            if certain and correct:
-                print(f"On index {i} found certain and correct")
-                certain_and_corrects.append(i)
-            if uncertain:
-                print(f"On index {i} found uncertain")
-                uncertains.append(i)
-        print(len(certain_and_incorrects))
-        print(len(certain_and_corrects))
-        print(len(uncertains))
-        for n, index in enumerate(certain_and_incorrects):
-            print(f"n = {n} certain_and_incorrects")
-            if n > 10:
-                break
-            plt.imshow(data[index])
-            plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"mc-dropout__certain-incorrect__index-{index}__label-{labels[index]}__uncertainty-{uncertainty_in_prediction[index]}__l1-loss-{l1_loss_of_prediction[index]}.png"))
-        for n, index in enumerate(certain_and_corrects):
-            print(f"n = {n} certain_and_corrects")
-            if n > 10:
-                break
-            plt.imshow(data[index])
-            plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"mc-dropout__certain-correct__index-{index}__label-{labels[index]}__uncertainty-{uncertainty_in_prediction[index]}__l1-loss-{l1_loss_of_prediction[index]}.png"))
-        for n, index in enumerate(uncertains):
-            print(f"n = {n} uncertains")
-            if n > 10:
-                break
-            plt.imshow(data[index])
-            plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"mc-dropout__uncertain__index-{index}__label-{labels[index]}__uncertainty-{uncertainty_in_prediction[index]}__l1-loss-{l1_loss_of_prediction[index]}.png"))
-
 
         # Plot RAR vs RER
         prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
