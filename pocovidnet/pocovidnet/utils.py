@@ -14,7 +14,8 @@ def undersample(X, Y, randomState=0, printText=""):
 
     # Resample each class with the same # of samples as the class with most samples
     minimumNumClass = min([labels.shape[0] for labels in labelsList])
-    finalUndersampledX, finalUndersampledY = np.zeros((minimumNumClass*len(classes), X.shape[1], X.shape[2], X.shape[3]), dtype=X.dtype), np.zeros((minimumNumClass*len(classes), Y.shape[1]), dtype=Y.dtype)
+    finalUndersampledX = np.zeros((minimumNumClass*len(classes), *X.shape[1:]), dtype=X.dtype)
+    finalUndersampledY = np.zeros((minimumNumClass*len(classes), *Y.shape[1:]), dtype=Y.dtype)
     currentIndex = 0
     for datapoints, labels in zip(datapointsList, labelsList):
         undersampledX, undersampledY = resample(datapoints, labels, n_samples=minimumNumClass, replace=False, random_state=randomState)
@@ -39,7 +40,8 @@ def oversample(X, Y, randomState=0, printText=""):
 
     # Resample each class with the same # of samples as the class with most samples
     maximumNumClass = max([labels.shape[0] for labels in labelsList])
-    finalOversampledX, finalOversampledY = np.zeros((maximumNumClass*len(classes), X.shape[1], X.shape[2], X.shape[3]), dtype=X.dtype), np.zeros((maximumNumClass*len(classes), Y.shape[1]), dtype=Y.dtype)
+    finalOversampledX = np.zeros((maximumNumClass*len(classes), *X.shape[1:]), dtype=X.dtype)
+    finalOversampledY = np.zeros((maximumNumClass*len(classes), *Y.shape[1:]), dtype=Y.dtype)
     currentIndex = 0
     for datapoints, labels in zip(datapointsList, labelsList):
         oversampledX, oversampledY = resample(datapoints, labels, n_samples=maximumNumClass, replace=True, random_state=randomState)

@@ -20,7 +20,6 @@ from keras import backend as K
 
 from pocovidnet import MODEL_FACTORY
 from pocovidnet.utils import Metrics, undersample, oversample
-from guppy import hpy; h=hpy()
 
 # Suppress logging
 tf.get_logger().setLevel('ERROR')
@@ -130,10 +129,6 @@ assert len(set(trainY)) == len(set(validationY)), (
 # convert the data and labels to NumPy arrays while scaling the pixel
 # intensities to the range [0, 255]
 trainX = np.float32(trainX) / 255.0
-# trainX = np.float32(trainX)
-# print(trainX[0])
-# print(trainX[100])
-# print(trainX.dtype)
 validationX = np.float32(validationX) / 255.0
 testX = np.float32(testX) / 255.0
 trainY = np.array(trainY)
@@ -173,7 +168,6 @@ trainAug = ImageDataGenerator(
 for i in range(NUM_MODELS):
     print(f"Training model {i}")
     print("====================================")
-    print(h.heap())
     this_model_dir = os.path.join(MODEL_DIR, f'model-{i}')
     if not os.path.exists(this_model_dir):
         os.makedirs(this_model_dir)
