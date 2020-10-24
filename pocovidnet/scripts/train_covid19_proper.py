@@ -15,9 +15,11 @@ from tensorflow.keras.callbacks import (
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.utils import to_categorical
+from keras import backend as K
 
 from pocovidnet import MODEL_FACTORY
 from pocovidnet.utils import Metrics, undersample, oversample
+from guppy import hpy; h=hpy()
 
 # Suppress logging
 tf.get_logger().setLevel('ERROR')
@@ -151,7 +153,10 @@ if num_classes == 2:
 trainX, trainY = oversample(train_data, train_labels, printText="training")
 validationX, validationY = undersample(validation_data, validation_labels, printText="validation")
 testX, testY = undersample(test_data, test_labels, printText="testing")
+print(h.heap()[0].byvia)
 del train_data, train_labels, validation_data, validation_labels, test_data, test_labels
+
+print(h.heap()[0].byvia)
 
 print('Class mappings are:', lb.classes_)
 
@@ -172,6 +177,7 @@ for i in range(NUM_MODELS):
     if not os.path.exists(this_model_dir):
         os.makedirs(this_model_dir)
 
+    print(h.heap()[0].byvia)
 
     # Load the VGG16 network
     model = MODEL_FACTORY[MODEL_ID](
@@ -228,6 +234,8 @@ for i in range(NUM_MODELS):
     print(f'Model has {model.count_params()} parameters')
     print(f'Model summary {model.summary()}')
 
+    print(h.heap()[0].byvia)
+
     # train the head of the network
     print('Starting training model...')
     H = model.fit(
@@ -240,6 +248,8 @@ for i in range(NUM_MODELS):
         use_multiprocessing=True,
         workers=3,
     )
+
+    print(h.heap()[0].byvia)
 
     # make predictions on the testing set
     print('Evaluating network...')
@@ -307,5 +317,18 @@ for i in range(NUM_MODELS):
     plt.ylabel('Loss/Accuracy')
     plt.legend(loc='lower left')
     plt.savefig(os.path.join(this_model_dir, 'loss.png'))
+    print(h.heap()[0].byvia)
+    print("=============================")
+
+    del model
+    print(h.heap()[0].byvia)
+    K.clear_session()
+    print(h.heap()[0].byvia)
+    print(h.heap())
+    del x
+    print(h.heap()[0].byvia)
+    print("-----------------------------")
+
+    outputtime
 
 print('Done, shuttting down!')
