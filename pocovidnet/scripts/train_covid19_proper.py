@@ -1,4 +1,5 @@
 import argparse
+import gc
 import os
 
 import cv2
@@ -83,8 +84,8 @@ labels = []
 
 print(f'selected validation-fold-{VALIDATION_FOLD}, test-fold-{TEST_FOLD}')
 
-train_labels, validation_labels, test_labels = [], [], []
-train_data, validation_data, test_data = [], [], []
+trainY, validationY, testY = [], [], []
+trainX, validationX, testX = [], [], []
 
 # loop over folds
 for imagePath in imagePaths:
@@ -102,59 +103,58 @@ for imagePath in imagePaths:
 
     # update the data and labels lists, respectively
     if train_test == str(TEST_FOLD):
-        test_labels.append(label)
-        test_data.append(image)
+        testY.append(label)
+        testX.append(image)
     elif train_test == str(VALIDATION_FOLD):
-        validation_labels.append(label)
-        validation_data.append(image)
+        validationY.append(label)
+        validationX.append(image)
     else:
-        train_labels.append(label)
-        train_data.append(image)
+        trainY.append(label)
+        trainX.append(image)
 
 # Prepare data for model
 print(
-    f'\nNumber of training samples: {len(train_labels)} \n'
-    f'\nNumber of validation samples: {len(validation_labels)} \n'
-    f'Number of testing samples: {len(test_labels)}'
+    f'\nNumber of training samples: {len(trainY)} \n'
+    f'\nNumber of validation samples: {len(validationY)} \n'
+    f'Number of testing samples: {len(testY)}'
 )
 
-assert len(set(train_labels)) == len(set(test_labels)), (
+assert len(set(trainY)) == len(set(testY)), (
     'Something went wrong. Some classes are only in train or test data.'
 )  # yapf: disable
 
-assert len(set(train_labels)) == len(set(validation_labels)), (
+assert len(set(trainY)) == len(set(validationY)), (
     'Something went wrong. Some classes are only in train or validation data.'
 )  # yapf: disable
 
 # convert the data and labels to NumPy arrays while scaling the pixel
 # intensities to the range [0, 255]
-train_data = np.array(train_data) / 255.0
-validation_data = np.array(validation_data) / 255.0
-test_data = np.array(test_data) / 255.0
-train_labels = np.array(train_labels)
-validation_labels = np.array(validation_labels)
-test_labels = np.array(test_labels)
+trainX = np.array(trainX) / 255.0
+validationX = np.array(validationX) / 255.0
+testX = np.array(testX) / 255.0
+trainY = np.array(trainY)
+validationY = np.array(validationY)
+testY = np.array(testY)
 
-num_classes = len(set(train_labels))
+num_classes = len(set(trainY))
 
 # perform one-hot encoding on the labels
 lb = LabelBinarizer()
-lb.fit(train_labels)
+lb.fit(trainY)
 
-train_labels = lb.transform(train_labels)
-validation_labels = lb.transform(validation_labels)
-test_labels = lb.transform(test_labels)
+trainY = lb.transform(trainY)
+validationY = lb.transform(validationY)
+testY = lb.transform(testY)
 
 if num_classes == 2:
-    train_labels = to_categorical(train_labels, num_classes=num_classes)
-    validation_labels = to_categorical(validation_labels, num_classes=num_classes)
-    test_labels = to_categorical(test_labels, num_classes=num_classes)
+    trainY = to_categorical(trainY, num_classes=num_classes)
+    validationY = to_categorical(validationY, num_classes=num_classes)
+    testY = to_categorical(testY, num_classes=num_classes)
 
-trainX, trainY = oversample(train_data, train_labels, printText="training")
-validationX, validationY = undersample(validation_data, validation_labels, printText="validation")
-testX, testY = undersample(test_data, test_labels, printText="testing")
+trainX, trainY = oversample(trainX, trainY, printText="training")
+validationX, validationY = undersample(validationX, validationY, printText="validation")
+testX, testY = undersample(testX, testY, printText="testing")
 print(h.heap()[0].byvia)
-del train_data, train_labels, validation_data, validation_labels, test_data, test_labels
 
 print(h.heap()[0].byvia)
 
@@ -325,7 +325,7 @@ for i in range(NUM_MODELS):
     K.clear_session()
     print(h.heap()[0].byvia)
     print(h.heap())
-    del x
+    gc.collect()
     print(h.heap()[0].byvia)
     print("-----------------------------")
 
