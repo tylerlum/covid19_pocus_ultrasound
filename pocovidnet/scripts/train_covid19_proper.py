@@ -129,15 +129,13 @@ assert len(set(trainY)) == len(set(validationY)), (
 
 # convert the data and labels to NumPy arrays while scaling the pixel
 # intensities to the range [0, 255]
-print(h.heap())
 trainX = np.float32(trainX) / 255.0
-print(h.heap())
 # trainX = np.float32(trainX)
 # print(trainX[0])
 # print(trainX[100])
 # print(trainX.dtype)
-validationX = np.array(validationX) / 255.0
-testX = np.array(testX) / 255.0
+validationX = np.float32(validationX) / 255.0
+testX = np.float32(testX) / 255.0
 trainY = np.array(trainY)
 validationY = np.array(validationY)
 testY = np.array(testY)
@@ -175,7 +173,7 @@ trainAug = ImageDataGenerator(
 for i in range(NUM_MODELS):
     print(f"Training model {i}")
     print("====================================")
-    print(h.heap()[0].byvia)
+    print(h.heap())
     this_model_dir = os.path.join(MODEL_DIR, f'model-{i}')
     if not os.path.exists(this_model_dir):
         os.makedirs(this_model_dir)
@@ -237,26 +235,16 @@ for i in range(NUM_MODELS):
 
     # train the head of the network
     print('Starting training model...')
-    print(h.heap()[0].byvia)
-    myflow = trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE)
-    print(h.heap()[0].byvia)
     H = model.fit(
-        myflow,
-        # trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE),
-        # trainX, trainY,
+        trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE),
         batch_size=BATCH_SIZE,
         validation_data=(validationX, validationY),
         epochs=EPOCHS,
         callbacks=[earlyStopping, reduce_lr_loss, metrics],
         # callbacks=[earlyStopping, mcp_save, reduce_lr_loss, metrics]
         use_multiprocessing=True,
-        workers=3,
+        workers=3,  # Empirically best performance
     )
-    print(h.heap()[0].byvia)
-    del myflow
-    print(h.heap()[0].byvia)
-    del trainAug
-    print(h.heap()[0].byvia)
 
     # make predictions on the testing set
     print('Evaluating network...')
@@ -325,15 +313,9 @@ for i in range(NUM_MODELS):
     plt.legend(loc='lower left')
     plt.savefig(os.path.join(this_model_dir, 'loss.png'))
 
+    # Try to save memory
     del model
     K.clear_session()
     gc.collect()
-    print(h.heap()[0].byvia)
-    print(h.heap()[0].referrers.byvia)
-    print(h.heap()[0].rp)
-    print(h.heap()[0].sp)
-    print(h.heap()[0].byid)
-    print(h.heap().byrcs)
-    print("End of model {i}")
 
 print('Done, shuttting down!')
