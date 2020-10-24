@@ -129,7 +129,13 @@ assert len(set(trainY)) == len(set(validationY)), (
 
 # convert the data and labels to NumPy arrays while scaling the pixel
 # intensities to the range [0, 255]
-trainX = np.array(trainX) / 255.0
+print(h.heap())
+trainX = np.float32(trainX) / 255.0
+print(h.heap())
+# trainX = np.float32(trainX)
+# print(trainX[0])
+# print(trainX[100])
+# print(trainX.dtype)
 validationX = np.array(validationX) / 255.0
 testX = np.array(testX) / 255.0
 trainY = np.array(trainY)
@@ -154,10 +160,6 @@ if num_classes == 2:
 trainX, trainY = oversample(trainX, trainY, printText="training")
 validationX, validationY = undersample(validationX, validationY, printText="validation")
 testX, testY = undersample(testX, testY, printText="testing")
-print(h.heap()[0].byvia)
-
-print(h.heap()[0].byvia)
-
 print('Class mappings are:', lb.classes_)
 
 # initialize the training data augmentation object
@@ -173,11 +175,10 @@ trainAug = ImageDataGenerator(
 for i in range(NUM_MODELS):
     print(f"Training model {i}")
     print("====================================")
+    print(h.heap()[0].byvia)
     this_model_dir = os.path.join(MODEL_DIR, f'model-{i}')
     if not os.path.exists(this_model_dir):
         os.makedirs(this_model_dir)
-
-    print(h.heap()[0].byvia)
 
     # Load the VGG16 network
     model = MODEL_FACTORY[MODEL_ID](
@@ -234,12 +235,15 @@ for i in range(NUM_MODELS):
     print(f'Model has {model.count_params()} parameters')
     print(f'Model summary {model.summary()}')
 
-    print(h.heap()[0].byvia)
-
     # train the head of the network
     print('Starting training model...')
+    print(h.heap()[0].byvia)
+    myflow = trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE)
+    print(h.heap()[0].byvia)
     H = model.fit(
-        trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE),
+        myflow,
+        # trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE),
+        # trainX, trainY,
         batch_size=BATCH_SIZE,
         validation_data=(validationX, validationY),
         epochs=EPOCHS,
@@ -248,7 +252,10 @@ for i in range(NUM_MODELS):
         use_multiprocessing=True,
         workers=3,
     )
-
+    print(h.heap()[0].byvia)
+    del myflow
+    print(h.heap()[0].byvia)
+    del trainAug
     print(h.heap()[0].byvia)
 
     # make predictions on the testing set
@@ -317,18 +324,16 @@ for i in range(NUM_MODELS):
     plt.ylabel('Loss/Accuracy')
     plt.legend(loc='lower left')
     plt.savefig(os.path.join(this_model_dir, 'loss.png'))
-    print(h.heap()[0].byvia)
-    print("=============================")
 
     del model
-    print(h.heap()[0].byvia)
     K.clear_session()
-    print(h.heap()[0].byvia)
-    print(h.heap())
     gc.collect()
     print(h.heap()[0].byvia)
-    print("-----------------------------")
-
-    outputtime
+    print(h.heap()[0].referrers.byvia)
+    print(h.heap()[0].rp)
+    print(h.heap()[0].sp)
+    print(h.heap()[0].byid)
+    print(h.heap().byrcs)
+    print("End of model {i}")
 
 print('Done, shuttting down!')

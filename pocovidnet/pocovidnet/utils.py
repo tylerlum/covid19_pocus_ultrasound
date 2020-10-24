@@ -39,7 +39,7 @@ def oversample(X, Y, randomState=0, printText=""):
 
     # Resample each class with the same # of samples as the class with most samples
     maximumNumClass = max([labels.shape[0] for labels in labelsList])
-    finalOversampledX, finalOversampledY = np.zeros((maximumNumClass*len(classes), X.shape[1], X.shape[2], X.shape[3])), np.zeros((maximumNumClass*len(classes), Y.shape[1]))
+    finalOversampledX, finalOversampledY = np.zeros((maximumNumClass*len(classes), X.shape[1], X.shape[2], X.shape[3]), dtype=np.float32), np.zeros((maximumNumClass*len(classes), Y.shape[1]), dtype=np.float32)
     currentIndex = 0
     for datapoints, labels in zip(datapointsList, labelsList):
         oversampledX, oversampledY = resample(datapoints, labels, n_samples=maximumNumClass, replace=True, random_state=randomState)
