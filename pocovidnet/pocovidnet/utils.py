@@ -5,7 +5,7 @@ from tensorflow.keras.callbacks import Callback
 import random
 
 
-def undersample(X, Y, randomState=0, printText=""):
+def undersample(X, Y, randomState=0, printText="", shuffle=True):
     # Separate datapoints by label
     classes = np.unique(np.argmax(Y, axis=1))
     indicesByClass = [np.where(np.argmax(Y, axis=1) == cls) for cls in classes]
@@ -25,13 +25,14 @@ def undersample(X, Y, randomState=0, printText=""):
         currentIndex = nextCurrentIndex
 
     # Shuffle the array
-    finalUndersampledX, finalUndersampledY = shuffle(finalUndersampledX, finalUndersampledY, random_state=randomState)
+    if shuffle:
+        finalUndersampledX, finalUndersampledY = shuffle(finalUndersampledX, finalUndersampledY, random_state=randomState)
 
     print(f"Previously had {X.shape[0]} {printText} samples, but now undersampled to: {finalUndersampledX.shape[0]}")
     return finalUndersampledX, finalUndersampledY
 
 
-def oversample(X, Y, randomState=0, printText=""):
+def oversample(X, Y, randomState=0, printText="", shuffle=True):
     # Separate datapoints by label
     classes = np.unique(np.argmax(Y, axis=1))
     indicesByClass = [np.where(np.argmax(Y, axis=1) == cls) for cls in classes]
@@ -51,7 +52,9 @@ def oversample(X, Y, randomState=0, printText=""):
         currentIndex = nextCurrentIndex
 
     # Shuffle the array
-    finalOversampledX, finalOversampledY = shuffle(finalOversampledX, finalOversampledY, random_state=randomState)
+    if shuffle:
+        finalOversampledX, finalOversampledY = shuffle(finalOversampledX, finalOversampledY, random_state=randomState)
+
     print(f"Previously had {X.shape[0]} {printText} samples, but now oversampled to: {finalOversampledX.shape[0]}")
     return finalOversampledX, finalOversampledY
 
