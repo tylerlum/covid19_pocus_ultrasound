@@ -1,4 +1,5 @@
 import tensorflow as tf
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
 import cv2
@@ -63,7 +64,7 @@ def get_dataset():
         labels = to_categorical(labels, num_classes=num_classes)
 
     print('Class mappings are:', lb.classes_)
-    data, labels = undersample(data, labels, printText="testing")
+    data, labels = undersample(data, labels, printText="testing", shuffle=False)
 
     return data, labels
 
@@ -147,24 +148,21 @@ def save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_pred
     print(f"len(certain_and_corrects) = {len(certain_and_corrects)}")
     print(f"len(uncertains) = {len(uncertains)}")
 
-    for n, index in enumerate(certain_and_incorrects):
-        print(f"n = {n} certain_and_incorrects")
-        if n > 10:
+    for n, i in enumerate(certain_and_incorrects):
+        if n >= num_images:
             break
-        plt.imshow(data[index])
-        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"mc-dropout__certain-incorrect__index-{index}__label-{labels[index]}__uncertainty-{uncertainty_in_prediction[index]}__l1-loss-{l1_loss_of_prediction[index]}.png"))
-    for n, index in enumerate(certain_and_corrects):
-        print(f"n = {n} certain_and_corrects")
-        if n > 10:
+        output_name = os.path.join(FINAL_OUTPUT_DIR, f"{start_of_filename}__certain-incorrect__index-{i}__label-{labels[i]}__uncertainty-{uncertainty_in_prediction[i]}__l1-loss-{l1_loss_of_prediction[i]}.png")
+        cv2.imwrite(output_name, data[i] * 255)
+    for n, i in enumerate(certain_and_corrects):
+        if n >= num_images:
             break
-        plt.imshow(data[index])
-        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"mc-dropout__certain-correct__index-{index}__label-{labels[index]}__uncertainty-{uncertainty_in_prediction[index]}__l1-loss-{l1_loss_of_prediction[index]}.png"))
-    for n, index in enumerate(uncertains):
-        print(f"n = {n} uncertains")
-        if n > 10:
+        output_name = os.path.join(FINAL_OUTPUT_DIR, f"{start_of_filename}__certain-correct__index-{i}__label-{labels[i]}__uncertainty-{uncertainty_in_prediction[i]}__l1-loss-{l1_loss_of_prediction[i]}.png")
+        cv2.imwrite(output_name, data[i] * 255)
+    for n, i in enumerate(uncertains):
+        if n >= num_images:
             break
-        plt.imshow(data[index])
-        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"mc-dropout__uncertain__index-{index}__label-{labels[index]}__uncertainty-{uncertainty_in_prediction[index]}__l1-loss-{l1_loss_of_prediction[index]}.png"))
+        output_name = os.path.join(FINAL_OUTPUT_DIR, f"{start_of_filename}__uncertain__index-{i}__label-{labels[i]}__uncertainty-{uncertainty_in_prediction[i]}__l1-loss-{l1_loss_of_prediction[i]}.png")
+        cv2.imwrite(output_name, data[i] * 255)
 
 
 
@@ -228,7 +226,7 @@ if __name__ == "__main__":
         # Compute logits
         all_logits = np.zeros((NUM_MC_DROPOUT_RUNS, labels.shape[0], labels.shape[1]))
         accuracies = []
-        for i in range(NUM_MC_DROPOUT_RUNS):
+        for i in tqdm(range(NUM_MC_DROPOUT_RUNS)):
             logits = mc_model.predict(data)
             accuracies.append(accuracy(logits, labels))
             all_logits[i, :, :] = logits
@@ -250,6 +248,9 @@ if __name__ == "__main__":
         # Plot RAR vs RER
         prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
         plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="mc_dropout")
+
+        # Save relevant images
+        save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=10, start_of_filename="mc_dropout")
 
     if TEST_TIME_AUGMENTATION:
         NUM_TEST_TIME_AUGMENTATION_RUNS = 50
@@ -273,7 +274,7 @@ if __name__ == "__main__":
         # Compute logits
         all_logits = np.zeros((NUM_TEST_TIME_AUGMENTATION_RUNS, labels.shape[0], labels.shape[1]))
         accuracies = []
-        for i in range(NUM_TEST_TIME_AUGMENTATION_RUNS):
+        for i in tqdm(range(NUM_TEST_TIME_AUGMENTATION_RUNS)):
             logits = model.predict(augmented_image_generator, steps=data.shape[0])
             accuracies.append(accuracy(logits, labels))
             all_logits[i, :, :] = logits
@@ -296,6 +297,9 @@ if __name__ == "__main__":
         prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
         plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="test_time_augmentation")
 
+        # Save relevant images
+        save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=10, start_of_filename="test_time_augmentation")
+
     if DEEP_ENSEMBLE:
         # Find paths to models
         print("Starting Deep Ensemble")
@@ -308,7 +312,8 @@ if __name__ == "__main__":
         # Compute logits
         all_logits = np.zeros((num_models, labels.shape[0], labels.shape[1]))
         accuracies = []
-        for i, model_filename in enumerate(model_filenames):
+        for i in tqdm(range(len(model_filenames))):
+            model_filename = model_filenames[i]
             one_model = tf.keras.models.load_model(model_filename)
             logits = one_model.predict(data)
             accuracies.append(accuracy(logits, labels))
@@ -332,3 +337,6 @@ if __name__ == "__main__":
         # Plot RAR vs RER
         prediction_accuracies = np.argmax(labels, axis=1) == np.argmax(average_logits, axis=1)
         plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="deep_ensemble")
+
+        # Save relevant images
+        save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=10, start_of_filename="deep_ensemble")
