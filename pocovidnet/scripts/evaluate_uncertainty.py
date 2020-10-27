@@ -89,17 +89,41 @@ def create_mc_model(model, dropProb=0.5):
   return mc_model
 
 
-def plot_loss_vs_uncertainty(loss, uncertainty, start_of_filename=None):
+def plot_loss_vs_uncertainty(loss, uncertainty, color_by_class=True, start_of_filename=None):
     output_filename = "loss_vs_uncertainty.png"
     if start_of_filename is not None:
         output_filename = start_of_filename + "_" + output_filename
-    plt.style.use('ggplot')
-    plt.figure()
-    plt.scatter(uncertainty, loss)
-    plt.title('L1 Loss vs. Uncertainty')
-    plt.xlabel('Uncertainty')
-    plt.ylabel('L1 Loss')
-    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
+
+    # Calculate values by class
+    covid_loss = [loss[i] for i in range(len(loss)) if labels[i][0] == 1]
+    pneu_loss = [loss[i] for i in range(len(loss)) if labels[i][1] == 1]
+    reg_loss = [loss[i] for i in range(len(loss)) if labels[i][2] == 1]
+    covid_uncertainty = [uncertainty[i] for i in range(len(uncertainty)) if labels[i][0] == 1]
+    pneu_uncertainty = [uncertainty[i] for i in range(len(uncertainty)) if labels[i][1] == 1]
+    reg_uncertainty = [uncertainty[i] for i in range(len(uncertainty)) if labels[i][2] == 1]
+
+    colors = ['red', 'yellow', 'blue']
+    mylabels = ['covid', 'pneu', 'reg']
+    losses = [covid_loss, pneu_loss, reg_loss]
+    uncertainties = [covid_uncertainty, pneu_uncertainty, reg_uncertainty]
+    if color_by_class:
+        plt.style.use('ggplot')
+        plt.figure()
+        for i in range(len(colors)):
+            plt.scatter(uncertainties[i], losses[i], c=colors[i], label=mylabels[i])
+        plt.title('L1 Loss vs. Uncertainty')
+        plt.xlabel('Uncertainty')
+        plt.ylabel('L1 Loss')
+        plt.legend()
+        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
+    else:
+        plt.style.use('ggplot')
+        plt.figure()
+        plt.scatter(uncertainty, loss)
+        plt.title('L1 Loss vs. Uncertainty')
+        plt.xlabel('Uncertainty')
+        plt.ylabel('L1 Loss')
+        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
 
 
 def plot_rar_vs_rer(accuracies, uncertainty_in_prediction, start_of_filename=None):
