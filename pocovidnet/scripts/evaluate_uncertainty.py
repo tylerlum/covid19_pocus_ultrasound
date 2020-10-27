@@ -64,7 +64,7 @@ def get_dataset():
         labels = to_categorical(labels, num_classes=num_classes)
 
     print('Class mappings are:', lb.classes_)
-    data, labels = undersample(data, labels, printText="testing", shuffle=False)
+    data, labels = undersample(data, labels, printText="testing", perform_shuffle=True)
 
     return data, labels
 
@@ -130,6 +130,116 @@ def plot_rar_vs_rer(accuracies, uncertainty_in_prediction, start_of_filename=Non
     plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
 
 
+def plot_histogram_labels(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename=None):
+    output_filename = "loss_histogram.png"
+    if start_of_filename is not None:
+        output_filename = start_of_filename + "_" + output_filename
+
+    plt.style.use('ggplot')
+    plt.figure()
+    covid_loss = [l1_loss_of_prediction[i] for i in range(len(l1_loss_of_prediction)) if labels[i][0] == 1]
+    pneu_loss = [l1_loss_of_prediction[i] for i in range(len(l1_loss_of_prediction)) if labels[i][1] == 1]
+    reg_loss = [l1_loss_of_prediction[i] for i in range(len(l1_loss_of_prediction)) if labels[i][2] == 1]
+    losses = [covid_loss, pneu_loss, reg_loss]
+    colors = ['red', 'yellow', 'blue']
+    mylabels = ['covid', 'pneu', 'reg']
+
+    plt.hist(losses, bins=20, label=mylabels, color=colors)
+    plt.title('Histogram Losses')
+    plt.xlabel('L1 Loss')
+    plt.ylabel('Frequency')
+    plt.legend()
+    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
+
+    output_filename = "uncertainty_histogram.png"
+    if start_of_filename is not None:
+        output_filename = start_of_filename + "_" + output_filename
+
+    plt.style.use('ggplot')
+    plt.figure()
+    covid_uncertainty = [uncertainty_in_prediction[i] for i in range(len(uncertainty_in_prediction)) if labels[i][0] == 1]
+    pneu_uncertainty = [uncertainty_in_prediction[i] for i in range(len(uncertainty_in_prediction)) if labels[i][1] == 1]
+    reg_uncertainty = [uncertainty_in_prediction[i] for i in range(len(uncertainty_in_prediction)) if labels[i][2] == 1]
+    uncertainties = [covid_uncertainty, pneu_uncertainty, reg_uncertainty]
+    colors = ['red', 'yellow', 'blue']
+    mylabels = ['covid', 'pneu', 'reg']
+
+    plt.hist(uncertainties, bins=20, label=mylabels, color=colors)
+    plt.title('Histogram uncertainties')
+    plt.xlabel('Uncertainty')
+    plt.ylabel('Frequency')
+    plt.legend()
+    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, output_filename))
+
+def save_max_min_loss_certainty_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=20, start_of_filename=None):
+    new_list = []
+    for i, (l1_loss, uncertainty) in enumerate(zip(l1_loss_of_prediction, uncertainty_in_prediction)):
+        new_list.append((i, l1_loss, uncertainty))
+
+    def get_sorted_by_uncertainty(new_list):
+        copy = list(new_list)
+        copy.sort(key=lambda x: x[2])
+        return copy
+    def get_sorted_by_loss(new_list):
+        copy = list(new_list)
+        copy.sort(key=lambda x: x[1])
+        return copy
+
+    sorted_by_uncertainty = get_sorted_by_uncertainty(new_list)
+    sorted_by_loss = get_sorted_by_loss(new_list)
+
+    def most_certain_and_correct(sorted_by_loss, sorted_by_uncertainty, top_how_many):
+        least_loss = set([x[0] for x in sorted_by_loss][:top_how_many])
+        least_uncertainty = set([x[0] for x in sorted_by_uncertainty][:top_how_many])
+        return least_loss.intersection(least_uncertainty)
+
+    def most_certain_and_incorrect(sorted_by_loss, sorted_by_uncertainty, top_how_many):
+        most_loss = set([x[0] for x in sorted_by_loss][-top_how_many:])
+        least_uncertainty = set([x[0] for x in sorted_by_uncertainty][:top_how_many])
+        return most_loss.intersection(least_uncertainty)
+
+    def most_uncertain(sorted_by_loss, sorted_by_uncertainty, top_how_many):
+        most_uncertainty = set([x[0] for x in sorted_by_uncertainty][-top_how_many:])
+        return most_uncertainty
+
+    top_how_many = 1
+    while True:
+        most_certain_and_incorrect_list = most_certain_and_incorrect(sorted_by_loss, sorted_by_uncertainty, top_how_many)
+        if len(most_certain_and_incorrect_list) >= num_images or top_how_many >= len(sorted_by_loss):
+            break
+        top_how_many += 1
+    print(f"{top_how_many}/{len(sorted_by_loss)} to get {num_images} certain and incorrect")
+
+    top_how_many = 1
+    while True:
+        most_certain_and_correct_list = most_certain_and_correct(sorted_by_loss, sorted_by_uncertainty, top_how_many)
+        if len(most_certain_and_correct_list) >= num_images or top_how_many >= len(sorted_by_loss):
+            break
+        top_how_many += 1
+    print(f"{top_how_many}/{len(sorted_by_loss)} to get {num_images} certain and correct")
+
+    # Save extrema images
+    most_uncertain_list = most_uncertain(sorted_by_loss, sorted_by_uncertainty, num_images)
+
+    def distribution(my_list):
+        dist = [0, 0, 0]
+        for i in my_list:
+            dist[np.argmax(labels[i])] += 1
+        return dist
+    print(f"Distribution of certain and incorrect: {distribution(most_certain_and_incorrect_list)}")
+    print(f"Distribution of certain and correct: {distribution(most_certain_and_correct_list)}")
+    print(f"Distribution of uncertain: {distribution(most_uncertain_list)}")
+    for i in most_certain_and_incorrect_list:
+        output_name = os.path.join(FINAL_OUTPUT_DIR, f"{start_of_filename}__most-certain-incorrect__index-{i}__label-{labels[i]}__uncertainty-{uncertainty_in_prediction[i]}__l1-loss-{l1_loss_of_prediction[i]}.png")
+        cv2.imwrite(output_name, data[i] * 255)
+    for i in most_certain_and_correct_list:
+        output_name = os.path.join(FINAL_OUTPUT_DIR, f"{start_of_filename}__most-certain-correct__index-{i}__label-{labels[i]}__uncertainty-{uncertainty_in_prediction[i]}__l1-loss-{l1_loss_of_prediction[i]}.png")
+        cv2.imwrite(output_name, data[i] * 255)
+    for i in most_uncertain_list:
+        output_name = os.path.join(FINAL_OUTPUT_DIR, f"{start_of_filename}__most-uncertain__index-{i}__label-{labels[i]}__uncertainty-{uncertainty_in_prediction[i]}__l1-loss-{l1_loss_of_prediction[i]}.png")
+        cv2.imwrite(output_name, data[i] * 255)
+
+
 def save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=10, start_of_filename=None):
     certain_and_incorrects, certain_and_corrects, uncertains = [], [], []
     for i, (l1_loss, uncertainty) in enumerate(zip(l1_loss_of_prediction, uncertainty_in_prediction)):
@@ -163,8 +273,6 @@ def save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_pred
             break
         output_name = os.path.join(FINAL_OUTPUT_DIR, f"{start_of_filename}__uncertain__index-{i}__label-{labels[i]}__uncertainty-{uncertainty_in_prediction[i]}__l1-loss-{l1_loss_of_prediction[i]}.png")
         cv2.imwrite(output_name, data[i] * 255)
-
-
 
 
 if __name__ == "__main__":
@@ -250,7 +358,12 @@ if __name__ == "__main__":
         plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="mc_dropout")
 
         # Save relevant images
-        save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=10, start_of_filename="mc_dropout")
+        save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=20, start_of_filename="mc_dropout")
+
+        # Save max/min loss/certainty images
+        save_max_min_loss_certainty_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=20, start_of_filename="mc_dropout")
+
+        plot_histogram_labels(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="mc_dropout")
 
     if TEST_TIME_AUGMENTATION:
         NUM_TEST_TIME_AUGMENTATION_RUNS = 50
@@ -298,7 +411,11 @@ if __name__ == "__main__":
         plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="test_time_augmentation")
 
         # Save relevant images
-        save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=10, start_of_filename="test_time_augmentation")
+        save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=20, start_of_filename="test_time_augmentation")
+
+        # Save max/min loss/certainty images
+        save_max_min_loss_certainty_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=20, start_of_filename="test_time_augmentation")
+        plot_histogram_labels(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="test_time_augmentation")
 
     if DEEP_ENSEMBLE:
         # Find paths to models
@@ -339,4 +456,9 @@ if __name__ == "__main__":
         plot_rar_vs_rer(prediction_accuracies, uncertainty_in_prediction, start_of_filename="deep_ensemble")
 
         # Save relevant images
-        save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=10, start_of_filename="deep_ensemble")
+        save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=20, start_of_filename="deep_ensemble")
+
+        # Save max/min loss/certainty images
+        save_max_min_loss_certainty_images(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, num_images=20, start_of_filename="deep_ensemble")
+
+        plot_histogram_labels(data, labels, l1_loss_of_prediction, uncertainty_in_prediction, start_of_filename="deep_ensemble")
