@@ -282,6 +282,22 @@ def save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_pred
     print(f"len(certain_and_corrects) = {len(certain_and_corrects)}")
     print(f"len(uncertains) = {len(uncertains)}")
 
+    import shap
+    print("About to try shap")
+    explainer = shap.GradientExplainer(model, data)
+    def plot_shap(explainer, your_data, text):
+        t = np.array([data[index] for i, index in enumerate(your_data) if i < num_images])
+        print(t.shape)
+        shap_values = explainer.shap_values(t)
+        plt.figure()
+        shap.image_plot([shap_values[i] for i in range(len(shap_values))], t)
+        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"{start_of_filename}__{text}__shap.png"))
+    print("About to shap plot")
+    plot_shap(explainer, certain_and_incorrects, "certain_and_incorrects")
+    plot_shap(explainer, certain_and_corrects, "certain_and_corrects")
+    plot_shap(explainer, uncertains, "uncertains")
+    print("Done plotting")
+
     for n, i in enumerate(certain_and_incorrects):
         if n >= num_images:
             break

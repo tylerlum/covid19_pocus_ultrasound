@@ -167,6 +167,16 @@ if __name__ == "__main__":
         logits = model.predict(data)
         save_evaluation_files(labels, logits, classes, "regular", FINAL_OUTPUT_DIR)
 
+        import shap
+        explainer = shap.GradientExplainer(model, data)
+        num_examples = 20
+        shap_values = explainer.shap_values(data[:num_examples])
+        print(len(shap_values))
+        print(len(shap_values[0]))
+        shap.image_plot([shap_values[i] for i in range(len(shap_values))], data[:num_examples])
+        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, "shap.png"))
+
+
     # Setup model
     if MC_DROPOUT:
         NUM_MC_DROPOUT_RUNS = 20
