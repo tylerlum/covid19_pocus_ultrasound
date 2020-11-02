@@ -207,7 +207,7 @@ if __name__ == "__main__":
 
     # Setup model
     if MC_DROPOUT:
-        NUM_MC_DROPOUT_RUNS = 20
+        NUM_MC_DROPOUT_RUNS = 50
         print(f"Running {NUM_MC_DROPOUT_RUNS} runs of MC Dropout")
         print("========================")
 
@@ -230,7 +230,7 @@ if __name__ == "__main__":
         save_evaluation_files(labels, logits, classes, "mc_dropout", FINAL_OUTPUT_DIR)
 
     if TEST_TIME_AUGMENTATION:
-        NUM_TEST_TIME_AUGMENTATION_RUNS = 20
+        NUM_TEST_TIME_AUGMENTATION_RUNS = 50
         print(f"Running {NUM_TEST_TIME_AUGMENTATION_RUNS} runs of Test Time Augmentation")
         print("========================")
 
