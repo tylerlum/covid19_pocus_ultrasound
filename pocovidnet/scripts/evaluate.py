@@ -125,6 +125,7 @@ if __name__ == "__main__":
     ap.add_argument('-a', '--mc_dropout', type=bool, default=False)
     ap.add_argument('-b', '--test_time_augmentation', type=bool, default=False)
     ap.add_argument('-c', '--deep_ensemble', type=bool, default=False)
+    ap.add_argument('-s', '--shap', type=bool, default=False)
     args = vars(ap.parse_args())
 
     # Initialize hyperparameters
@@ -136,6 +137,7 @@ if __name__ == "__main__":
     MC_DROPOUT = args['mc_dropout']
     TEST_TIME_AUGMENTATION = args['test_time_augmentation']
     DEEP_ENSEMBLE = args['deep_ensemble']
+    SHAP = args['shap']
     REGULAR = True
 
     print(f'Evaluating with: {args}')
@@ -158,20 +160,27 @@ if __name__ == "__main__":
         print(f"Running REGULAR model")
         print("========================")
 
-        # Create MC model
+        # Create regular model
         model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
         print(f"Looking for model at {model_path}")
         model = tf.keras.models.load_model(model_path)
 
         # make predictions on the testing set
         logits = model.predict(data)
+        save_evaluation_files(labels, logits, classes, "regular", FINAL_OUTPUT_DIR)
+
+    if SHAP:
+        # Create regular model
+        model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
+        print(f"Looking for model at {model_path}")
+        model = tf.keras.models.load_model(model_path)
+
+        # Selected images for evaluation
         folder = "outputs/scripts|evaluate_uncertainty.py__Data-..|data|cross_validation_balanced__Model-models|ensemble_balanced3|validation-fold-2_test-fold-3__Fold-3__MC-True__TTA-False__ENSEMBLE-False__Oct-27-2020_18-02-19"
         image_filenames = ["mc_dropout__certain-incorrect__index-84__label-[1 0 0]__uncertainty-0.0691902687061081__l1-loss-0.906338838338852.png", "mc_dropout__certain-incorrect__index-180__label-[1 0 0]__uncertainty-0.01399976156860364__l1-loss-0.9907586216926575.png", "mc_dropout__certain-incorrect__index-185__label-[0 1 0]__uncertainty-0.04448785803094582__l1-loss-0.9283356690406799.png", "mc_dropout__certain-incorrect__index-127__label-[0 0 1]__uncertainty-0.020174342382949104__l1-loss-0.9932182478904724.png", "mc_dropout__certain-incorrect__index-20__label-[0 0 1]__uncertainty-0.008452541030487913__l1-loss-0.9952394783496856.png", "mc_dropout__certain-incorrect__index-58__label-[0 0 1]__uncertainty-0.03691961227103745__l1-loss-0.9810117626190186.png", "mc_dropout__certain-correct__index-21__label-[1 0 0]__uncertainty-0.02249087042797793__l1-loss-0.01452756881713868.png", "mc_dropout__certain-correct__index-26__label-[1 0 0]__uncertainty-0.021063608159052588__l1-loss-0.009026633501052816.png", "mc_dropout__certain-correct__index-6__label-[0 1 0]__uncertainty-0.06496651852313849__l1-loss-0.026082087755203265.png", "mc_dropout__certain-correct__index-0__label-[0 1 0]__uncertainty-0.007189998127695973__l1-loss-0.005185798406600939.png", "mc_dropout__certain-correct__index-7__label-[0 0 1]__uncertainty-0.00873774073540707__l1-loss-0.0038542127609253463.png", "mc_dropout__certain-correct__index-5__label-[0 0 1]__uncertainty-0.015318109900374043__l1-loss-0.01686740398406983.png", "mc_dropout__most-uncertain__index-218__label-[1 0 0]__uncertainty-0.11493162844491756__l1-loss-0.6389305627346039.png", "mc_dropout__most-uncertain__index-149__label-[1 0 0]__uncertainty-0.141019137374305__l1-loss-0.6775126373767852.png", "mc_dropout__most-uncertain__index-190__label-[0 1 0]__uncertainty-0.15890519701658554__l1-loss-0.26360798537731167.png", "mc_dropout__most-uncertain__index-208__label-[0 1 0]__uncertainty-0.1501838342272395__l1-loss-0.7401564568281174.png", "mc_dropout__most-uncertain__index-229__label-[0 0 1]__uncertainty-0.16262208517033447__l1-loss-0.6901898381114006.png", "mc_dropout__most-uncertain__index-124__label-[0 0 1]__uncertainty-0.1256323441802403__l1-loss-0.24258242070674896.png"]
         test_images = [os.path.join(folder, x) for x in image_filenames]
         test_images = [cv2.cvtColor(cv2.imread(x), cv2.COLOR_BGR2RGB) for x in test_images]
         test_images = [np.array(cv2.resize(x, (224, 224)))/255.0 for x in test_images]
-
-        save_evaluation_files(labels, logits, classes, "regular", FINAL_OUTPUT_DIR)
 
         import shap
         explainer = shap.GradientExplainer(model, data)
