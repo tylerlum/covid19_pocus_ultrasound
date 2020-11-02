@@ -239,14 +239,42 @@ if __name__ == "__main__":
         print(f"Looking for model at {model_path}")
         model = tf.keras.models.load_model(model_path)
         augmentation = ImageDataGenerator(
-            rotation_range=10,
-            fill_mode='nearest',
-            horizontal_flip=True,
-            vertical_flip=False,
-            width_shift_range=0.1,
-            height_shift_range=0.1
+        )
+        augmentation2 = ImageDataGenerator(
+            brightness_range=(1.0, 1.0)
+        )
+        augmentation3 = ImageDataGenerator(
+            brightness_range=(0.0, 0.0)
         )
         augmented_image_generator = augmentation.flow(data, labels, shuffle=False, batch_size=1)
+        augmented_image_generator2 = augmentation2.flow(data, labels, shuffle=False, batch_size=1)
+        augmented_image_generator3 = augmentation3.flow(data, labels, shuffle=False, batch_size=1)
+        img, img2, img3 = augmented_image_generator[0][0][0], augmented_image_generator2[0][0][0], augmented_image_generator3[0][0][0]
+        img4 = img2 / 255
+        print(img.shape)
+        print(img2.shape)
+        print(img3.shape)
+        print(img4.shape)
+        print(data[0].shape)
+        print(img.max())
+        print(img2.max())
+        print(img3.max())
+        print(img4.max())
+        print(data[0].max())
+        print(np.average(img))
+        print(np.average(img2))
+        print(np.average(img3))
+        print(np.average(img4))
+        print(np.average(data[0]))
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img.png"), img)
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img-255.png"), img * 255)
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img2.png"), img2)
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img3.png"), img3)
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img4.png"), img4)
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "data.png"), data[0])
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "data-255.png"), data[0] * 255)
+        print(doit)
+
 
         # Compute logits
         all_logits = np.zeros((NUM_TEST_TIME_AUGMENTATION_RUNS, labels.shape[0], labels.shape[1]))
