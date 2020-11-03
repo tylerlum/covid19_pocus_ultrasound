@@ -238,35 +238,31 @@ if __name__ == "__main__":
         model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
         print(f"Looking for model at {model_path}")
         model = tf.keras.models.load_model(model_path)
-        augmentation = ImageDataGenerator(
-        )
-        augmentation2 = ImageDataGenerator(
-            brightness_range=(1.0, 1.0)
-        )
-        augmentation3 = ImageDataGenerator(
-            brightness_range=(0.0, 0.0)
-        )
-        augmented_image_generator = augmentation.flow(data, labels, shuffle=False, batch_size=1)
-        augmented_image_generator2 = augmentation2.flow(data, labels, shuffle=False, batch_size=1)
-        augmented_image_generator3 = augmentation3.flow(data, labels, shuffle=False, batch_size=1)
-        img, img2, img3 = augmented_image_generator[0][0][0], augmented_image_generator2[0][0][0], augmented_image_generator3[0][0][0]
-        img4 = img2 / 255
-        print(img.shape)
-        print(img2.shape)
-        print(img3.shape)
-        print(img4.shape)
-        print(data[0].shape)
-        print(img.max())
-        print(img2.max())
-        print(img3.max())
-        print(img4.max())
-        print(data[0].max())
-        print(np.average(img))
-        print(np.average(img2))
-        print(np.average(img3))
-        print(np.average(img4))
-        print(np.average(data[0]))
-        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img.png"), img)
+        originalImage = data[0]
+        noChangeImage = ImageDataGenerator().flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
+        fullBrightnessImage = ImageDataGenerator(brightness_range=(1.0, 1.0)).flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
+        moreBrightnessImage = ImageDataGenerator(brightness_range=(1.5, 1.5)).flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
+        smallChannelShiftImage = ImageDataGenerator(channel_shift_range=0.5).flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
+        channelAndBrightnessShiftImage = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=150).flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
+        def printAndSave(myimg, name):
+            print(f"{name}.shape = {myimg.shape}")
+            print(f"{name}.max() = {myimg.max()}")
+            print(f"{name}.min() = {myimg.min()}")
+            print(f"np.average({name}) = {np.average(myimg)}")
+            scaled_img = myimg * 255 / myimg.max() 
+            print("Rescaled img")
+            print(f"{name}.max() = {scaled_img.max()}")
+            print(f"{name}.min() = {scaled_img.min()}")
+            print(f"np.average({name}) = {np.average(scaled_img)}")
+            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"{name}.png"), scaled_img)
+            print("==============================")
+        # all_imgs = [(originalImage, "originalImage"), (noChangeImage, "noChangeImage"), (fullBrightnessImage, "fullBrightnessImage"), (moreBrightnessImage, "moreBrightnessImage")]
+        # all_imgs = [(originalImage, "originalImage"), (noChangeImage, "noChangeImage"), (fullBrightnessImage, "fullBrightnessImage")]
+        all_imgs = [(originalImage, "originalImage"), (noChangeImage, "noChangeImage"), (fullBrightnessImage, "fullBrightnessImage"), (smallChannelShiftImage, "smallChannelShiftImage"), (channelAndBrightnessShiftImage, "channelAndBrightnessShiftImage"), (moreBrightnessImage, "moreBrightnessImage")]
+        for x in all_imgs:
+            printAndSave(x[0], x[1])
+
+
         cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img-255.png"), img * 255)
         cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img2.png"), img2)
         cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img3.png"), img3)
