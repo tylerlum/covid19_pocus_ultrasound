@@ -5,8 +5,11 @@ import pickle
 import warnings
 
 import numpy as np
-from sklearn.metrics import classification_report, confusion_matrix
+import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
+from sklearn.model_selection import train_test_split
 from tensorflow.keras.callbacks import (
     EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 )
@@ -18,8 +21,11 @@ from pocovidnet.utils import fix_layers
 
 from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
+from datetime import datetime
+from datetime import date
 
 warnings.filterwarnings("ignore")
+datestring = date.today().strftime("%b-%d-%Y") + "_" + datetime.now().strftime('%H-%M-%S')
 
 
 def main():
@@ -62,6 +68,10 @@ def main():
     if not os.path.isdir(args.save):
         os.makedirs(args.save)
 
+    FINAL_OUTPUT_DIR = os.path.join(MODEL_D, datestring)
+    if not os.path.exists(FINAL_OUTPUT_DIR):
+        os.makedirs(FINAL_OUTPUT_DIR)
+
     # Initialize video converter
     vid3d = Videoto3D(
         args.videos, width=64, height=64, depth=args.depth, framerate=args.fr
@@ -81,20 +91,16 @@ def main():
         ) as infile:
             X_train, train_labels_text, train_files = pickle.load(infile)
     else:
-        # Make split
-        with open(args.json, "r") as infile:
-            split_dict = json.load(infile)
-        train_files, train_labels = split_dict[str(args.fold)]["train"]
-        test_files, test_labels = split_dict[str(args.fold)]["test"]
-        # # SPLIT NO CROSSVAL
-        # class_short = ["cov", "pne", "reg"]
-        # vid_files = [
-        #     v for v in os.listdir(args.videos) if v[:3].lower() in class_short
-        # ]
-        # labels = [vid[:3].lower() for vid in vid_files]
-        # train_files, test_files, train_labels, test_labels = train_test_split(
-        #     vid_files, labels, stratify=labels, test_size=0.2
-        # )
+        # SPLIT NO CROSSVAL
+        class_short = ["cov", "pne", "reg"]
+        vid_files = [
+            v for v in os.listdir(args.videos) if v[:3].lower() in class_short
+        ]
+        labels = [vid[:3].lower() for vid in vid_files]
+        train_files, test_files, train_labels, test_labels = train_test_split(
+            vid_files, labels, stratify=labels, test_size=0.2
+        )
+
         # Read in videos and transform to 3D
         X_train, train_labels_text, train_files = vid3d.video3d(
             train_files,
@@ -180,7 +186,7 @@ def main():
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
     )
-    history = model.fit(
+    H = model.fit(
         X_train,
         Y_train,
         validation_data=(X_test, Y_test),
@@ -209,23 +215,58 @@ def main():
     print('Test accuracy:', acc)
 
     print('Evaluating network...')
-    predIdxs = model.predict(X_test, batch_size=args.batch)
+    testPredIdxs = model.predict(X_test, batch_size=args.batch)
+    def savePredictionsToCSV(predIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
+        df = pd.DataFrame(predIdxs)
+        df.to_csv(os.path.join(directory, csvFilename))
+    savePredictionsToCSV(testPredIdxs, "test_preds_last_epoch.csv")
+
     # for each image in the testing set we need to find the index of the
     # label with corresponding largest predicted probability
-    predIdxs = np.argmax(predIdxs, axis=1)
+    testPredIdxs = np.argmax(testPredIdxs, axis=1)
 
-    print('classification report sklearn:')
-    print(
-        classification_report(
-            Y_test.argmax(axis=1), predIdxs, target_names=lb.classes_
-        )
-    )
     # compute the confusion matrix and and use it to derive the raw
     # accuracy, sensitivity, and specificity
-    print('confusion matrix:')
-    cm = confusion_matrix(Y_test.argmax(axis=1), predIdxs)
-    print(cm)
+    def printAndSaveClassificationReport(y, predIdxs, classes, reportFilename, directory=FINAL_OUTPUT_DIR):
+        print(f'classification report sklearn for {reportFilename}')
+        print(
+            classification_report(
+                y.argmax(axis=1), predIdxs, target_names=classes
+            )
+        )
 
+        report = classification_report(
+            y.argmax(axis=1), predIdxs, target_names=classes, output_dict=True
+        )
+        reportDf = pd.DataFrame(report).transpose()
+        reportDf.to_csv(os.path.join(directory, reportFilename))
+    printAndSaveClassificationReport(Y_test, testPredIdxs, lb.classes_, "testReport.csv")
+
+    def printAndSaveConfusionMatrix(y, predIdxs, classes, confusionMatrixFilename, directory=FINAL_OUTPUT_DIR):
+        print(f'confusion matrix for {confusionMatrixFilename}')
+
+        cm = confusion_matrix(y.argmax(axis=1), predIdxs)
+        # show the confusion matrix, accuracy, sensitivity, and specificity
+        print(cm)
+
+        plt.figure()
+        cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
+        cmDisplay.plot()
+        plt.savefig(os.path.join(directory, confusionMatrixFilename))
+    printAndSaveConfusionMatrix(Y_test, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
+
+    # plot the training loss and accuracy
+    plt.style.use('ggplot')
+    plt.figure()
+    plt.plot(np.arange(0, len(H.history['loss'])), H.history['loss'], label='train_loss')
+    plt.plot(np.arange(0, len(H.history['val_loss'])), H.history['val_loss'], label='val_loss')
+    plt.plot(np.arange(0, len(H.history['accuracy'])), H.history['accuracy'], label='train_acc')
+    plt.plot(np.arange(0, len(H.history['val_accuracy'])), H.history['val_accuracy'], label='val_acc')
+    plt.title('Training Loss and Accuracy on COVID-19 Dataset')
+    plt.xlabel('Epoch #')
+    plt.ylabel('Loss/Accuracy')
+    plt.legend(loc='lower left')
+    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, 'loss.png'))
 
 if __name__ == '__main__':
     main()
