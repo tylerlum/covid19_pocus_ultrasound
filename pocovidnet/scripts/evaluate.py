@@ -238,15 +238,16 @@ if __name__ == "__main__":
         model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
         print(f"Looking for model at {model_path}")
         model = tf.keras.models.load_model(model_path)
-        originalImage = data[0] * 255
-        noChangeImage = ImageDataGenerator().flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
-        loBrightnessImage = ImageDataGenerator(brightness_range=(0.5, 0.5)).flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
-        moreBrightnessImage = ImageDataGenerator(brightness_range=(2.0, 2.0)).flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
-        smallChannelShiftImage = ImageDataGenerator(channel_shift_range=0.5).flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
-        channelAndBrightnessShiftImage = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=50).flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
-        channelAndBrightnessShiftImage2 = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=50).flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
-        channelAndBrightnessShiftImage3 = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=50).flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
-        channelAndBrightnessShiftImage4 = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=50).flow(data*255, labels, shuffle=False, batch_size=1)[0][0][0]
+        idx = 4
+        originalImage = data[idx] * 255
+        noChangeImage = ImageDataGenerator().flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        loBrightnessImage = ImageDataGenerator(brightness_range=(0.75, 0.5)).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        moreBrightnessImage = ImageDataGenerator(brightness_range=(1.25, 1.25)).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        smallChannelShiftImage = ImageDataGenerator(channel_shift_range=0.5).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        channelAndBrightnessShiftImage = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=30).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        channelAndBrightnessShiftImage2 = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=30).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        channelAndBrightnessShiftImage3 = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=30).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        channelAndBrightnessShiftImage4 = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=30).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
         def printAndSave(myimg, name):
             print(f"{name}.shape = {myimg.shape}")
             print(f"{name}.max() = {myimg.max()}")
