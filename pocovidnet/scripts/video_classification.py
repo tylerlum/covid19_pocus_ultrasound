@@ -33,7 +33,7 @@ def main():
         description='simple 3D convolution for action recognition'
     )
     parser.add_argument('--batch', type=int, default=8)
-    parser.add_argument('--epoch', type=int, default=20)
+    parser.add_argument('--epoch', type=int, default=60)
     parser.add_argument(
         '--videos',
         type=str,
@@ -277,6 +277,9 @@ def main():
         plt.savefig(os.path.join(directory, confusionMatrixFilename))
     printAndSaveConfusionMatrix(Y_validation, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
     printAndSaveConfusionMatrix(Y_test, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
+
+    print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
+    model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
 
     # plot the training loss and accuracy
     plt.style.use('ggplot')
