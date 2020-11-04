@@ -100,6 +100,9 @@ def main():
         train_files, test_files, train_labels, test_labels = train_test_split(
             vid_files, labels, stratify=labels, test_size=0.2
         )
+        train_files, validation_files, train_labels, validation_labels = train_test_split(
+            train_files, train_labels, stratify=train_labels, test_size=0.2
+        )
 
         # Read in videos and transform to 3D
         X_train, train_labels_text, train_files = vid3d.video3d(
@@ -107,6 +110,13 @@ def main():
             train_labels,
             save=os.path.join(
                 args.save, "conv3d_train_fold_" + str(args.fold) + ".dat"
+            )
+        )
+        X_validation, validation_labels_text, validation_files = vid3d.video3d(
+            validation_files,
+            validation_labels,
+            save=os.path.join(
+                args.save, "conv3d_validation_fold_" + str(args.fold) + ".dat"
             )
         )
         X_test, test_labels_text, test_files = vid3d.video3d(
@@ -120,14 +130,17 @@ def main():
     lb = LabelBinarizer()
     lb.fit(train_labels_text)
     Y_train = lb.transform(train_labels_text)
+    Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
     # Verbose
     print("testing on split", args.fold)
     print(X_train.shape, Y_train.shape)
+    print(X_validation.shape, Y_validation.shape)
     print(X_test.shape, Y_test.shape)
     nb_classes = len(np.unique(train_labels_text))
     print(nb_classes, np.max(X_train))
     print("unique in train", np.unique(train_labels_text, return_counts=True))
+    print("unique in validation", np.unique(validation_labels_text, return_counts=True))
     print("unique in test", np.unique(test_labels_text, return_counts=True))
 
     # Define callbacks
@@ -164,9 +177,11 @@ def main():
         input_shape = 1, 64, 64, 32
 
         X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
+        X_validation = np.transpose(X_validation, [0, 4, 2, 3, 1])
         X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
         # Frames are also repeated 6-7 times since depth of model is 32
         X_test = np.repeat(X_test, [6, 7, 7, 6, 6], axis=-1)
+        X_validation = np.repeat(X_validation, [6, 7, 7, 6, 6], axis=-1)
         X_train = np.repeat(X_train, [6, 7, 7, 6, 6], axis=-1)
 
         model = VIDEO_MODEL_FACTORY[args.model_id
@@ -189,14 +204,14 @@ def main():
     H = model.fit(
         X_train,
         Y_train,
-        validation_data=(X_test, Y_test),
+        validation_data=(X_validation, Y_validation),
         batch_size=args.batch,
         epochs=args.epoch,
         verbose=1,
         shuffle=True,
-        callbacks=[earlyStopping, mcp_save, reduce_lr_loss]
+        callbacks=[earlyStopping, reduce_lr_loss]
+        # callbacks=[earlyStopping, mcp_save, reduce_lr_loss]
     )
-    model.evaluate(X_test, Y_test, verbose=0)
     model_json = model.to_json()
     with open(
         os.path.join(
@@ -210,19 +225,25 @@ def main():
         )
     )
 
-    loss, acc = model.evaluate(X_test, Y_test, verbose=0)
-    print('Test loss:', loss)
-    print('Test accuracy:', acc)
+    validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=0)
+    print('Validation loss:', validationLoss)
+    print('Validation accuracy:', validationAcc)
+    testLoss, testAcc = model.evaluate(X_test, Y_test, verbose=0)
+    print('Test loss:', testLoss)
+    print('Test accuracy:', testAcc)
 
     print('Evaluating network...')
+    validationPredIdxs = model.predict(X_validation, batch_size=args.batch)
     testPredIdxs = model.predict(X_test, batch_size=args.batch)
     def savePredictionsToCSV(predIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
         df = pd.DataFrame(predIdxs)
         df.to_csv(os.path.join(directory, csvFilename))
+    savePredictionsToCSV(validationPredIdxs, "validation_preds_last_epoch.csv")
     savePredictionsToCSV(testPredIdxs, "test_preds_last_epoch.csv")
 
     # for each image in the testing set we need to find the index of the
     # label with corresponding largest predicted probability
+    validationPredIdxs = np.argmax(validationPredIdxs, axis=1)
     testPredIdxs = np.argmax(testPredIdxs, axis=1)
 
     # compute the confusion matrix and and use it to derive the raw
@@ -240,6 +261,7 @@ def main():
         )
         reportDf = pd.DataFrame(report).transpose()
         reportDf.to_csv(os.path.join(directory, reportFilename))
+    printAndSaveClassificationReport(Y_validation, validationPredIdxs, lb.classes_, "validationReport.csv")
     printAndSaveClassificationReport(Y_test, testPredIdxs, lb.classes_, "testReport.csv")
 
     def printAndSaveConfusionMatrix(y, predIdxs, classes, confusionMatrixFilename, directory=FINAL_OUTPUT_DIR):
@@ -253,6 +275,7 @@ def main():
         cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
         cmDisplay.plot()
         plt.savefig(os.path.join(directory, confusionMatrixFilename))
+    printAndSaveConfusionMatrix(Y_validation, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
     printAndSaveConfusionMatrix(Y_test, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
     # plot the training loss and accuracy
