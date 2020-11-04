@@ -160,10 +160,21 @@ trainAug = ImageDataGenerator(
     rotation_range=10,
     fill_mode='nearest',
     horizontal_flip=True,
-    vertical_flip=False,
+    vertical_flip=True,
     width_shift_range=0.1,
-    height_shift_range=0.1
+    height_shift_range=0.1,
+    brightness_range=(0.5, 1.5),
+    channel_shift_range=50,
+    rescale=1/255  # Bug in ImageDataGenerator requires images at 255
 )
+
+# testing = trainAug.flow(trainX*255, trainY*255, batch_size=BATCH_SIZE, shuffle=False)
+# print(testing.shape)  no shape
+# print(testing[0].shape)  no shape
+# print(testing[0][0].shape)  # (8, *img.shape)
+# print(testing[0][0][0].shape)  # img.shape
+# cv2.imwrite("TESTING1.jpg", 255*testing[0][0][5])
+# print(hehe)
 
 for i in range(NUM_MODELS):
     print(f"Training model {i}")
@@ -230,11 +241,12 @@ for i in range(NUM_MODELS):
     # train the head of the network
     print('Starting training model...')
     H = model.fit(
-        trainAug.flow(trainX, trainY, batch_size=BATCH_SIZE),
+        trainAug.flow(trainX*255, trainY, batch_size=BATCH_SIZE),  # Bug in ImageDataGenerator requires images at 255
         batch_size=BATCH_SIZE,
         validation_data=(validationX, validationY),
         epochs=EPOCHS,
-        callbacks=[earlyStopping, reduce_lr_loss, metrics],
+        callbacks=[metrics],
+        # callbacks=[earlyStopping, reduce_lr_loss, metrics],
         # callbacks=[earlyStopping, mcp_save, reduce_lr_loss, metrics]
         use_multiprocessing=True,
         workers=3,  # Empirically best performance
@@ -283,6 +295,7 @@ for i in range(NUM_MODELS):
         # show the confusion matrix, accuracy, sensitivity, and specificity
         print(cm)
 
+        plt.figure()
         cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
         cmDisplay.plot()
         plt.savefig(os.path.join(directory, confusionMatrixFilename))
