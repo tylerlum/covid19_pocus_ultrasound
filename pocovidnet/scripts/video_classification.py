@@ -86,6 +86,12 @@ def main():
             X_test, test_labels_text, test_files = pickle.load(infile)
         with open(
             os.path.join(
+                args.save, 'conv3d_validation_fold_' + str(args.fold) + '.dat'
+            ), 'rb'
+        ) as infile:
+            X_validation, validation_labels_text, validation_files = pickle.load(infile)
+        with open(
+            os.path.join(
                 args.save, 'conv3d_train_fold_' + str(args.fold) + '.dat'
             ), 'rb'
         ) as infile:
@@ -103,6 +109,7 @@ def main():
         train_files, validation_files, train_labels, validation_labels = train_test_split(
             train_files, train_labels, stratify=train_labels, test_size=0.2
         )
+        full_video_train_files, full_video_validation_files, full_video_test_files, full_video_train_labels, full_video_validation_labels, full_video_test_labels = train_files, validation_files, test_files, train_labels, validation_labels, test_labels
 
         # Read in videos and transform to 3D
         X_train, train_labels_text, train_files = vid3d.video3d(
@@ -126,6 +133,7 @@ def main():
                 args.save, "conv3d_test_fold_" + str(args.fold) + ".dat"
             )
         )
+
     # One-hot encoding
     lb = LabelBinarizer()
     lb.fit(train_labels_text)
@@ -239,6 +247,7 @@ def main():
     print('Test accuracy:', testAcc)
 
     print('Evaluating network...')
+    trainPredIdxs = model.predict(X_train, batch_size=args.batch)
     validationPredIdxs = model.predict(X_validation, batch_size=args.batch)
     testPredIdxs = model.predict(X_test, batch_size=args.batch)
     def savePredictionsToCSV(predIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
@@ -249,6 +258,7 @@ def main():
 
     # for each image in the testing set we need to find the index of the
     # label with corresponding largest predicted probability
+    trainPredIdxs = np.argmax(trainPredIdxs, axis=1)
     validationPredIdxs = np.argmax(validationPredIdxs, axis=1)
     testPredIdxs = np.argmax(testPredIdxs, axis=1)
 
@@ -267,6 +277,7 @@ def main():
         )
         reportDf = pd.DataFrame(report).transpose()
         reportDf.to_csv(os.path.join(directory, reportFilename))
+    printAndSaveClassificationReport(Y_train, trainPredIdxs, lb.classes_, "trainReport.csv")
     printAndSaveClassificationReport(Y_validation, validationPredIdxs, lb.classes_, "validationReport.csv")
     printAndSaveClassificationReport(Y_test, testPredIdxs, lb.classes_, "testReport.csv")
 
@@ -281,6 +292,7 @@ def main():
         cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
         cmDisplay.plot()
         plt.savefig(os.path.join(directory, confusionMatrixFilename))
+    printAndSaveConfusionMatrix(Y_train, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
     printAndSaveConfusionMatrix(Y_validation, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
     printAndSaveConfusionMatrix(Y_test, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
@@ -299,6 +311,35 @@ def main():
     plt.ylabel('Loss/Accuracy')
     plt.legend(loc='lower left')
     plt.savefig(os.path.join(FINAL_OUTPUT_DIR, 'loss.png'))
+
+
+    # going patient-wise #################
+    def calculate_patient_wise(files, x, y, model):
+        gt = []
+        preds = []
+        files = np.array(files)
+        for video in np.unique(files):
+            current_data = x[files == video]
+            current_labels = y[files == video]
+            true_label = current_labels[0]
+            current_predictions = model.predict(current_data)
+            prediction = np.argmax(np.mean(current_predictions, axis=0))
+            print(true_label)
+            print(prediction)
+            print("----")
+            gt.append(true_label)
+            preds.append(prediction)
+        return np.array(gt), np.array(preds)
+    train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
+    validation_gt, validation_preds = calculate_patient_wise(validation_files, X_validation, Y_validation, model)
+    test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
+
+    printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, "trainReportPatients.csv")
+    printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, "validationReportPatients.csv")
+    printAndSaveClassificationReport(test_gt, test_preds, lb.classes_, "testReportPatients.csv")
+    printAndSaveConfusionMatrix(train_gt, train_preds, lb.classes_, "trainConfusionMatrixPatients.png")
+    printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, "validationConfusionMatrixPatients.png")
+    printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, "testConfusionMatrixPatients.png")
 
 if __name__ == '__main__':
     main()
