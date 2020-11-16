@@ -74,7 +74,7 @@ def main():
 
     # Initialize video converter
     vid3d = Videoto3D(
-        args.videos, width=64, height=64, depth=args.depth, framerate=args.fr
+        args.videos, width=224, height=224, depth=args.depth, framerate=args.fr
     )
     # Load saved data or read in videos
     if args.load:
@@ -169,6 +169,7 @@ def main():
     )
     if args.model_id == 'base':
         input_shape = X_train.shape[1:]
+        print(f"input_shape = {input_shape}")
         model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
     elif args.model_id == 'genesis':
 
@@ -201,6 +202,9 @@ def main():
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
     )
+    class_weight = {0: 2.,
+                    1: 2.,
+                    2: 1.}
     H = model.fit(
         X_train,
         Y_train,
@@ -209,6 +213,8 @@ def main():
         epochs=args.epoch,
         verbose=1,
         shuffle=True,
+        class_weight=class_weight,
+        # callbacks=[reduce_lr_loss]
         callbacks=[earlyStopping, reduce_lr_loss]
         # callbacks=[earlyStopping, mcp_save, reduce_lr_loss]
     )
