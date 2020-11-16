@@ -324,9 +324,6 @@ def main():
             true_label = current_labels[0]
             current_predictions = model.predict(current_data)
             prediction = np.argmax(np.mean(current_predictions, axis=0))
-            print(true_label)
-            print(prediction)
-            print("----")
             gt.append(true_label)
             preds.append(prediction)
         return np.array(gt), np.array(preds)
