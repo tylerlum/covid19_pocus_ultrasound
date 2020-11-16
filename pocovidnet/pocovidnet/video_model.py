@@ -35,6 +35,8 @@ def get_video_model(input_shape, nb_classes):
     model.add(Flatten())
     model.add(Dense(2048, activation=None))
     model.add(BatchNormalization())
+    model.add(Dense(512, activation=None))
+    model.add(BatchNormalization())
     model.add(Activation('sigmoid'))
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes, activation='softmax'))
