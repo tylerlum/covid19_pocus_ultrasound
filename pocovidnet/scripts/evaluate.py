@@ -207,7 +207,7 @@ if __name__ == "__main__":
 
     # Setup model
     if MC_DROPOUT:
-        NUM_MC_DROPOUT_RUNS = 20
+        NUM_MC_DROPOUT_RUNS = 50
         print(f"Running {NUM_MC_DROPOUT_RUNS} runs of MC Dropout")
         print("========================")
 
@@ -230,7 +230,7 @@ if __name__ == "__main__":
         save_evaluation_files(labels, logits, classes, "mc_dropout", FINAL_OUTPUT_DIR)
 
     if TEST_TIME_AUGMENTATION:
-        NUM_TEST_TIME_AUGMENTATION_RUNS = 20
+        NUM_TEST_TIME_AUGMENTATION_RUNS = 50
         print(f"Running {NUM_TEST_TIME_AUGMENTATION_RUNS} runs of Test Time Augmentation")
         print("========================")
 
@@ -238,15 +238,38 @@ if __name__ == "__main__":
         model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
         print(f"Looking for model at {model_path}")
         model = tf.keras.models.load_model(model_path)
-        augmentation = ImageDataGenerator(
-            rotation_range=10,
-            fill_mode='nearest',
-            horizontal_flip=True,
-            vertical_flip=False,
-            width_shift_range=0.1,
-            height_shift_range=0.1
-        )
-        augmented_image_generator = augmentation.flow(data, labels, shuffle=False, batch_size=1)
+        idx = 40
+        originalImage = data[idx] * 255
+        noChangeImage = ImageDataGenerator(rescale=1/255).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        loBrightnessImage = ImageDataGenerator(brightness_range=(0.75, 0.5), rescale=1/255).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        moreBrightnessImage = ImageDataGenerator(brightness_range=(1.25, 1.25), rescale=1/255).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        smallChannelShiftImage = ImageDataGenerator(channel_shift_range=0.5, rescale=1/255).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        channelAndBrightnessShiftImage = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=30, rescale=1/255).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        channelAndBrightnessShiftImage2 = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=30, rescale=1/255).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        channelAndBrightnessShiftImage3 = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=30, rescale=1/255).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        channelAndBrightnessShiftImage4 = ImageDataGenerator(brightness_range=(1.0, 1.0), channel_shift_range=30, rescale=1/255).flow(data*255, labels, shuffle=False, batch_size=1)[idx][0][0]
+        def printAndSave(myimg, name):
+            myimg *= 255
+            print(f"{name}.shape = {myimg.shape}")
+            print(f"{name}.max() = {myimg.max()}")
+            print(f"{name}.min() = {myimg.min()}")
+            print(f"np.average({name}) = {np.average(myimg)}")
+            scaled_img = myimg
+            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"{name}.png"), scaled_img)
+            print("==============================")
+        all_imgs = [(noChangeImage, "noChangeImage"), (loBrightnessImage, "loBrightnessImage"), (smallChannelShiftImage, "smallChannelShiftImage"), (channelAndBrightnessShiftImage, "channelAndBrightnessShiftImage"), (moreBrightnessImage, "moreBrightnessImage"), (channelAndBrightnessShiftImage2, "channelAndBrightnessShiftImage2"), (channelAndBrightnessShiftImage3, "channelAndBrightnessShiftImage3"), (channelAndBrightnessShiftImage4, "channelAndBrightnessShiftImage4")]
+        for x in all_imgs:
+            printAndSave(x[0], x[1])
+
+
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img-255.png"), img * 255)
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img2.png"), img2)
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img3.png"), img3)
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "img4.png"), img4)
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "data.png"), data[0])
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, "data-255.png"), data[0] * 255)
+        print(doit)
+
 
         # Compute logits
         all_logits = np.zeros((NUM_TEST_TIME_AUGMENTATION_RUNS, labels.shape[0], labels.shape[1]))
