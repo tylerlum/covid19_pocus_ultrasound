@@ -16,28 +16,23 @@ def get_video_model(input_shape, nb_classes):
             32,
             kernel_size=(3, 3, 3),
             input_shape=(input_shape),
-            padding='same'
+            padding='same',
+            activation='relu',
         )
     )
-    model.add(Activation('relu'))
-    model.add(Conv3D(32, kernel_size=(3, 3, 3), padding='same'))
-    model.add(Activation('softmax'))
+    model.add(Conv3D(32, kernel_size=(3, 3, 3), padding='same', activation='relu'))
     model.add(MaxPooling3D(pool_size=(3, 3, 3), padding='same'))
     model.add(Dropout(0.5))
 
-    model.add(Conv3D(32, kernel_size=(3, 3, 3), padding='same'))
-    model.add(Activation('relu'))
-    model.add(Conv3D(32, kernel_size=(3, 3, 3), padding='same'))
-    model.add(Activation('softmax'))
+    model.add(Conv3D(32, kernel_size=(3, 3, 3), padding='same', activation='relu'))
+    model.add(Conv3D(32, kernel_size=(3, 3, 3), padding='same', activation='relu'))
     model.add(MaxPooling3D(pool_size=(3, 3, 3), padding='same'))
     model.add(Dropout(0.5))
 
     model.add(Flatten())
     model.add(Dense(2048, activation=None))
     model.add(BatchNormalization())
-    model.add(Dense(512, activation=None))
-    model.add(BatchNormalization())
-    model.add(Activation('sigmoid'))
+    model.add(Activation('relu'))
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes, activation='softmax'))
 
