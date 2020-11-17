@@ -152,6 +152,14 @@ def main():
     class_weight = {0: 2.,
                     1: 2.,
                     2: 1.}
+    index = 24
+    X_train = X_train[0:index]
+    X_validation = X_validation[0:index]
+    X_test = X_test[0:index]
+    Y_train = Y_train[0:index]
+    Y_validation = Y_validation[0:index]
+    Y_test = Y_test[0:index]
+
     H = model.fit(
         X_train,
         Y_train,
