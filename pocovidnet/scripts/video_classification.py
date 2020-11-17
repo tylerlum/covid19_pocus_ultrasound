@@ -55,6 +55,7 @@ def main():
     parser.add_argument('--output', type=str, default="video_model_outputs")
     parser.add_argument('--fold', type=int, default=0)
     parser.add_argument('--load', type=bool, default=False)
+    parser.add_argument('--visualize', type=bool, default=False)
     parser.add_argument('--fr', type=int, default=5)
     parser.add_argument('--depth', type=int, default=5)
     parser.add_argument('--model_id', type=str, default='genesis')
@@ -112,6 +113,20 @@ def main():
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
 
+    ## VISUALIZE
+    if args.visualize:
+        for i in range(X_train.shape[0]):
+            example = X_train[i]
+            label = Y_train[i]
+            print(f"Label = {label}")
+            for j in range(example.shape[0]):
+                import cv2
+                print(f"Frame {j}")
+                frame = example[j]
+                print(f"np.max(frame) = {np.max(frame)}")
+                print(f"np.min(frame) = {np.min(frame)}")
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
+
     # Verbose
     print("testing on split", args.fold)
     print(X_train.shape, Y_train.shape)
@@ -130,7 +145,7 @@ def main():
         model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
 
     print(model.summary())
-    opt = Adam(learning_rate=args.lr)
+    opt = Adam(lr=args.lr)
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
     )
@@ -145,7 +160,7 @@ def main():
         epochs=args.epoch,
         verbose=1,
         shuffle=False,
-        class_weight=class_weight,
+        # class_weight=class_weight,
     )
 
     print('Evaluating network...')
