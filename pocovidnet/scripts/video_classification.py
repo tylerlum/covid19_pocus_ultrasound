@@ -3,7 +3,7 @@ import argparse
 import json
 import os
 os.environ['PYTHONHASHSEED']=str(seed_value)
-os.environ['CUDA_VISIBLE_DEVICES']=str(1)
+import sys
 # 2. Set `python` built-in pseudo-random generator at a fixed value
 import random
 random.seed(seed_value)
@@ -81,10 +81,6 @@ def main():
     if not os.path.exists(FINAL_OUTPUT_DIR):
         os.makedirs(FINAL_OUTPUT_DIR)
 
-    # Initialize video converter
-    vid3d = Videoto3D(
-        args.videos, width=224, height=224, depth=args.depth, framerate=args.fr
-    )
     # Load saved data or read in videos
     if args.load:
         with open(
@@ -106,42 +102,8 @@ def main():
         ) as infile:
             X_train, train_labels_text, train_files = pickle.load(infile)
     else:
-        # SPLIT NO CROSSVAL
-        class_short = ["cov", "pne", "reg"]
-        vid_files = [
-            v for v in os.listdir(args.videos) if v[:3].lower() in class_short
-        ]
-        labels = [vid[:3].lower() for vid in vid_files]
-        train_files, test_files, train_labels, test_labels = train_test_split(
-            vid_files, labels, stratify=labels, test_size=0.2
-        )
-        train_files, validation_files, train_labels, validation_labels = train_test_split(
-            train_files, train_labels, stratify=train_labels, test_size=0.2
-        )
-        full_video_train_files, full_video_validation_files, full_video_test_files, full_video_train_labels, full_video_validation_labels, full_video_test_labels = train_files, validation_files, test_files, train_labels, validation_labels, test_labels
-
-        # Read in videos and transform to 3D
-        X_train, train_labels_text, train_files = vid3d.video3d(
-            train_files,
-            train_labels,
-            save=os.path.join(
-                args.save, "conv3d_train_fold_" + str(args.fold) + ".dat"
-            )
-        )
-        X_validation, validation_labels_text, validation_files = vid3d.video3d(
-            validation_files,
-            validation_labels,
-            save=os.path.join(
-                args.save, "conv3d_validation_fold_" + str(args.fold) + ".dat"
-            )
-        )
-        X_test, test_labels_text, test_files = vid3d.video3d(
-            test_files,
-            test_labels,
-            save=os.path.join(
-                args.save, "conv3d_test_fold_" + str(args.fold) + ".dat"
-            )
-        )
+        print("Add --load")
+        sys.exit()
 
     # One-hot encoding
     lb = LabelBinarizer()
@@ -162,61 +124,12 @@ def main():
     print("unique in test", np.unique(test_labels_text, return_counts=True))
 
     # Define callbacks
-    earlyStopping = EarlyStopping(
-        monitor='val_loss',
-        patience=20,
-        verbose=1,
-        mode='min',
-        restore_best_weights=True
-    )
-
-    mcp_save = ModelCheckpoint(
-        os.path.join(MODEL_D, 'fold_' + str(args.fold), 'epoch_{epoch:02d}'),
-        save_best_only=True,
-        monitor='val_accuracy',
-        mode='max',
-        verbose=1
-    )
-    reduce_lr_loss = ReduceLROnPlateau(
-        monitor='val_loss',
-        factor=0.1,
-        patience=7,
-        verbose=1,
-        epsilon=1e-4,
-        mode='min'
-    )
     if args.model_id == 'base':
         input_shape = X_train.shape[1:]
         print(f"input_shape = {input_shape}")
         model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
-    elif args.model_id == 'genesis':
-
-        # For Genesis models inputs are shrinked to 64,64
-        input_shape = 42
-        input_shape = 1, 64, 64, 32
-
-        X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
-        X_validation = np.transpose(X_validation, [0, 4, 2, 3, 1])
-        X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
-        # Frames are also repeated 6-7 times since depth of model is 32
-        X_test = np.repeat(X_test, [6, 7, 7, 6, 6], axis=-1)
-        X_validation = np.repeat(X_validation, [6, 7, 7, 6, 6], axis=-1)
-        X_train = np.repeat(X_train, [6, 7, 7, 6, 6], axis=-1)
-
-        model = VIDEO_MODEL_FACTORY[args.model_id
-                                    ](input_shape, batch_normalization=True)
-        model.load_weights(args.weight_path)
-        x = model.get_layer('depth_7_relu').output
-        x = GlobalAveragePooling3D()(x)
-        x = Dense(1024, activation='relu')(x)
-        output = Dense(nb_classes, activation='softmax')(x)
-        model = Model(inputs=model.input, outputs=output)
-        model = fix_layers(
-            model, num_flex_layers=args.trainable_base_layers + 4
-        )
 
     print(model.summary())
-    # opt = Adam(lr=args.lr, decay=args.lr / args.epoch)
     opt = Adam(learning_rate=args.lr)
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
@@ -233,23 +146,9 @@ def main():
         verbose=1,
         shuffle=False,
         class_weight=class_weight,
-        # callbacks=[reduce_lr_loss]
-        # callbacks=[earlyStopping, reduce_lr_loss]
-        # callbacks=[earlyStopping, mcp_save, reduce_lr_loss]
-    )
-    model_json = model.to_json()
-    with open(
-        os.path.join(
-            MODEL_D, 'fold_' + str(args.fold), '3dcnnmodel_final.json'
-        ), 'w'
-    ) as json_file:
-        json_file.write(model_json)
-    model.save_weights(
-        os.path.join(
-            MODEL_D, 'fold_' + str(args.fold), '3dcnnmodel_final.hd5'
-        )
     )
 
+    print('Evaluating network...')
     trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=0)
     print('train loss:', trainLoss)
     print('train accuracy:', trainAcc)
@@ -260,7 +159,6 @@ def main():
     print('Test loss:', testLoss)
     print('Test accuracy:', testAcc)
 
-    print('Evaluating network...')
     trainPredIdxs = model.predict(X_train, batch_size=args.batch)
     validationPredIdxs = model.predict(X_validation, batch_size=args.batch)
     testPredIdxs = model.predict(X_test, batch_size=args.batch)
