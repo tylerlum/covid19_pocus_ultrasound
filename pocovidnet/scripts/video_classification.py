@@ -150,14 +150,6 @@ def main():
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
 
-    X_train = X_train[0:5]
-    X_validation = X_validation[0:5]
-    X_test = X_test[0:5]
-    Y_train = Y_train[0:5]
-    Y_validation = Y_validation[0:5]
-    Y_test = Y_test[0:5]
-
-
     # Verbose
     print("testing on split", args.fold)
     print(X_train.shape, Y_train.shape)
