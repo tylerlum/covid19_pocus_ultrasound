@@ -222,8 +222,8 @@ def main():
         verbose=1,
         shuffle=True,
         class_weight=class_weight,
-        # callbacks=[reduce_lr_loss]
-        callbacks=[earlyStopping, reduce_lr_loss]
+        callbacks=[reduce_lr_loss]
+        # callbacks=[earlyStopping, reduce_lr_loss]
         # callbacks=[earlyStopping, mcp_save, reduce_lr_loss]
     )
     model_json = model.to_json()
