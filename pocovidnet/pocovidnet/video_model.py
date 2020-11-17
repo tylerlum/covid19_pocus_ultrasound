@@ -8,7 +8,7 @@ from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.optimizers import Adam
 
 
-def get_video_model(input_shape, nb_classes, batch_norm=True):
+def get_video_model(input_shape, nb_classes, batch_norm=False):
     # Define model
     model = Sequential()
     model.add(
