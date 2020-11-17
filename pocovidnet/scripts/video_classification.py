@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 os.environ['PYTHONHASHSEED']=str(seed_value)
+os.environ['CUDA_VISIBLE_DEVICES']=str(-1)
 # 2. Set `python` built-in pseudo-random generator at a fixed value
 import random
 random.seed(seed_value)
@@ -148,6 +149,15 @@ def main():
     Y_train = lb.transform(train_labels_text)
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
+
+    X_train = X_train[0:5]
+    X_validation = X_validation[0:5]
+    X_test = X_test[0:5]
+    Y_train = Y_train[0:5]
+    Y_validation = Y_validation[0:5]
+    Y_test = Y_test[0:5]
+
+
     # Verbose
     print("testing on split", args.fold)
     print(X_train.shape, Y_train.shape)
