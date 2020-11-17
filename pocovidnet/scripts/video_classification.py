@@ -27,6 +27,21 @@ from datetime import date
 warnings.filterwarnings("ignore")
 datestring = date.today().strftime("%b-%d-%Y") + "_" + datetime.now().strftime('%H-%M-%S')
 
+# SET SEED FOR REPRODUCIBLE VALUES
+# Set seed value
+seed_value = 56
+import os
+os.environ['PYTHONHASHSEED']=str(seed_value)
+# 2. Set `python` built-in pseudo-random generator at a fixed value
+import random
+random.seed(seed_value)
+# 3. Set `numpy` pseudo-random generator at a fixed value
+import numpy as np
+np.random.seed(seed_value)
+# 4. Set `tensorflow` pseudo-random generator at a fixed value
+import tensorflow as tf
+tf.random.set_seed(seed_value)
+# 5. Configure a new global `tensorflow` session
 
 def main():
     parser = argparse.ArgumentParser(
@@ -206,7 +221,8 @@ def main():
         )
 
     print(model.summary())
-    opt = Adam(lr=args.lr, decay=args.lr / args.epoch)
+    # opt = Adam(lr=args.lr, decay=args.lr / args.epoch)
+    opt = Adam(learning_rate=args.lr)
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
     )
@@ -220,7 +236,7 @@ def main():
         batch_size=args.batch,
         epochs=args.epoch,
         verbose=1,
-        shuffle=True,
+        shuffle=False,
         class_weight=class_weight,
         callbacks=[reduce_lr_loss]
         # callbacks=[earlyStopping, reduce_lr_loss]
@@ -239,6 +255,9 @@ def main():
         )
     )
 
+    trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=0)
+    print('train loss:', trainLoss)
+    print('train accuracy:', trainAcc)
     validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=0)
     print('Validation loss:', validationLoss)
     print('Validation accuracy:', validationAcc)
