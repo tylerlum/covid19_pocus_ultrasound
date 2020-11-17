@@ -1,9 +1,9 @@
-seed_value = 56
+seed_value = 566
 import argparse
 import json
 import os
 os.environ['PYTHONHASHSEED']=str(seed_value)
-os.environ['CUDA_VISIBLE_DEVICES']=str(-1)
+os.environ['CUDA_VISIBLE_DEVICES']=str(1)
 # 2. Set `python` built-in pseudo-random generator at a fixed value
 import random
 random.seed(seed_value)
