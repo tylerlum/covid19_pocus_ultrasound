@@ -1,15 +1,23 @@
+seed_value = 56
 import argparse
 import json
 import os
+os.environ['PYTHONHASHSEED']=str(seed_value)
+# 2. Set `python` built-in pseudo-random generator at a fixed value
+import random
+random.seed(seed_value)
 import pickle
 import warnings
 
 import numpy as np
+np.random.seed(seed_value)
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
+import tensorflow as tf
+tf.random.set_seed(seed_value)
 from tensorflow.keras.callbacks import (
     EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 )
@@ -27,21 +35,6 @@ from datetime import date
 warnings.filterwarnings("ignore")
 datestring = date.today().strftime("%b-%d-%Y") + "_" + datetime.now().strftime('%H-%M-%S')
 
-# SET SEED FOR REPRODUCIBLE VALUES
-# Set seed value
-seed_value = 56
-import os
-os.environ['PYTHONHASHSEED']=str(seed_value)
-# 2. Set `python` built-in pseudo-random generator at a fixed value
-import random
-random.seed(seed_value)
-# 3. Set `numpy` pseudo-random generator at a fixed value
-import numpy as np
-np.random.seed(seed_value)
-# 4. Set `tensorflow` pseudo-random generator at a fixed value
-import tensorflow as tf
-tf.random.set_seed(seed_value)
-# 5. Configure a new global `tensorflow` session
 
 def main():
     parser = argparse.ArgumentParser(
@@ -238,7 +231,7 @@ def main():
         verbose=1,
         shuffle=False,
         class_weight=class_weight,
-        callbacks=[reduce_lr_loss]
+        # callbacks=[reduce_lr_loss]
         # callbacks=[earlyStopping, reduce_lr_loss]
         # callbacks=[earlyStopping, mcp_save, reduce_lr_loss]
     )
