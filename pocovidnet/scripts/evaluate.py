@@ -126,6 +126,7 @@ if __name__ == "__main__":
     ap.add_argument('-b', '--test_time_augmentation', type=bool, default=False)
     ap.add_argument('-c', '--deep_ensemble', type=bool, default=False)
     ap.add_argument('-s', '--shap', type=bool, default=False)
+    ap.add_argument('-p', '--patient_wise', type=bool, default=False)
     args = vars(ap.parse_args())
 
     # Initialize hyperparameters
@@ -138,7 +139,9 @@ if __name__ == "__main__":
     TEST_TIME_AUGMENTATION = args['test_time_augmentation']
     DEEP_ENSEMBLE = args['deep_ensemble']
     SHAP = args['shap']
-    REGULAR = True
+    PATIENT_WISE = args['patient_wise']
+    # REGULAR = True
+    REGULAR = False
 
     print(f'Evaluating with: {args}')
 
@@ -168,6 +171,50 @@ if __name__ == "__main__":
         # make predictions on the testing set
         logits = model.predict(data)
         save_evaluation_files(labels, logits, classes, "regular", FINAL_OUTPUT_DIR)
+
+    if PATIENT_WISE:
+        # Get patient images and labels from the videos
+        patient_images, patient_labels = [], []
+        FULL_VIDEOS_DIR = DATA_DIR + f"_full_videos/split{FOLD}"
+        class_dirs = [x[0] for x in os.walk(FULL_VIDEOS_DIR)]
+        for class_dir in class_dirs:
+            for _, _, files in os.walk(class_dir):
+                for file_ in files:
+                    video_path = os.path.join(class_dir,  file_)
+                    print(f"Grabbing frames from {video_path}")
+                    if os.path.exists(video_path):
+                        path_parts = video_path.split(os.path.sep)
+                        label = path_parts[-2]
+                        cap = cv2.VideoCapture(video_path)
+                        while cap.isOpened():
+                            ret, frame = cap.read()
+                            if (ret != True):
+                                break
+                            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                            image = cv2.resize(image, (IMG_WIDTH, IMG_HEIGHT))
+                            patient_images.append(image)
+                            patient_labels.append(label)
+                    print(f"Done getting frames from {video_path}")
+        print(f"Got {len(patient_images)} images")
+        num_classes = len(set(patient_labels))
+        patient_images = np.array(patient_images) / 255.0
+        patient_labels = np.array(patient_labels)
+
+        # perform one-hot encoding on the labels
+        lb = LabelBinarizer()
+        lb.fit(patient_labels)
+
+        patient_labels = lb.transform(patient_labels)
+
+        if num_classes == 2:
+            patient_labels = to_categorical(patient_labels, num_classes=num_classes)
+        print("About to save images")
+        for i in range(40):
+            cv2.imwrite(f"testimg_{i}_{patient_labels[i]}.jpg", 255*patient_images[i])
+
+
+
+
 
     if SHAP:
         # Create regular model
