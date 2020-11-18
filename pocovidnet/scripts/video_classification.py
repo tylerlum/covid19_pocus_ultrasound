@@ -223,7 +223,7 @@ def main():
                 # augmentedX.append(s)
                 augmentedX.append(batch_x[j])
             returnX = np.array(augmentedX)[:,:,:,:,0:1]
-            return returnX / 255, batch_y
+            return returnX, batch_y
 
         def __next__(self):
             if self.n >= self.__len__():
@@ -232,6 +232,18 @@ def main():
             self.n += 1
             return result
 
+#    gen = MyGenerator(X_train, Y_train, args.batch)
+#    for i in range(10):
+#        x, y = next(gen)
+#        x = x[0][0]
+#        print(x.shape)
+#        y = y[0]
+#        import cv2
+#        print(np.max(x))
+#        print(np.min(x))
+#        cv2.imwrite(f"TESTING1-{i}-y-{y}.jpg", 255*x)
+#    sys.exit()
+#
 
     H = model.fit(
         MyGenerator(X_train, Y_train, args.batch),
@@ -242,6 +254,8 @@ def main():
         verbose=1,
         shuffle=False,
         class_weight=class_weight,
+        use_multiprocessing=True,
+        workers=2,  # Empirically best performance
     )
 
     print('Evaluating network...')

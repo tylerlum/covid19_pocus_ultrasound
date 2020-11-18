@@ -35,7 +35,7 @@ def get_video_model(input_shape, nb_classes):
     model.add(Dropout(0.5))
 
     model.add(Flatten())
-    model.add(Dense(512, activation=None))
+    model.add(Dense(2048, activation=None))
     model.add(BatchNormalization())
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
