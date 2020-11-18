@@ -228,10 +228,18 @@ if __name__ == "__main__":
         actuals = []
         for i, (imgs_, labels_) in enumerate(zip(patient_image_lists, patient_label_lists)):
             test_predictions = model.predict(imgs_)
+            indiv_predictions = np.argmax(test_predictions, axis=1)
+            v, c = np.unique(indiv_predictions, return_counts=True)
             test_prediction = np.mean(test_predictions, axis=0)
             predIdxs.append(test_prediction)
             actual = labels_[0]
             actuals.append(actual)
+            if np.argmax(test_prediction) != np.argmax(actual):
+                print(f"Label = {np.argmax(actual)}")
+                print(f"Values = {v}")
+                print(f"Counts = {c}")
+                cv2.imwrite(f"{i}_label-{actual}_{v}_{c}.jpg", imgs_[0]*255)
+                print(f"================")
         save_evaluation_files(np.array(actuals), np.array(predIdxs), classes, "patientwise", FINAL_OUTPUT_DIR)
 
 
