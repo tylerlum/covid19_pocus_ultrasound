@@ -225,7 +225,7 @@ def main():
     printAndSaveConfusionMatrix(Y_test, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
     print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
-    model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
+    # model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
 
     # plot the training loss and accuracy
     plt.style.use('ggplot')
