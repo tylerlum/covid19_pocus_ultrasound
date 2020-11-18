@@ -234,7 +234,8 @@ if __name__ == "__main__":
             predIdxs.append(test_prediction)
             actual = labels_[0]
             actuals.append(actual)
-            if np.argmax(test_prediction) != np.argmax(actual):
+            # if np.argmax(test_prediction) != np.argmax(actual):
+            if np.argmax(test_prediction) != np.argmax(actual) or len(v) > 1:
                 print(f"Label = {np.argmax(actual)}")
                 print(f"Values = {v}")
                 print(f"Counts = {c}")
