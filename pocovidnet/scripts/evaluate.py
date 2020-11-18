@@ -54,6 +54,16 @@ def save_evaluation_files(labels, logits, classes, start_of_filename, directory)
     printAndSaveClassificationReport(labels, predIdxs, classes, start_of_filename, directory)
     printAndSaveConfusionMatrix(labels, predIdxs, classes, start_of_filename, directory)
 
+
+def printAndSaveConfusionMatrix2(y, predIdxs, classes, start_of_filename, directory):
+    cm = confusion_matrix(y.argmax(axis=1), predIdxs)
+    # show the confusion matrix, accuracy, sensitivity, and specificity
+    print(cm)
+
+    cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
+    cmDisplay.plot()
+    plt.savefig(os.path.join(directory, start_of_filename + "ConfusionMatrix.png"))
+
 def get_dataset():
     # Get data
     data, labels = [], []
@@ -173,6 +183,11 @@ if __name__ == "__main__":
         save_evaluation_files(labels, logits, classes, "regular", FINAL_OUTPUT_DIR)
 
     if PATIENT_WISE:
+        # Create regular model
+        model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
+        print(f"Looking for model at {model_path}")
+        model = tf.keras.models.load_model(model_path)
+
         # Get patient images and labels from the videos
         patient_image_lists, patient_label_lists = [], []
         image_counter = 0
@@ -214,9 +229,17 @@ if __name__ == "__main__":
         print("About to save images")
         print(len(patient_label_lists))
         print(len(patient_image_lists))
+        predIdxs = []
+        actuals = []
         for i, (imgs_, labels_) in enumerate(zip(patient_image_lists, patient_label_lists)):
-            print(i)
-            print(labels_[0])
+            test_predictions = model.predict(imgs_)
+            test_prediction = np.mean(test_predictions, axis=0)
+            guess = np.argmax(test_prediction)
+            predIdxs.append(guess)
+            actual = labels_[0]
+            actuals.append(actual)
+        printAndSaveConfusionMatrix2(np.array(actuals), np.array(predIdxs), lb.classes_, "mine", ".")
+
 
 
 
