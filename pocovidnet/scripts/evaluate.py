@@ -174,43 +174,49 @@ if __name__ == "__main__":
 
     if PATIENT_WISE:
         # Get patient images and labels from the videos
-        patient_images, patient_labels = [], []
+        patient_image_lists, patient_label_lists = [], []
+        image_counter = 0
         FULL_VIDEOS_DIR = DATA_DIR + f"_full_videos/split{FOLD}"
         class_dirs = [x[0] for x in os.walk(FULL_VIDEOS_DIR)]
         for class_dir in class_dirs:
             for _, _, files in os.walk(class_dir):
                 for file_ in files:
                     video_path = os.path.join(class_dir,  file_)
-                    print(f"Grabbing frames from {video_path}")
                     if os.path.exists(video_path):
                         path_parts = video_path.split(os.path.sep)
                         label = path_parts[-2]
                         cap = cv2.VideoCapture(video_path)
+                        patient_image_list, patient_label_list = [], []
                         while cap.isOpened():
                             ret, frame = cap.read()
                             if (ret != True):
                                 break
                             image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                             image = cv2.resize(image, (IMG_WIDTH, IMG_HEIGHT))
-                            patient_images.append(image)
-                            patient_labels.append(label)
+                            patient_image_list.append(image)
+                            patient_label_list.append(label)
+                            image_counter += 1
+                        patient_label_lists.append(np.array(patient_label_list))
+                        patient_image_lists.append(np.array(patient_image_list) / 255)
                     print(f"Done getting frames from {video_path}")
-        print(f"Got {len(patient_images)} images")
-        num_classes = len(set(patient_labels))
-        patient_images = np.array(patient_images) / 255.0
-        patient_labels = np.array(patient_labels)
+        print(f"Got {image_counter} images from {len(patient_image_lists)} videos")
+        possible_labels = list(set([label_list[0] for label_list in patient_label_lists]))
+        num_classes = len(possible_labels)
 
         # perform one-hot encoding on the labels
         lb = LabelBinarizer()
-        lb.fit(patient_labels)
+        lb.fit(possible_labels)
 
-        patient_labels = lb.transform(patient_labels)
+        patient_label_lists = [lb.transform(patient_label_list) for patient_label_list in patient_label_lists]
 
         if num_classes == 2:
-            patient_labels = to_categorical(patient_labels, num_classes=num_classes)
+            patient_label_lists = [to_categorical(patient_label_list, num_classes=num_classes) for patient_label_list in patient_label_lists]
         print("About to save images")
-        for i in range(40):
-            cv2.imwrite(f"testimg_{i}_{patient_labels[i]}.jpg", 255*patient_images[i])
+        print(len(patient_label_lists))
+        print(len(patient_image_lists))
+        for i, (imgs_, labels_) in enumerate(zip(patient_image_lists, patient_label_lists)):
+            print(i)
+            print(labels_[0])
 
 
 
