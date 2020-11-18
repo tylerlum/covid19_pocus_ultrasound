@@ -39,6 +39,7 @@ def get_video_model(input_shape, nb_classes, batch_norm=True):
     if batch_norm: model.add(BatchNormalization())
     model.add(Activation('relu'))
     # model.add(Activation('sigmoid'))
+    model.add(Dropout(0.5))
     model.add(Dense(nb_classes, activation='softmax'))
 
     return model
