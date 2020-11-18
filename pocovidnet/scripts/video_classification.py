@@ -2,7 +2,8 @@ seed_value = 1231
 import argparse
 import json
 import os
-os.environ['PYTHONHASHSEED']=str(seed_value) import sys
+os.environ['PYTHONHASHSEED']=str(seed_value)
+import sys
 # 2. Set `python` built-in pseudo-random generator at a fixed value
 import random
 random.seed(seed_value)
@@ -114,32 +115,31 @@ def main():
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
 
+    sometimes = lambda aug: va.Sometimes(0.5, aug) # Used to apply augmentor with 50% probability
+    seq = va.Sequential([
+                va.RandomCrop(size=(220, 220)), # randomly crop video with a size of (240 x 180)
+                va.RandomRotate(degrees=5), # randomly rotates the video with a degree randomly choosen from [-10, 10]  
+                va.RandomTranslate(x=20, y=20), # randomly translates the video with a degree randomly choosen from [-20, 20]  
+                sometimes(va.Multiply(value=0.9)),
+                sometimes(va.Multiply(value=0.9)),
+                sometimes(va.Multiply(value=0.9)),
+                sometimes(va.Multiply(value=0.9)),
+                sometimes(va.Multiply(value=1.1)),
+                sometimes(va.Multiply(value=1.1)),
+                sometimes(va.Multiply(value=1.1)),
+                sometimes(va.Multiply(value=1.1)),
+                sometimes(va.Add(value=10)),
+                sometimes(va.Add(value=10)),
+                sometimes(va.Add(value=10)),
+                sometimes(va.Add(value=10)),
+                sometimes(va.Add(value=-10)),
+                sometimes(va.Add(value=-10)),
+                sometimes(va.Add(value=-10)),
+                sometimes(va.Add(value=-10)),
+                sometimes(va.HorizontalFlip()) # horizontally flip the video with 50% probability
+                    ])
     ## VISUALIZE
     if args.visualize:
-        sometimes = lambda aug: va.Sometimes(0.5, aug) # Used to apply augmentor with 50% probability
-        seq = va.Sequential([
-                    va.RandomCrop(size=(220, 220)), # randomly crop video with a size of (240 x 180)
-                    va.RandomRotate(degrees=5), # randomly rotates the video with a degree randomly choosen from [-10, 10]  
-                    va.RandomTranslate(x=20, y=20), # randomly translates the video with a degree randomly choosen from [-20, 20]  
-                    sometimes(va.Multiply(value=0.9)),
-                    sometimes(va.Multiply(value=0.9)),
-                    sometimes(va.Multiply(value=0.9)),
-                    sometimes(va.Multiply(value=0.9)),
-                    sometimes(va.Multiply(value=1.1)),
-                    sometimes(va.Multiply(value=1.1)),
-                    sometimes(va.Multiply(value=1.1)),
-                    sometimes(va.Multiply(value=1.1)),
-                    sometimes(va.Add(value=10)),
-                    sometimes(va.Add(value=10)),
-                    sometimes(va.Add(value=10)),
-                    sometimes(va.Add(value=10)),
-                    sometimes(va.Add(value=-10)),
-                    sometimes(va.Add(value=-10)),
-                    sometimes(va.Add(value=-10)),
-                    sometimes(va.Add(value=-10)),
-                    sometimes(va.HorizontalFlip()) # horizontally flip the video with 50% probability
-                        ])
-
         for i in range(20):
             # 'video' should be either a list of images from type of numpy array or PIL images
             orig_video = X_train[i]
@@ -158,6 +158,18 @@ def main():
                 print(f"np.min(frame) = {np.min(frame)}")
                 cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"video_aug-{i}_Frame-{j}.jpg"), frame)
                 cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"video_aug-{i}_Frame-{j}org.jpg"), 255*orig_video[j])
+
+        for i in range(X_train.shape[0]):
+            example = X_train[i]
+            label = Y_train[i]
+            print(f"Label = {label}")
+            for j in range(example.shape[0]):
+                import cv2
+                print(f"Frame {j}")
+                frame = example[j]
+                print(f"np.max(frame) = {np.max(frame)}")
+                print(f"np.min(frame) = {np.min(frame)}")
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
 
 
     # Verbose
@@ -186,6 +198,38 @@ def main():
     class_weight = {0: 2.,
                     1: 2.,
                     2: 1.}
+    def augment_generator(X, Y, batch_size=args.batch):
+        i = 0
+        while True:
+            batchX = X[i:i+args.batch]
+            batchY = Y[i:i+args.batch]
+            i += args.batch
+            if batchX.shape[0] < args.batch:
+                extraNeeded = args.batch - batchX.shape[0]
+                extraX = X[:extraNeeded]
+                extraY = Y[:extraNeeded]
+                batchX = np.concatenate(batchX, extraX)
+                batchY = np.concatenate(batchY, extraY)
+                i = extraNeeded
+
+            augmentedX = []
+            for j in range(args.batch):
+                video = np.squeeze(batchX[j])
+                video = np.stack([video, video, video], axis=3)
+                video_aug = seq(video*255)
+                augmentedX.append(np.array(video_aug))
+            yield( np.array(augmentedX) / 255, batchY )
+
+    iterator = augment_generator(X_train, Y_train)
+    batchX, batchY = next(iterator)
+    print(batchX.shape)
+    print(batchY.shape)
+    for i in range(batchX.shape[0]):
+        import cv2
+        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"BATCHvideo_aug-{i}_Frame-0.jpg"), 255*batchX[i][0])
+    sys.exit()
+
+
     H = model.fit(
         X_train,
         Y_train,
