@@ -143,6 +143,7 @@ def main():
         input_shape = X_train.shape[1:]
         print(f"input_shape = {input_shape}")
         model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
+        tf.keras.utils.plot_model(model, "my_first_model.png", show_shapes=True)
 
     print(model.summary())
     opt = Adam(lr=args.lr)
@@ -160,7 +161,7 @@ def main():
         epochs=args.epoch,
         verbose=1,
         shuffle=False,
-        # class_weight=class_weight,
+        class_weight=class_weight,
     )
 
     print('Evaluating network...')
