@@ -150,8 +150,7 @@ if __name__ == "__main__":
     DEEP_ENSEMBLE = args['deep_ensemble']
     SHAP = args['shap']
     PATIENT_WISE = args['patient_wise']
-    # REGULAR = True
-    REGULAR = False
+    REGULAR = True
 
     print(f'Evaluating with: {args}')
 
@@ -213,7 +212,6 @@ if __name__ == "__main__":
                             image_counter += 1
                         patient_label_lists.append(np.array(patient_label_list))
                         patient_image_lists.append(np.array(patient_image_list) / 255)
-                    print(f"Done getting frames from {video_path}")
         print(f"Got {image_counter} images from {len(patient_image_lists)} videos")
         possible_labels = list(set([label_list[0] for label_list in patient_label_lists]))
         num_classes = len(possible_labels)
@@ -226,19 +224,15 @@ if __name__ == "__main__":
 
         if num_classes == 2:
             patient_label_lists = [to_categorical(patient_label_list, num_classes=num_classes) for patient_label_list in patient_label_lists]
-        print("About to save images")
-        print(len(patient_label_lists))
-        print(len(patient_image_lists))
         predIdxs = []
         actuals = []
         for i, (imgs_, labels_) in enumerate(zip(patient_image_lists, patient_label_lists)):
             test_predictions = model.predict(imgs_)
             test_prediction = np.mean(test_predictions, axis=0)
-            guess = np.argmax(test_prediction)
-            predIdxs.append(guess)
+            predIdxs.append(test_prediction)
             actual = labels_[0]
             actuals.append(actual)
-        printAndSaveConfusionMatrix2(np.array(actuals), np.array(predIdxs), lb.classes_, "mine", ".")
+        save_evaluation_files(np.array(actuals), np.array(predIdxs), classes, "patientwise", FINAL_OUTPUT_DIR)
 
 
 
@@ -378,5 +372,5 @@ if __name__ == "__main__":
             all_logits[i, :, :] = logits
 
         # Compute average, variance, and uncertainty of logits
-        average_logits = np.mean(all_logits, axis=0)
+        logits = np.mean(all_logits, axis=0)
         save_evaluation_files(labels, logits, classes, "deep_ensemble", FINAL_OUTPUT_DIR)
