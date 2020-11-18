@@ -1,9 +1,8 @@
-seed_value = 566
+seed_value = 1231
 import argparse
 import json
 import os
-os.environ['PYTHONHASHSEED']=str(seed_value)
-import sys
+os.environ['PYTHONHASHSEED']=str(seed_value) import sys
 # 2. Set `python` built-in pseudo-random generator at a fixed value
 import random
 random.seed(seed_value)
@@ -32,6 +31,8 @@ from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
 from datetime import datetime
 from datetime import date
+from vidaug import augmentors as va
+
 
 warnings.filterwarnings("ignore")
 datestring = date.today().strftime("%b-%d-%Y") + "_" + datetime.now().strftime('%H-%M-%S')
@@ -115,17 +116,49 @@ def main():
 
     ## VISUALIZE
     if args.visualize:
-        for i in range(X_train.shape[0]):
-            example = X_train[i]
-            label = Y_train[i]
-            print(f"Label = {label}")
-            for j in range(example.shape[0]):
+        sometimes = lambda aug: va.Sometimes(0.5, aug) # Used to apply augmentor with 50% probability
+        seq = va.Sequential([
+                    va.RandomCrop(size=(220, 220)), # randomly crop video with a size of (240 x 180)
+                    va.RandomRotate(degrees=5), # randomly rotates the video with a degree randomly choosen from [-10, 10]  
+                    va.RandomTranslate(x=20, y=20), # randomly translates the video with a degree randomly choosen from [-20, 20]  
+                    sometimes(va.Multiply(value=0.9)),
+                    sometimes(va.Multiply(value=0.9)),
+                    sometimes(va.Multiply(value=0.9)),
+                    sometimes(va.Multiply(value=0.9)),
+                    sometimes(va.Multiply(value=1.1)),
+                    sometimes(va.Multiply(value=1.1)),
+                    sometimes(va.Multiply(value=1.1)),
+                    sometimes(va.Multiply(value=1.1)),
+                    sometimes(va.Add(value=10)),
+                    sometimes(va.Add(value=10)),
+                    sometimes(va.Add(value=10)),
+                    sometimes(va.Add(value=10)),
+                    sometimes(va.Add(value=-10)),
+                    sometimes(va.Add(value=-10)),
+                    sometimes(va.Add(value=-10)),
+                    sometimes(va.Add(value=-10)),
+                    sometimes(va.HorizontalFlip()) # horizontally flip the video with 50% probability
+                        ])
+
+        for i in range(20):
+            # 'video' should be either a list of images from type of numpy array or PIL images
+            orig_video = X_train[i]
+            video = np.squeeze(orig_video)
+            video = [video, video, video]
+            video = np.stack(video, axis=3)
+            print(video.shape)
+            video_aug = seq(video*255)
+            print(len(video_aug))
+            print(video_aug[0].shape)
+            for j in range(1):
                 import cv2
                 print(f"Frame {j}")
-                frame = example[j]
+                frame = video_aug[j]
                 print(f"np.max(frame) = {np.max(frame)}")
                 print(f"np.min(frame) = {np.min(frame)}")
-                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"video_aug-{i}_Frame-{j}.jpg"), frame)
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"video_aug-{i}_Frame-{j}org.jpg"), 255*orig_video[j])
+
 
     # Verbose
     print("testing on split", args.fold)
