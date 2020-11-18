@@ -1,5 +1,6 @@
 seed_value = 1231
 import argparse
+import math
 import json
 import os
 os.environ['PYTHONHASHSEED']=str(seed_value)
@@ -26,6 +27,8 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Dense, GlobalAveragePooling3D
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.models import Model
+from tensorflow.keras.utils import Sequence
+
 from pocovidnet.utils import fix_layers
 
 from pocovidnet import VIDEO_MODEL_FACTORY
@@ -117,7 +120,7 @@ def main():
 
     sometimes = lambda aug: va.Sometimes(0.5, aug) # Used to apply augmentor with 50% probability
     seq = va.Sequential([
-                va.RandomCrop(size=(220, 220)), # randomly crop video with a size of (240 x 180)
+                # va.RandomCrop(size=(220, 220)), # randomly crop video with a size of (240 x 180)
                 va.RandomRotate(degrees=5), # randomly rotates the video with a degree randomly choosen from [-10, 10]  
                 va.RandomTranslate(x=20, y=20), # randomly translates the video with a degree randomly choosen from [-20, 20]  
                 sometimes(va.Multiply(value=0.9)),
@@ -198,44 +201,44 @@ def main():
     class_weight = {0: 2.,
                     1: 2.,
                     2: 1.}
-    def augment_generator(X, Y, batch_size=args.batch):
-        i = 0
-        while True:
-            batchX = X[i:i+args.batch]
-            batchY = Y[i:i+args.batch]
-            i += args.batch
-            if batchX.shape[0] < args.batch:
-                extraNeeded = args.batch - batchX.shape[0]
-                extraX = X[:extraNeeded]
-                extraY = Y[:extraNeeded]
-                batchX = np.concatenate(batchX, extraX)
-                batchY = np.concatenate(batchY, extraY)
-                i = extraNeeded
+    class MyGenerator(Sequence):
+        def __init__(self, x_set, y_set, batch_size):
+            self.x, self.y = x_set, y_set
+            self.batch_size = batch_size
+            self.n = 0
+
+        def __len__(self):
+            return math.ceil(len(self.x) / self.batch_size)
+
+        def __getitem__(self, idx):
+            batch_x = self.x[idx * self.batch_size:(idx+1)*self.batch_size]
+            batch_y = self.y[idx * self.batch_size:(idx+1)*self.batch_size]
 
             augmentedX = []
-            for j in range(args.batch):
-                video = np.squeeze(batchX[j])
+            for j in range(batch_x.shape[0]):
+                video = np.squeeze(batch_x[j])
                 video = np.stack([video, video, video], axis=3)
                 video_aug = seq(video*255)
-                augmentedX.append(np.array(video_aug))
-            yield( np.array(augmentedX) / 255, batchY )
+                s = np.array(video_aug)
+                # augmentedX.append(s)
+                augmentedX.append(batch_x[j])
+            returnX = np.array(augmentedX)[:,:,:,:,0:1]
+            return returnX / 255, batch_y
 
-    iterator = augment_generator(X_train, Y_train)
-    batchX, batchY = next(iterator)
-    print(batchX.shape)
-    print(batchY.shape)
-    for i in range(batchX.shape[0]):
-        import cv2
-        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"BATCHvideo_aug-{i}_Frame-0.jpg"), 255*batchX[i][0])
-    sys.exit()
+        def __next__(self):
+            if self.n >= self.__len__():
+                self.n = 0
+            result = self.__getitem__(self.n)
+            self.n += 1
+            return result
 
 
     H = model.fit(
-        X_train,
-        Y_train,
+        MyGenerator(X_train, Y_train, args.batch),
+        # X_train, Y_train,
         validation_data=(X_validation, Y_validation),
-        batch_size=args.batch,
         epochs=args.epoch,
+        batch_size=args.batch,
         verbose=1,
         shuffle=False,
         class_weight=class_weight,
