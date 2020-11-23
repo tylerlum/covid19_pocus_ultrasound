@@ -1,4 +1,5 @@
 import tensorflow as tf
+import math
 import sys
 from tqdm import tqdm
 import matplotlib.pyplot as plt
@@ -424,11 +425,9 @@ if __name__ == "__main__":
         accuracies = []
         print("Getting patientwise dataset")
         patient_image_lists, patient_label_lists = get_patientwise_dataset()
-        patient_image_lists, patient_label_lists = patient_image_lists[1:2], patient_label_lists[1:2]
+        patient_image_lists, patient_label_lists = patient_image_lists[6:7], patient_label_lists[6:7]
         print("Got patientwise dataset")
-        for _, (imgs_, labels_) in enumerate(zip(patient_image_lists, patient_label_lists)):
-            # imgs_ = imgs_[:5]
-            # labels_ = labels_[:5]
+        for j, (imgs_, labels_) in enumerate(zip(patient_image_lists, patient_label_lists)):
             all_logits_single_patient = np.zeros((NUM_MC_DROPOUT_RUNS, labels_.shape[0], labels_.shape[1]))
             for i in tqdm(range(NUM_MC_DROPOUT_RUNS)):
                 logits = mc_model.predict(imgs_)
@@ -439,14 +438,39 @@ if __name__ == "__main__":
             std_dev_logits_single_patient = np.std(all_logits_single_patient, axis=0, ddof=1)
             indices_of_prediction_single_patient = np.argmax(average_logits_single_patient, axis=1)
             uncertainty_in_prediction = np.take_along_axis(std_dev_logits_single_patient, np.expand_dims(indices_of_prediction_single_patient, axis=1), axis=-1).squeeze(axis=-1)
-            weighted_logits = np.multiply(average_logits_single_patient, std_dev_logits_single_patient)
+
+            # Method 1: Use only the highest predicted value for uncertainty weighting
+            # weighted_logits = [0] * 3
+            # for i in range(uncertainty_in_prediction.shape[0]):
+            #     # weighted_logits[indices_of_prediction_single_patient[i]] += 1/uncertainty_in_prediction[i]
+            #     weighted_logits[indices_of_prediction_single_patient[i]] += math.exp(-uncertainty_in_prediction[i])
+            # average_weighted_logits = np.array(weighted_logits) / sum(weighted_logits)
+
+            # Method 2: Use all predicted values for uncertainty weighting
+            # weighted_logits = np.divide(average_logits_single_patient, std_dev_logits_single_patient)
+            weighted_logits = np.multiply(average_logits_single_patient, np.exp(-*std_dev_logits_single_patient))
             average_weighted_logits = np.mean(weighted_logits, axis=0)
             average_weighted_logits = average_weighted_logits / np.sum(average_weighted_logits)
             average_logits = np.mean(average_logits_single_patient, axis=0)
+
+            # Print logits at each frame
+            # for i in range(average_logits_single_patient.shape[0]):
+            #     print(f"average_logits_single_patient = {average_logits_single_patient[i]}")
+            #     print(f"std_dev_logits_single_patient = {std_dev_logits_single_patient[i]}")
+
+            # Print patient-wise prediction
+            print(f"----------------------")
+            print(j)
             print(f"average_logits = {average_logits}")
             print(f"average_weighted_logits = {average_weighted_logits}")
             print(f"ground_truth = {labels_[0]}")
             print(f"======================")
+
+            # Save first frames to visualize
+            # for i in range(imgs_.shape[0]):
+            #     cv2.imwrite(f"img_{j}_{i}.jpg", imgs_[i]*255)
+            #     break
+
         sys.exit()
 
 
