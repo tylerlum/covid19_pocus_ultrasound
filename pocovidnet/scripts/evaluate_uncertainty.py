@@ -409,7 +409,7 @@ if __name__ == "__main__":
 
     # Setup model
     if MC_DROPOUT:
-        NUM_MC_DROPOUT_RUNS = 10
+        NUM_MC_DROPOUT_RUNS = 50
         print(f"Running {NUM_MC_DROPOUT_RUNS} runs of MC Dropout")
         print("========================")
 
@@ -426,61 +426,28 @@ if __name__ == "__main__":
         patient_image_lists, patient_label_lists = get_patientwise_dataset()
         print("Got patientwise dataset")
         for _, (imgs_, labels_) in enumerate(zip(patient_image_lists, patient_label_lists)):
-            print("Outer loop")
-            imgs_ = imgs_[:5]
-            labels_ = labels_[:5]
+            # imgs_ = imgs_[:5]
+            # labels_ = labels_[:5]
             all_logits_single_patient = np.zeros((NUM_MC_DROPOUT_RUNS, labels_.shape[0], labels_.shape[1]))
             for i in tqdm(range(NUM_MC_DROPOUT_RUNS)):
-                print("Inner loop")
-                print(f"imgs_.shape = {imgs_.shape}")
                 logits = mc_model.predict(imgs_)
-                print("Inner loop 2")
                 accuracies.append(accuracy(logits, labels_))
-                print("Inner loop 3")
                 all_logits_single_patient[i, :, :] = logits
-                print("Inner loop 4")
-                print(f"logits = {logits}")
 
             average_logits_single_patient = np.mean(all_logits_single_patient, axis=0)
-            print(f"average_logits_single_patient.shape = {average_logits_single_patient.shape}")
-            print(f"average_logits_single_patient = {average_logits_single_patient}")
             std_dev_logits_single_patient = np.std(all_logits_single_patient, axis=0, ddof=1)
-            print(f"std_dev_logits_single_patient.shape = {std_dev_logits_single_patient.shape}")
-            print(f"std_dev_logits_single_patient = {std_dev_logits_single_patient}")
             indices_of_prediction_single_patient = np.argmax(average_logits_single_patient, axis=1)
-            print(f"indices_of_prediction_single_patient.shape = {indices_of_prediction_single_patient.shape}")
-            print(f"indices_of_prediction_single_patient = {indices_of_prediction_single_patient}")
             uncertainty_in_prediction = np.take_along_axis(std_dev_logits_single_patient, np.expand_dims(indices_of_prediction_single_patient, axis=1), axis=-1).squeeze(axis=-1)
-            print(f"uncertainty_in_prediction.shape = {uncertainty_in_prediction.shape}")
-            print(f"uncertainty_in_prediction = {uncertainty_in_prediction}")
             weighted_logits = np.multiply(average_logits_single_patient, std_dev_logits_single_patient)
-            print(f"weighted_logits.shape = {weighted_logits.shape}")
-            print(f"weighted_logits = {weighted_logits}")
             average_weighted_logits = np.mean(weighted_logits, axis=0)
             average_weighted_logits = average_weighted_logits / np.sum(average_weighted_logits)
-            print(f"average_weighted_logits.shape = {average_weighted_logits.shape}")
-            print(f"average_weighted_logits = {average_weighted_logits}")
             average_logits = np.mean(average_logits_single_patient, axis=0)
-            print(f"average_logits.shape = {average_logits.shape}")
             print(f"average_logits = {average_logits}")
-            sys.exit()
+            print(f"average_weighted_logits = {average_weighted_logits}")
+            print(f"ground_truth = {labels_[0]}")
+            print(f"======================")
+        sys.exit()
 
-        # Compute logits
-        all_logits = np.zeros((NUM_MC_DROPOUT_RUNS, labels.shape[0], labels.shape[1]))
-        accuracies = []
-        for i in tqdm(range(NUM_MC_DROPOUT_RUNS)):
-            logits = mc_model.predict(data)
-            accuracies.append(accuracy(logits, labels))
-            all_logits[i, :, :] = logits
-
-        # Compute average, variance, and uncertainty of logits
-        average_logits = np.mean(all_logits, axis=0)
-        std_dev_logits = np.std(all_logits, axis=0, ddof=1)
-        indices_of_prediction = np.argmax(average_logits, axis=1)
-        uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
-        print(f"Mean accuracy of individual mc models = {sum(accuracies)/len(accuracies)}")
-        print(f"Combined accuracy of mc models = {accuracy(average_logits, labels)}")
-        print(f"Average uncertainty in mc model predictions = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
 
         # Plot accuracy vs uncertainty
         correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
