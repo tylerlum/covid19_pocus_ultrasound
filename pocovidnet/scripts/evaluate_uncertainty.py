@@ -1,6 +1,4 @@
 import tensorflow as tf
-import math
-import sys
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
@@ -318,48 +316,6 @@ def save_special_images(data, labels, l1_loss_of_prediction, uncertainty_in_pred
         cv2.imwrite(output_name, data[i] * 255)
 
 
-def get_patientwise_dataset():
-    # Get patient images and labels from the videos
-    patient_image_lists, patient_label_lists = [], []
-    image_counter = 0
-    FULL_VIDEOS_DIR = DATA_DIR + f"_full_videos/split{FOLD}"
-    class_dirs = [x[0] for x in os.walk(FULL_VIDEOS_DIR)]
-    for class_dir in class_dirs:
-        for _, _, files in os.walk(class_dir):
-            for file_ in files:
-                video_path = os.path.join(class_dir,  file_)
-                if os.path.exists(video_path):
-                    path_parts = video_path.split(os.path.sep)
-                    label = path_parts[-2]
-                    cap = cv2.VideoCapture(video_path)
-                    patient_image_list, patient_label_list = [], []
-                    while cap.isOpened():
-                        ret, frame = cap.read()
-                        if (ret != True):
-                            break
-                        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                        image = cv2.resize(image, (IMG_WIDTH, IMG_HEIGHT))
-                        patient_image_list.append(image)
-                        patient_label_list.append(label)
-                        image_counter += 1
-                    patient_label_lists.append(np.array(patient_label_list))
-                    patient_image_lists.append(np.array(patient_image_list) / 255)
-    print(f"Got {image_counter} images from {len(patient_image_lists)} videos")
-    possible_labels = list(set([label_list[0] for label_list in patient_label_lists]))
-    num_classes = len(possible_labels)
-
-    # perform one-hot encoding on the labels
-    lb = LabelBinarizer()
-    lb.fit(possible_labels)
-
-    patient_label_lists = [lb.transform(patient_label_list) for patient_label_list in patient_label_lists]
-
-    if num_classes == 2:
-        patient_label_lists = [to_categorical(patient_label_list, num_classes=num_classes) for patient_label_list in patient_label_lists]
-    return patient_image_lists, patient_label_lists
-
-
-
 if __name__ == "__main__":
     IMG_WIDTH, IMG_HEIGHT = 224, 224
 
@@ -378,7 +334,6 @@ if __name__ == "__main__":
     ap.add_argument('-b', '--test_time_augmentation', type=bool, default=False)
     ap.add_argument('-c', '--deep_ensemble', type=bool, default=False)
     ap.add_argument('-s', '--shap', type=bool, default=False)
-    ap.add_argument('-p', '--patient_wise', type=bool, default=False)
     args = vars(ap.parse_args())
 
     # Initialize hyperparameters
@@ -391,7 +346,6 @@ if __name__ == "__main__":
     SHAP = args['shap']
     TEST_TIME_AUGMENTATION = args['test_time_augmentation']
     DEEP_ENSEMBLE = args['deep_ensemble']
-    PATIENT_WISE = args['patient_wise']
 
     print(f'Evaluating with: {args}')
 
@@ -402,7 +356,7 @@ if __name__ == "__main__":
         os.makedirs(FINAL_OUTPUT_DIR)
 
     # Get dataset
-    # data, labels = get_dataset()
+    data, labels = get_dataset()
 
     # Consider shrinking dataset for easier understanding
     # start_idx, end_idx = 10, 14
@@ -420,59 +374,22 @@ if __name__ == "__main__":
         model = tf.keras.models.load_model(model_path)
         mc_model = create_mc_model(model)
 
-
-        # Get patient-wise data
+        # Compute logits
+        all_logits = np.zeros((NUM_MC_DROPOUT_RUNS, labels.shape[0], labels.shape[1]))
         accuracies = []
-        print("Getting patientwise dataset")
-        patient_image_lists, patient_label_lists = get_patientwise_dataset()
-        patient_image_lists, patient_label_lists = patient_image_lists[6:7], patient_label_lists[6:7]
-        print("Got patientwise dataset")
-        for j, (imgs_, labels_) in enumerate(zip(patient_image_lists, patient_label_lists)):
-            all_logits_single_patient = np.zeros((NUM_MC_DROPOUT_RUNS, labels_.shape[0], labels_.shape[1]))
-            for i in tqdm(range(NUM_MC_DROPOUT_RUNS)):
-                logits = mc_model.predict(imgs_)
-                accuracies.append(accuracy(logits, labels_))
-                all_logits_single_patient[i, :, :] = logits
+        for i in tqdm(range(NUM_MC_DROPOUT_RUNS)):
+            logits = mc_model.predict(data)
+            accuracies.append(accuracy(logits, labels))
+            all_logits[i, :, :] = logits
 
-            average_logits_single_patient = np.mean(all_logits_single_patient, axis=0)
-            std_dev_logits_single_patient = np.std(all_logits_single_patient, axis=0, ddof=1)
-            indices_of_prediction_single_patient = np.argmax(average_logits_single_patient, axis=1)
-            uncertainty_in_prediction = np.take_along_axis(std_dev_logits_single_patient, np.expand_dims(indices_of_prediction_single_patient, axis=1), axis=-1).squeeze(axis=-1)
-
-            # Method 1: Use only the highest predicted value for uncertainty weighting
-            # weighted_logits = [0] * 3
-            # for i in range(uncertainty_in_prediction.shape[0]):
-            #     # weighted_logits[indices_of_prediction_single_patient[i]] += 1/uncertainty_in_prediction[i]
-            #     weighted_logits[indices_of_prediction_single_patient[i]] += math.exp(-uncertainty_in_prediction[i])
-            # average_weighted_logits = np.array(weighted_logits) / sum(weighted_logits)
-
-            # Method 2: Use all predicted values for uncertainty weighting
-            # weighted_logits = np.divide(average_logits_single_patient, std_dev_logits_single_patient)
-            weighted_logits = np.multiply(average_logits_single_patient, np.exp(-*std_dev_logits_single_patient))
-            average_weighted_logits = np.mean(weighted_logits, axis=0)
-            average_weighted_logits = average_weighted_logits / np.sum(average_weighted_logits)
-            average_logits = np.mean(average_logits_single_patient, axis=0)
-
-            # Print logits at each frame
-            # for i in range(average_logits_single_patient.shape[0]):
-            #     print(f"average_logits_single_patient = {average_logits_single_patient[i]}")
-            #     print(f"std_dev_logits_single_patient = {std_dev_logits_single_patient[i]}")
-
-            # Print patient-wise prediction
-            print(f"----------------------")
-            print(j)
-            print(f"average_logits = {average_logits}")
-            print(f"average_weighted_logits = {average_weighted_logits}")
-            print(f"ground_truth = {labels_[0]}")
-            print(f"======================")
-
-            # Save first frames to visualize
-            # for i in range(imgs_.shape[0]):
-            #     cv2.imwrite(f"img_{j}_{i}.jpg", imgs_[i]*255)
-            #     break
-
-        sys.exit()
-
+        # Compute average, variance, and uncertainty of logits
+        average_logits = np.mean(all_logits, axis=0)
+        std_dev_logits = np.std(all_logits, axis=0, ddof=1)
+        indices_of_prediction = np.argmax(average_logits, axis=1)
+        uncertainty_in_prediction = np.take_along_axis(std_dev_logits, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
+        print(f"Mean accuracy of individual mc models = {sum(accuracies)/len(accuracies)}")
+        print(f"Combined accuracy of mc models = {accuracy(average_logits, labels)}")
+        print(f"Average uncertainty in mc model predictions = {np.sum(uncertainty_in_prediction)/uncertainty_in_prediction.shape[0]}")
 
         # Plot accuracy vs uncertainty
         correct_labels = np.take_along_axis(labels, np.expand_dims(indices_of_prediction, axis=1), axis=-1).squeeze(axis=-1)
