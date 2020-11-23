@@ -118,6 +118,47 @@ def get_dataset():
     return data, labels, lb.classes_
 
 
+def get_patientwise_dataset():
+    # Get patient images and labels from the videos
+    patient_image_lists, patient_label_lists = [], []
+    image_counter = 0
+    FULL_VIDEOS_DIR = DATA_DIR + f"_full_videos/split{FOLD}"
+    class_dirs = [x[0] for x in os.walk(FULL_VIDEOS_DIR)]
+    for class_dir in class_dirs:
+        for _, _, files in os.walk(class_dir):
+            for file_ in files:
+                video_path = os.path.join(class_dir,  file_)
+                if os.path.exists(video_path):
+                    path_parts = video_path.split(os.path.sep)
+                    label = path_parts[-2]
+                    cap = cv2.VideoCapture(video_path)
+                    patient_image_list, patient_label_list = [], []
+                    while cap.isOpened():
+                        ret, frame = cap.read()
+                        if (ret != True):
+                            break
+                        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        image = cv2.resize(image, (IMG_WIDTH, IMG_HEIGHT))
+                        patient_image_list.append(image)
+                        patient_label_list.append(label)
+                        image_counter += 1
+                    patient_label_lists.append(np.array(patient_label_list))
+                    patient_image_lists.append(np.array(patient_image_list) / 255)
+    print(f"Got {image_counter} images from {len(patient_image_lists)} videos")
+    possible_labels = list(set([label_list[0] for label_list in patient_label_lists]))
+    num_classes = len(possible_labels)
+
+    # perform one-hot encoding on the labels
+    lb = LabelBinarizer()
+    lb.fit(possible_labels)
+
+    patient_label_lists = [lb.transform(patient_label_list) for patient_label_list in patient_label_lists]
+
+    if num_classes == 2:
+        patient_label_lists = [to_categorical(patient_label_list, num_classes=num_classes) for patient_label_list in patient_label_lists]
+    return patient_image_lists, patient_label_lists
+ 
+
 if __name__ == "__main__":
     IMG_WIDTH, IMG_HEIGHT = 224, 224
 
@@ -176,6 +217,7 @@ if __name__ == "__main__":
         model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
         print(f"Looking for model at {model_path}")
         model = tf.keras.models.load_model(model_path)
+        model.summary()
 
         # make predictions on the testing set
         logits = model.predict(data)
@@ -188,42 +230,9 @@ if __name__ == "__main__":
         model = tf.keras.models.load_model(model_path)
 
         # Get patient images and labels from the videos
-        patient_image_lists, patient_label_lists = [], []
-        image_counter = 0
-        FULL_VIDEOS_DIR = DATA_DIR + f"_full_videos/split{FOLD}"
-        class_dirs = [x[0] for x in os.walk(FULL_VIDEOS_DIR)]
-        for class_dir in class_dirs:
-            for _, _, files in os.walk(class_dir):
-                for file_ in files:
-                    video_path = os.path.join(class_dir,  file_)
-                    if os.path.exists(video_path):
-                        path_parts = video_path.split(os.path.sep)
-                        label = path_parts[-2]
-                        cap = cv2.VideoCapture(video_path)
-                        patient_image_list, patient_label_list = [], []
-                        while cap.isOpened():
-                            ret, frame = cap.read()
-                            if (ret != True):
-                                break
-                            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                            image = cv2.resize(image, (IMG_WIDTH, IMG_HEIGHT))
-                            patient_image_list.append(image)
-                            patient_label_list.append(label)
-                            image_counter += 1
-                        patient_label_lists.append(np.array(patient_label_list))
-                        patient_image_lists.append(np.array(patient_image_list) / 255)
-        print(f"Got {image_counter} images from {len(patient_image_lists)} videos")
-        possible_labels = list(set([label_list[0] for label_list in patient_label_lists]))
-        num_classes = len(possible_labels)
 
-        # perform one-hot encoding on the labels
-        lb = LabelBinarizer()
-        lb.fit(possible_labels)
+        patient_image_lists, patient_label_lists = get_patientwise_dataset()
 
-        patient_label_lists = [lb.transform(patient_label_list) for patient_label_list in patient_label_lists]
-
-        if num_classes == 2:
-            patient_label_lists = [to_categorical(patient_label_list, num_classes=num_classes) for patient_label_list in patient_label_lists]
         predIdxs = []
         actuals = []
         for i, (imgs_, labels_) in enumerate(zip(patient_image_lists, patient_label_lists)):
