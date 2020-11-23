@@ -424,6 +424,7 @@ if __name__ == "__main__":
         accuracies = []
         print("Getting patientwise dataset")
         patient_image_lists, patient_label_lists = get_patientwise_dataset()
+        patient_image_lists, patient_label_lists = patient_image_lists[1:2], patient_label_lists[1:2]
         print("Got patientwise dataset")
         for _, (imgs_, labels_) in enumerate(zip(patient_image_lists, patient_label_lists)):
             # imgs_ = imgs_[:5]
