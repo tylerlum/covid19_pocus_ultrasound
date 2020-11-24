@@ -55,15 +55,6 @@ def save_evaluation_files(labels, logits, classes, start_of_filename, directory)
     printAndSaveConfusionMatrix(labels, predIdxs, classes, start_of_filename, directory)
 
 
-def printAndSaveConfusionMatrix2(y, predIdxs, classes, start_of_filename, directory):
-    cm = confusion_matrix(y.argmax(axis=1), predIdxs)
-    # show the confusion matrix, accuracy, sensitivity, and specificity
-    print(cm)
-
-    cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
-    cmDisplay.plot()
-    plt.savefig(os.path.join(directory, start_of_filename + "ConfusionMatrix.png"))
-
 def get_dataset():
     # Get data
     data, labels = [], []
@@ -157,7 +148,7 @@ def get_patientwise_dataset():
     if num_classes == 2:
         patient_label_lists = [to_categorical(patient_label_list, num_classes=num_classes) for patient_label_list in patient_label_lists]
     return patient_image_lists, patient_label_lists
- 
+
 
 if __name__ == "__main__":
     IMG_WIDTH, IMG_HEIGHT = 224, 224
