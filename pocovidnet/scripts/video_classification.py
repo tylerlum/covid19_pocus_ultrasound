@@ -210,9 +210,26 @@ def main():
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
     )
-    class_weight = {0: 2.,
+    class_weight = {0: 1.,
                     1: 2.,
                     2: 1.}
+
+    # Define callbacks
+    earlyStopping = EarlyStopping(
+        monitor='val_loss',
+        patience=20,
+        verbose=1,
+        mode='min',
+        restore_best_weights=True
+    )
+    reduce_lr_loss = ReduceLROnPlateau(
+        monitor='val_loss',
+        factor=0.1,
+        patience=7,
+        verbose=1,
+        epsilon=1e-4,
+        mode='min'
+    )
 
     H = model.fit(
         X_train, Y_train,
@@ -224,6 +241,7 @@ def main():
         class_weight=class_weight,
         use_multiprocessing=True,
         workers=2,  # Empirically best performance
+        callbacks=[earlyStopping, reduce_lr_loss],
     )
 
     print('Evaluating network...')
