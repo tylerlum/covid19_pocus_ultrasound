@@ -1,15 +1,25 @@
+seed_value = 1231
 import argparse
+import math
 import json
 import os
+os.environ['PYTHONHASHSEED']=str(seed_value)
+import sys
+# 2. Set `python` built-in pseudo-random generator at a fixed value
+import random
+random.seed(seed_value)
 import pickle
 import warnings
 
 import numpy as np
+np.random.seed(seed_value)
 import matplotlib.pyplot as plt
 import pandas as pd
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
+import tensorflow as tf
+tf.random.set_seed(seed_value)
 from tensorflow.keras.callbacks import (
     EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 )
@@ -17,12 +27,16 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Dense, GlobalAveragePooling3D
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.models import Model
+from tensorflow.keras.utils import Sequence
+
 from pocovidnet.utils import fix_layers
 
 from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
 from datetime import datetime
 from datetime import date
+from vidaug import augmentors as va
+
 
 warnings.filterwarnings("ignore")
 datestring = date.today().strftime("%b-%d-%Y") + "_" + datetime.now().strftime('%H-%M-%S')
@@ -46,6 +60,7 @@ def main():
     parser.add_argument('--output', type=str, default="video_model_outputs")
     parser.add_argument('--fold', type=int, default=0)
     parser.add_argument('--load', type=bool, default=False)
+    parser.add_argument('--visualize', type=bool, default=False)
     parser.add_argument('--fr', type=int, default=5)
     parser.add_argument('--depth', type=int, default=5)
     parser.add_argument('--model_id', type=str, default='genesis')
@@ -72,10 +87,6 @@ def main():
     if not os.path.exists(FINAL_OUTPUT_DIR):
         os.makedirs(FINAL_OUTPUT_DIR)
 
-    # Initialize video converter
-    vid3d = Videoto3D(
-        args.videos, width=64, height=64, depth=args.depth, framerate=args.fr
-    )
     # Load saved data or read in videos
     if args.load:
         with open(
@@ -86,52 +97,84 @@ def main():
             X_test, test_labels_text, test_files = pickle.load(infile)
         with open(
             os.path.join(
+                args.save, 'conv3d_validation_fold_' + str(args.fold) + '.dat'
+            ), 'rb'
+        ) as infile:
+            X_validation, validation_labels_text, validation_files = pickle.load(infile)
+        with open(
+            os.path.join(
                 args.save, 'conv3d_train_fold_' + str(args.fold) + '.dat'
             ), 'rb'
         ) as infile:
             X_train, train_labels_text, train_files = pickle.load(infile)
     else:
-        # SPLIT NO CROSSVAL
-        class_short = ["cov", "pne", "reg"]
-        vid_files = [
-            v for v in os.listdir(args.videos) if v[:3].lower() in class_short
-        ]
-        labels = [vid[:3].lower() for vid in vid_files]
-        train_files, test_files, train_labels, test_labels = train_test_split(
-            vid_files, labels, stratify=labels, test_size=0.2
-        )
-        train_files, validation_files, train_labels, validation_labels = train_test_split(
-            train_files, train_labels, stratify=train_labels, test_size=0.2
-        )
+        print("Add --load")
+        sys.exit()
 
-        # Read in videos and transform to 3D
-        X_train, train_labels_text, train_files = vid3d.video3d(
-            train_files,
-            train_labels,
-            save=os.path.join(
-                args.save, "conv3d_train_fold_" + str(args.fold) + ".dat"
-            )
-        )
-        X_validation, validation_labels_text, validation_files = vid3d.video3d(
-            validation_files,
-            validation_labels,
-            save=os.path.join(
-                args.save, "conv3d_validation_fold_" + str(args.fold) + ".dat"
-            )
-        )
-        X_test, test_labels_text, test_files = vid3d.video3d(
-            test_files,
-            test_labels,
-            save=os.path.join(
-                args.save, "conv3d_test_fold_" + str(args.fold) + ".dat"
-            )
-        )
     # One-hot encoding
     lb = LabelBinarizer()
     lb.fit(train_labels_text)
     Y_train = lb.transform(train_labels_text)
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
+
+    sometimes = lambda aug: va.Sometimes(0.5, aug) # Used to apply augmentor with 50% probability
+    seq = va.Sequential([
+                # va.RandomCrop(size=(220, 220)), # randomly crop video with a size of (240 x 180)
+                va.RandomRotate(degrees=5), # randomly rotates the video with a degree randomly choosen from [-10, 10]  
+                va.RandomTranslate(x=20, y=20), # randomly translates the video with a degree randomly choosen from [-20, 20]  
+                sometimes(va.Multiply(value=0.9)),
+                sometimes(va.Multiply(value=0.9)),
+                sometimes(va.Multiply(value=0.9)),
+                sometimes(va.Multiply(value=0.9)),
+                sometimes(va.Multiply(value=1.1)),
+                sometimes(va.Multiply(value=1.1)),
+                sometimes(va.Multiply(value=1.1)),
+                sometimes(va.Multiply(value=1.1)),
+                sometimes(va.Add(value=10)),
+                sometimes(va.Add(value=10)),
+                sometimes(va.Add(value=10)),
+                sometimes(va.Add(value=10)),
+                sometimes(va.Add(value=-10)),
+                sometimes(va.Add(value=-10)),
+                sometimes(va.Add(value=-10)),
+                sometimes(va.Add(value=-10)),
+                sometimes(va.HorizontalFlip()) # horizontally flip the video with 50% probability
+                    ])
+    ## VISUALIZE
+    if args.visualize:
+        for i in range(20):
+            # 'video' should be either a list of images from type of numpy array or PIL images
+            orig_video = X_train[i]
+            video = np.squeeze(orig_video)
+            video = [video, video, video]
+            video = np.stack(video, axis=3)
+            print(video.shape)
+            video_aug = seq(video*255)
+            print(len(video_aug))
+            print(video_aug[0].shape)
+            for j in range(1):
+                import cv2
+                print(f"Frame {j}")
+                frame = video_aug[j]
+                print(f"np.max(frame) = {np.max(frame)}")
+                print(f"np.min(frame) = {np.min(frame)}")
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"video_aug-{i}_Frame-{j}.jpg"), frame)
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"video_aug-{i}_Frame-{j}org.jpg"), 255*orig_video[j])
+
+        for i in range(X_train.shape[0]):
+            example = X_train[i]
+            label = Y_train[i]
+            print(f"Label = {label}")
+            for j in range(example.shape[0]):
+                import cv2
+                print(f"Frame {j}")
+                frame = example[j]
+                print(f"np.max(frame) = {np.max(frame)}")
+                print(f"np.min(frame) = {np.min(frame)}")
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
+
+
     # Verbose
     print("testing on split", args.fold)
     print(X_train.shape, Y_train.shape)
@@ -144,87 +187,81 @@ def main():
     print("unique in test", np.unique(test_labels_text, return_counts=True))
 
     # Define callbacks
-    earlyStopping = EarlyStopping(
-        monitor='val_loss',
-        patience=20,
-        verbose=1,
-        mode='min',
-        restore_best_weights=True
-    )
-
-    mcp_save = ModelCheckpoint(
-        os.path.join(MODEL_D, 'fold_' + str(args.fold), 'epoch_{epoch:02d}'),
-        save_best_only=True,
-        monitor='val_accuracy',
-        mode='max',
-        verbose=1
-    )
-    reduce_lr_loss = ReduceLROnPlateau(
-        monitor='val_loss',
-        factor=0.1,
-        patience=7,
-        verbose=1,
-        epsilon=1e-4,
-        mode='min'
-    )
     if args.model_id == 'base':
         input_shape = X_train.shape[1:]
+        print(f"input_shape = {input_shape}")
         model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
-    elif args.model_id == 'genesis':
-
-        # For Genesis models inputs are shrinked to 64,64
-        input_shape = 42
-        input_shape = 1, 64, 64, 32
-
-        X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
-        X_validation = np.transpose(X_validation, [0, 4, 2, 3, 1])
-        X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
-        # Frames are also repeated 6-7 times since depth of model is 32
-        X_test = np.repeat(X_test, [6, 7, 7, 6, 6], axis=-1)
-        X_validation = np.repeat(X_validation, [6, 7, 7, 6, 6], axis=-1)
-        X_train = np.repeat(X_train, [6, 7, 7, 6, 6], axis=-1)
-
-        model = VIDEO_MODEL_FACTORY[args.model_id
-                                    ](input_shape, batch_normalization=True)
-        model.load_weights(args.weight_path)
-        x = model.get_layer('depth_7_relu').output
-        x = GlobalAveragePooling3D()(x)
-        x = Dense(1024, activation='relu')(x)
-        output = Dense(nb_classes, activation='softmax')(x)
-        model = Model(inputs=model.input, outputs=output)
-        model = fix_layers(
-            model, num_flex_layers=args.trainable_base_layers + 4
-        )
+        tf.keras.utils.plot_model(model, "my_first_model.png", show_shapes=True)
 
     print(model.summary())
-    opt = Adam(lr=args.lr, decay=args.lr / args.epoch)
+    opt = Adam(lr=args.lr)
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
     )
+    class_weight = {0: 2.,
+                    1: 2.,
+                    2: 1.}
+    class MyGenerator(Sequence):
+        def __init__(self, x_set, y_set, batch_size):
+            self.x, self.y = x_set, y_set
+            self.batch_size = batch_size
+            self.n = 0
+
+        def __len__(self):
+            return math.ceil(len(self.x) / self.batch_size)
+
+        def __getitem__(self, idx):
+            batch_x = self.x[idx * self.batch_size:(idx+1)*self.batch_size]
+            batch_y = self.y[idx * self.batch_size:(idx+1)*self.batch_size]
+
+            augmentedX = []
+            for j in range(batch_x.shape[0]):
+                video = np.squeeze(batch_x[j])
+                video = np.stack([video, video, video], axis=3)
+                video_aug = seq(video*255)
+                s = np.array(video_aug)
+                # augmentedX.append(s)
+                augmentedX.append(batch_x[j])
+            returnX = np.array(augmentedX)[:,:,:,:,0:1]
+            return returnX, batch_y
+
+        def __next__(self):
+            if self.n >= self.__len__():
+                self.n = 0
+            result = self.__getitem__(self.n)
+            self.n += 1
+            return result
+
+#    gen = MyGenerator(X_train, Y_train, args.batch)
+#    for i in range(10):
+#        x, y = next(gen)
+#        x = x[0][0]
+#        print(x.shape)
+#        y = y[0]
+#        import cv2
+#        print(np.max(x))
+#        print(np.min(x))
+#        cv2.imwrite(f"TESTING1-{i}-y-{y}.jpg", 255*x)
+#    sys.exit()
+#
+
     H = model.fit(
-        X_train,
-        Y_train,
+        MyGenerator(X_train, Y_train, args.batch),
+        # X_train, Y_train,
         validation_data=(X_validation, Y_validation),
-        batch_size=args.batch,
         epochs=args.epoch,
+        batch_size=args.batch,
         verbose=1,
-        shuffle=True,
-        callbacks=[earlyStopping, reduce_lr_loss]
-        # callbacks=[earlyStopping, mcp_save, reduce_lr_loss]
-    )
-    model_json = model.to_json()
-    with open(
-        os.path.join(
-            MODEL_D, 'fold_' + str(args.fold), '3dcnnmodel_final.json'
-        ), 'w'
-    ) as json_file:
-        json_file.write(model_json)
-    model.save_weights(
-        os.path.join(
-            MODEL_D, 'fold_' + str(args.fold), '3dcnnmodel_final.hd5'
-        )
+        shuffle=False,
+        class_weight=class_weight,
+        use_multiprocessing=True,
+        workers=2,  # Empirically best performance
     )
 
+    print('Evaluating network...')
+    trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=0)
+    print('train loss:', trainLoss)
+    print('train accuracy:', trainAcc)
     validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=0)
     print('Validation loss:', validationLoss)
     print('Validation accuracy:', validationAcc)
@@ -232,7 +269,7 @@ def main():
     print('Test loss:', testLoss)
     print('Test accuracy:', testAcc)
 
-    print('Evaluating network...')
+    trainPredIdxs = model.predict(X_train, batch_size=args.batch)
     validationPredIdxs = model.predict(X_validation, batch_size=args.batch)
     testPredIdxs = model.predict(X_test, batch_size=args.batch)
     def savePredictionsToCSV(predIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
@@ -243,6 +280,7 @@ def main():
 
     # for each image in the testing set we need to find the index of the
     # label with corresponding largest predicted probability
+    trainPredIdxs = np.argmax(trainPredIdxs, axis=1)
     validationPredIdxs = np.argmax(validationPredIdxs, axis=1)
     testPredIdxs = np.argmax(testPredIdxs, axis=1)
 
@@ -261,6 +299,7 @@ def main():
         )
         reportDf = pd.DataFrame(report).transpose()
         reportDf.to_csv(os.path.join(directory, reportFilename))
+    printAndSaveClassificationReport(Y_train, trainPredIdxs, lb.classes_, "trainReport.csv")
     printAndSaveClassificationReport(Y_validation, validationPredIdxs, lb.classes_, "validationReport.csv")
     printAndSaveClassificationReport(Y_test, testPredIdxs, lb.classes_, "testReport.csv")
 
@@ -275,11 +314,12 @@ def main():
         cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
         cmDisplay.plot()
         plt.savefig(os.path.join(directory, confusionMatrixFilename))
+    printAndSaveConfusionMatrix(Y_train, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
     printAndSaveConfusionMatrix(Y_validation, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
     printAndSaveConfusionMatrix(Y_test, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
     print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
-    model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
+    # model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
 
     # plot the training loss and accuracy
     plt.style.use('ggplot')
@@ -293,6 +333,32 @@ def main():
     plt.ylabel('Loss/Accuracy')
     plt.legend(loc='lower left')
     plt.savefig(os.path.join(FINAL_OUTPUT_DIR, 'loss.png'))
+
+
+    # going patient-wise #################
+    def calculate_patient_wise(files, x, y, model):
+        gt = []
+        preds = []
+        files = np.array(files)
+        for video in np.unique(files):
+            current_data = x[files == video]
+            current_labels = y[files == video]
+            true_label = current_labels[0]
+            current_predictions = model.predict(current_data)
+            prediction = np.argmax(np.mean(current_predictions, axis=0))
+            gt.append(true_label)
+            preds.append(prediction)
+        return np.array(gt), np.array(preds)
+    train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
+    validation_gt, validation_preds = calculate_patient_wise(validation_files, X_validation, Y_validation, model)
+    test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
+
+    printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, "trainReportPatients.csv")
+    printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, "validationReportPatients.csv")
+    printAndSaveClassificationReport(test_gt, test_preds, lb.classes_, "testReportPatients.csv")
+    printAndSaveConfusionMatrix(train_gt, train_preds, lb.classes_, "trainConfusionMatrixPatients.png")
+    printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, "validationConfusionMatrixPatients.png")
+    printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, "testConfusionMatrixPatients.png")
 
 if __name__ == '__main__':
     main()

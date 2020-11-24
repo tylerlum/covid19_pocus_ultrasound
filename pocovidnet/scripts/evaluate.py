@@ -54,6 +54,7 @@ def save_evaluation_files(labels, logits, classes, start_of_filename, directory)
     printAndSaveClassificationReport(labels, predIdxs, classes, start_of_filename, directory)
     printAndSaveConfusionMatrix(labels, predIdxs, classes, start_of_filename, directory)
 
+
 def get_dataset():
     # Get data
     data, labels = [], []
@@ -108,6 +109,47 @@ def get_dataset():
     return data, labels, lb.classes_
 
 
+def get_patientwise_dataset():
+    # Get patient images and labels from the videos
+    patient_image_lists, patient_label_lists = [], []
+    image_counter = 0
+    FULL_VIDEOS_DIR = DATA_DIR + f"_full_videos/split{FOLD}"
+    class_dirs = [x[0] for x in os.walk(FULL_VIDEOS_DIR)]
+    for class_dir in class_dirs:
+        for _, _, files in os.walk(class_dir):
+            for file_ in files:
+                video_path = os.path.join(class_dir,  file_)
+                if os.path.exists(video_path):
+                    path_parts = video_path.split(os.path.sep)
+                    label = path_parts[-2]
+                    cap = cv2.VideoCapture(video_path)
+                    patient_image_list, patient_label_list = [], []
+                    while cap.isOpened():
+                        ret, frame = cap.read()
+                        if (ret != True):
+                            break
+                        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        image = cv2.resize(image, (IMG_WIDTH, IMG_HEIGHT))
+                        patient_image_list.append(image)
+                        patient_label_list.append(label)
+                        image_counter += 1
+                    patient_label_lists.append(np.array(patient_label_list))
+                    patient_image_lists.append(np.array(patient_image_list) / 255)
+    print(f"Got {image_counter} images from {len(patient_image_lists)} videos")
+    possible_labels = list(set([label_list[0] for label_list in patient_label_lists]))
+    num_classes = len(possible_labels)
+
+    # perform one-hot encoding on the labels
+    lb = LabelBinarizer()
+    lb.fit(possible_labels)
+
+    patient_label_lists = [lb.transform(patient_label_list) for patient_label_list in patient_label_lists]
+
+    if num_classes == 2:
+        patient_label_lists = [to_categorical(patient_label_list, num_classes=num_classes) for patient_label_list in patient_label_lists]
+    return patient_image_lists, patient_label_lists
+
+
 if __name__ == "__main__":
     IMG_WIDTH, IMG_HEIGHT = 224, 224
 
@@ -126,6 +168,7 @@ if __name__ == "__main__":
     ap.add_argument('-b', '--test_time_augmentation', type=bool, default=False)
     ap.add_argument('-c', '--deep_ensemble', type=bool, default=False)
     ap.add_argument('-s', '--shap', type=bool, default=False)
+    ap.add_argument('-p', '--patient_wise', type=bool, default=False)
     args = vars(ap.parse_args())
 
     # Initialize hyperparameters
@@ -138,6 +181,7 @@ if __name__ == "__main__":
     TEST_TIME_AUGMENTATION = args['test_time_augmentation']
     DEEP_ENSEMBLE = args['deep_ensemble']
     SHAP = args['shap']
+    PATIENT_WISE = args['patient_wise']
     REGULAR = True
 
     print(f'Evaluating with: {args}')
@@ -164,10 +208,45 @@ if __name__ == "__main__":
         model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
         print(f"Looking for model at {model_path}")
         model = tf.keras.models.load_model(model_path)
+        model.summary()
 
         # make predictions on the testing set
         logits = model.predict(data)
         save_evaluation_files(labels, logits, classes, "regular", FINAL_OUTPUT_DIR)
+
+    if PATIENT_WISE:
+        # Create regular model
+        model_path = os.path.join(MODEL_DIR, "model-0", MODEL_FILE)
+        print(f"Looking for model at {model_path}")
+        model = tf.keras.models.load_model(model_path)
+
+        # Get patient images and labels from the videos
+
+        patient_image_lists, patient_label_lists = get_patientwise_dataset()
+
+        predIdxs = []
+        actuals = []
+        for i, (imgs_, labels_) in enumerate(zip(patient_image_lists, patient_label_lists)):
+            test_predictions = model.predict(imgs_)
+            indiv_predictions = np.argmax(test_predictions, axis=1)
+            v, c = np.unique(indiv_predictions, return_counts=True)
+            test_prediction = np.mean(test_predictions, axis=0)
+            predIdxs.append(test_prediction)
+            actual = labels_[0]
+            actuals.append(actual)
+            # if np.argmax(test_prediction) != np.argmax(actual):
+            if np.argmax(test_prediction) != np.argmax(actual) or len(v) > 1:
+                print(f"Label = {np.argmax(actual)}")
+                print(f"Values = {v}")
+                print(f"Counts = {c}")
+                cv2.imwrite(f"{i}_label-{actual}_{v}_{c}.jpg", imgs_[0]*255)
+                print(f"================")
+        save_evaluation_files(np.array(actuals), np.array(predIdxs), classes, "patientwise", FINAL_OUTPUT_DIR)
+
+
+
+
+
 
     if SHAP:
         # Create regular model
@@ -302,5 +381,5 @@ if __name__ == "__main__":
             all_logits[i, :, :] = logits
 
         # Compute average, variance, and uncertainty of logits
-        average_logits = np.mean(all_logits, axis=0)
+        logits = np.mean(all_logits, axis=0)
         save_evaluation_files(labels, logits, classes, "deep_ensemble", FINAL_OUTPUT_DIR)

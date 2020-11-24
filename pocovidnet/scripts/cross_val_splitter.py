@@ -34,11 +34,17 @@ args = vars(ap.parse_args())
 NUM_FOLDS = args['splits']
 DATA_DIR = args['data_dir']
 OUTPUT_DIR = args['output_dir']
+FULL_VIDEOS_DIR = OUTPUT_DIR + "_full_videos"
 
 # MAKE DIRECTORIES
 for split_ind in range(NUM_FOLDS):
     # make directory for this split
     split_path = os.path.join(OUTPUT_DIR, 'split' + str(split_ind))
+    if not os.path.exists(split_path):
+        os.makedirs(split_path)
+for split_ind in range(NUM_FOLDS):
+    # make directory for this split
+    split_path = os.path.join(FULL_VIDEOS_DIR, 'split' + str(split_ind))
     if not os.path.exists(split_path):
         os.makedirs(split_path)
 
@@ -52,7 +58,12 @@ for classe in os.listdir(DATA_DIR):
         mod_path = os.path.join(OUTPUT_DIR, 'split' + str(split_ind), classe)
         if not os.path.exists(mod_path):
             os.makedirs(mod_path)
+    for split_ind in range(NUM_FOLDS):
+        mod_path = os.path.join(FULL_VIDEOS_DIR, 'split' + str(split_ind), classe)
+        if not os.path.exists(mod_path):
+            os.makedirs(mod_path)
 
+    print(f"About to look in {DATA_DIR} for videos and images")
     uni_videos = []
     uni_images = []
     for in_file in os.listdir(os.path.join(DATA_DIR, classe)):
@@ -64,20 +75,26 @@ for classe in os.listdir(DATA_DIR):
         else:
             # this is an image
             uni_images.append(in_file.split(".")[0])
+
+    print(f"About to distribute video frames and images among folds")
     # construct dict of file to fold mapping
     inner_dict = {}
     # consider images and videos separately
     frequency_by_fold = [0] * NUM_FOLDS
     for k, uni in enumerate([uni_videos, uni_images]):
         unique_files, unique_counts = np.unique(uni, return_counts=True)
+
+        # Sort files and counts by frequency (descending, highest first)
         sortedIndices = (-unique_counts).argsort()
         unique_files = unique_files[sortedIndices]
         unique_counts = unique_counts[sortedIndices]
         for file_, count_ in zip(unique_files, unique_counts):
-            index_of_min = frequency_by_fold.index(min(frequency_by_fold))
-            frequency_by_fold[index_of_min] += count_
-            inner_dict[file_] = index_of_min
+            fold_with_min_images = frequency_by_fold.index(min(frequency_by_fold))
+            frequency_by_fold[fold_with_min_images] += count_
+            inner_dict[file_] = fold_with_min_images
 
+    # Copy over images to the split's class folder
+    print(f"About to copy images into {OUTPUT_DIR} for {classe}")
     copy_dict[classe] = inner_dict
     for in_file in os.listdir(os.path.join(DATA_DIR, classe)):
         fold_to_put = inner_dict[in_file.split(".")[0]]
@@ -86,6 +103,54 @@ for classe in os.listdir(DATA_DIR):
         )
         # print(os.path.join(DATA_DIR, classe, file), split_path)
         shutil.copy(os.path.join(DATA_DIR, classe, in_file), split_path)
+
+    # TYLER CODE:
+    # Copy over full videos to the full video split's class folder
+    print(f"About to copy full videos into {FULL_VIDEOS_DIR} for {classe}")
+    stored_videos = set()
+    for in_file in os.listdir(os.path.join(DATA_DIR, classe)):
+        # Check if video
+        is_video = (len(in_file.split(".")) == 3)
+        if not is_video:
+            continue
+
+        # Check if video already processed
+        index_of_end_of_video = in_file.index("_frame")
+        video_file = in_file[:index_of_end_of_video]
+        if video_file in stored_videos:
+            continue
+        stored_videos.add(video_file)
+
+        # Create path to store this video
+        fold_to_put = inner_dict[in_file.split(".")[0]]
+        output_path = os.path.join(
+            FULL_VIDEOS_DIR, 'split' + str(fold_to_put), classe
+        )
+
+        # Check if video can be found
+        VIDEO_DIR = "../data/pocus_videos/convex"
+        BUTTERFLY_DIR = "../data/butterfly"
+        video_path = os.path.join(VIDEO_DIR, video_file)
+        if os.path.exists(video_path):
+            shutil.copy(video_path, output_path)
+        else:
+            butterfly_subdirs = [x[0] for x in os.walk(BUTTERFLY_DIR)]
+            index_of_dash = video_file.index("-")
+            butterfly_video_file = video_file[index_of_dash+1:]
+            video_found = False
+            for subdir in butterfly_subdirs:
+                potential_path = os.path.join(subdir, butterfly_video_file)
+                if os.path.exists(potential_path):
+                    shutil.copy(potential_path, output_path)
+                    video_found = True
+                    break
+            if not video_found:
+                print(f"WARNING: could not find {video_file}")
+
+    print("=======================================")
+
+
+
 
 
 def check_crossval(cross_val_directory="../data/cross_validation"):
