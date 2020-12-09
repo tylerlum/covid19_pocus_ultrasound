@@ -46,7 +46,8 @@ class Videoto3D:
                     break
                 # plt.imshow(image)
                 # plt.show()
-                image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                # image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                image = frame
                 image = cv2.resize(image, (self.width, self.height))
 
                 if frame_id % show_every == 0 or (
@@ -63,7 +64,8 @@ class Videoto3D:
                     print("already 5 parts of this video")
                     break
             cap.release()
-        data = np.expand_dims(np.asarray(data_3d), 4) / 255
+        # data = np.expand_dims(np.asarray(data_3d), 4) / 255
+        data = np.asarray(data_3d) / 255
         if save is not None:
             self.save_data(data, labels_3d, files_3d, save)
         return data, labels_3d, files_3d

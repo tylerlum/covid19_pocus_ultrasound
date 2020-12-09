@@ -58,7 +58,7 @@ def main():
         '--json', type=str, default="../data/cross_val.json"
     )
     parser.add_argument('--output', type=str, default="video_model_outputs")
-    parser.add_argument('--fold', type=int, default=0)
+    parser.add_argument('--fold', type=int, default=1)
     parser.add_argument('--load', type=bool, default=False)
     parser.add_argument('--visualize', type=bool, default=False)
     parser.add_argument('--fr', type=int, default=5)
