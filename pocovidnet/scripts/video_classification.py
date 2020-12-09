@@ -63,7 +63,7 @@ def main():
     parser.add_argument('--visualize', type=bool, default=False)
     parser.add_argument('--fr', type=int, default=5)
     parser.add_argument('--depth', type=int, default=5)
-    parser.add_argument('--model_id', type=str, default='genesis')
+    parser.add_argument('--model_id', type=str, default='base')
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--trainable_base_layers', type=int, default=0)
     parser.add_argument(
@@ -205,7 +205,6 @@ def main():
         model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
         tf.keras.utils.plot_model(model, "my_first_model.png", show_shapes=True)
 
-    print(model.summary())
     opt = Adam(lr=args.lr)
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
@@ -230,6 +229,7 @@ def main():
         epsilon=1e-4,
         mode='min'
     )
+    print(model.summary())
 
     H = model.fit(
         X_train, Y_train,
