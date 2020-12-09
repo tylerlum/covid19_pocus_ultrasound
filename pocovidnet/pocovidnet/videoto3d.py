@@ -12,7 +12,7 @@ class Videoto3D:
         self.height = height
         self.depth = depth
         self.framerate = framerate
-        self.max_vid = {"cov": 3, "pne": 10, "reg": 10}
+        self.max_vid = {"cov": 10, "pne": 10, "reg": 10}
 
     def save_data(self, data_3d, labels_3d, files_3d, save_path):
         print("SAVE DATA", data_3d.shape, np.max(data_3d))

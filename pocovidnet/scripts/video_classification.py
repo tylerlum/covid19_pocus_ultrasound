@@ -108,8 +108,43 @@ def main():
         ) as infile:
             X_train, train_labels_text, train_files = pickle.load(infile)
     else:
-        print("Add --load")
-        sys.exit()
+        # SPLIT NO CROSSVAL
+        class_short = ["cov", "pne", "reg"]
+        vid_files = [
+            v for v in os.listdir(args.videos) if v[:3].lower() in class_short
+        ]
+        labels = [vid[:3].lower() for vid in vid_files]
+        train_files, test_files, train_labels, test_labels = train_test_split(
+            vid_files, labels, stratify=labels, test_size=0.2
+        )
+        train_files, validation_files, train_labels, validation_labels = train_test_split(
+            train_files, train_labels, stratify=train_labels, test_size=0.2
+        )
+        full_video_train_files, full_video_validation_files, full_video_test_files, full_video_train_labels, full_video_validation_labels, full_video_test_labels = train_files, validation_files, test_files, train_labels, validation_labels, test_labels
+
+        # Read in videos and transform to 3D
+        vid3d = Videoto3D(args.videos, width=224, height=224, depth=args.depth, framerate=args.fr)
+        X_train, train_labels_text, train_files = vid3d.video3d(
+            train_files,
+            train_labels,
+            save=os.path.join(
+                args.save, "conv3d_train_fold_" + str(args.fold) + ".dat"
+            )
+        )
+        X_validation, validation_labels_text, validation_files = vid3d.video3d(
+            validation_files,
+            validation_labels,
+            save=os.path.join(
+                args.save, "conv3d_validation_fold_" + str(args.fold) + ".dat"
+            )
+        )
+        X_test, test_labels_text, test_files = vid3d.video3d(
+            test_files,
+            test_labels,
+            save=os.path.join(
+                args.save, "conv3d_test_fold_" + str(args.fold) + ".dat"
+            )
+        )
 
     # One-hot encoding
     lb = LabelBinarizer()
@@ -118,29 +153,6 @@ def main():
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
 
-    sometimes = lambda aug: va.Sometimes(0.5, aug) # Used to apply augmentor with 50% probability
-    seq = va.Sequential([
-                # va.RandomCrop(size=(220, 220)), # randomly crop video with a size of (240 x 180)
-                va.RandomRotate(degrees=5), # randomly rotates the video with a degree randomly choosen from [-10, 10]  
-                va.RandomTranslate(x=20, y=20), # randomly translates the video with a degree randomly choosen from [-20, 20]  
-                sometimes(va.Multiply(value=0.9)),
-                sometimes(va.Multiply(value=0.9)),
-                sometimes(va.Multiply(value=0.9)),
-                sometimes(va.Multiply(value=0.9)),
-                sometimes(va.Multiply(value=1.1)),
-                sometimes(va.Multiply(value=1.1)),
-                sometimes(va.Multiply(value=1.1)),
-                sometimes(va.Multiply(value=1.1)),
-                sometimes(va.Add(value=10)),
-                sometimes(va.Add(value=10)),
-                sometimes(va.Add(value=10)),
-                sometimes(va.Add(value=10)),
-                sometimes(va.Add(value=-10)),
-                sometimes(va.Add(value=-10)),
-                sometimes(va.Add(value=-10)),
-                sometimes(va.Add(value=-10)),
-                sometimes(va.HorizontalFlip()) # horizontally flip the video with 50% probability
-                    ])
     ## VISUALIZE
     if args.visualize:
         for i in range(20):
@@ -198,56 +210,29 @@ def main():
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
     )
-    class_weight = {0: 2.,
+    class_weight = {0: 1.,
                     1: 2.,
                     2: 1.}
-    class MyGenerator(Sequence):
-        def __init__(self, x_set, y_set, batch_size):
-            self.x, self.y = x_set, y_set
-            self.batch_size = batch_size
-            self.n = 0
 
-        def __len__(self):
-            return math.ceil(len(self.x) / self.batch_size)
-
-        def __getitem__(self, idx):
-            batch_x = self.x[idx * self.batch_size:(idx+1)*self.batch_size]
-            batch_y = self.y[idx * self.batch_size:(idx+1)*self.batch_size]
-
-            augmentedX = []
-            for j in range(batch_x.shape[0]):
-                video = np.squeeze(batch_x[j])
-                video = np.stack([video, video, video], axis=3)
-                video_aug = seq(video*255)
-                s = np.array(video_aug)
-                # augmentedX.append(s)
-                augmentedX.append(batch_x[j])
-            returnX = np.array(augmentedX)[:,:,:,:,0:1]
-            return returnX, batch_y
-
-        def __next__(self):
-            if self.n >= self.__len__():
-                self.n = 0
-            result = self.__getitem__(self.n)
-            self.n += 1
-            return result
-
-#    gen = MyGenerator(X_train, Y_train, args.batch)
-#    for i in range(10):
-#        x, y = next(gen)
-#        x = x[0][0]
-#        print(x.shape)
-#        y = y[0]
-#        import cv2
-#        print(np.max(x))
-#        print(np.min(x))
-#        cv2.imwrite(f"TESTING1-{i}-y-{y}.jpg", 255*x)
-#    sys.exit()
-#
+    # Define callbacks
+    earlyStopping = EarlyStopping(
+        monitor='val_loss',
+        patience=20,
+        verbose=1,
+        mode='min',
+        restore_best_weights=True
+    )
+    reduce_lr_loss = ReduceLROnPlateau(
+        monitor='val_loss',
+        factor=0.1,
+        patience=7,
+        verbose=1,
+        epsilon=1e-4,
+        mode='min'
+    )
 
     H = model.fit(
-        MyGenerator(X_train, Y_train, args.batch),
-        # X_train, Y_train,
+        X_train, Y_train,
         validation_data=(X_validation, Y_validation),
         epochs=args.epoch,
         batch_size=args.batch,
@@ -256,6 +241,7 @@ def main():
         class_weight=class_weight,
         use_multiprocessing=True,
         workers=2,  # Empirically best performance
+        callbacks=[earlyStopping, reduce_lr_loss],
     )
 
     print('Evaluating network...')
