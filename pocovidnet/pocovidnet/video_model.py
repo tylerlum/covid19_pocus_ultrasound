@@ -25,15 +25,14 @@ def get_video_model(input_shape, nb_classes):
     input_tensor = Input(shape=(input_shape))
     timeDistributed_layer = TimeDistributed( intermediate_model )(input_tensor)
 
-    number_of_hidden_units = 32
+    number_of_hidden_units = 64
     model = LSTM(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
     model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
-    model = Dense(512, activation='relu')(model)
-    model = Dense(64, activation='relu')(model)
+    model = Dense(2048, activation='relu')(model)
+    model = Dense(128, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
     model = Model( inputs = input_tensor, outputs = model)
-
 
     # Define vgg-model
 #    model = Sequential()

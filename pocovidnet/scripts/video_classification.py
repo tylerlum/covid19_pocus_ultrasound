@@ -1,4 +1,4 @@
-seed_value = 1231
+seed_value = 1232
 import argparse
 import math
 import json
@@ -58,11 +58,11 @@ def main():
         '--json', type=str, default="../data/cross_val.json"
     )
     parser.add_argument('--output', type=str, default="video_model_outputs")
-    parser.add_argument('--fold', type=int, default=1)
+    parser.add_argument('--fold', type=int, default=3)
     parser.add_argument('--load', type=bool, default=False)
     parser.add_argument('--visualize', type=bool, default=False)
     parser.add_argument('--fr', type=int, default=5)
-    parser.add_argument('--depth', type=int, default=5)
+    parser.add_argument('--depth', type=int, default=15)
     parser.add_argument('--model_id', type=str, default='base')
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--trainable_base_layers', type=int, default=0)
@@ -123,7 +123,7 @@ def main():
         full_video_train_files, full_video_validation_files, full_video_test_files, full_video_train_labels, full_video_validation_labels, full_video_test_labels = train_files, validation_files, test_files, train_labels, validation_labels, test_labels
 
         # Read in videos and transform to 3D
-        vid3d = Videoto3D(args.videos, width=224, height=224, depth=args.depth, framerate=args.fr)
+        vid3d = Videoto3D(args.videos, width=64, height=64, depth=args.depth, framerate=args.fr)
         X_train, train_labels_text, train_files = vid3d.video3d(
             train_files,
             train_labels,
