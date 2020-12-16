@@ -1,4 +1,4 @@
-seed_value = 1232
+seed_value = 1233
 import argparse
 import math
 import json
@@ -115,10 +115,10 @@ def main():
         ]
         labels = [vid[:3].lower() for vid in vid_files]
         train_files, test_files, train_labels, test_labels = train_test_split(
-            vid_files, labels, stratify=labels, test_size=0.2
+            vid_files, labels, stratify=labels, test_size=0.2, random_state=seed_value
         )
         train_files, validation_files, train_labels, validation_labels = train_test_split(
-            train_files, train_labels, stratify=train_labels, test_size=0.2
+            train_files, train_labels, stratify=train_labels, test_size=0.2, random_state=seed_value
         )
         full_video_train_files, full_video_validation_files, full_video_test_files, full_video_train_labels, full_video_validation_labels, full_video_test_labels = train_files, validation_files, test_files, train_labels, validation_labels, test_labels
 
