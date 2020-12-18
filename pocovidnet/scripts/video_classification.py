@@ -35,7 +35,7 @@ from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
 from datetime import datetime
 from datetime import date
-from vidaug import augmentors as va
+# from vidaug import augmentors as va
 
 
 warnings.filterwarnings("ignore")
@@ -58,10 +58,10 @@ def main():
         '--json', type=str, default="../data/cross_val.json"
     )
     parser.add_argument('--output', type=str, default="video_model_outputs")
-    parser.add_argument('--fold', type=int, default=3)
+    parser.add_argument('--fold', type=int, default=4)
     parser.add_argument('--load', type=bool, default=False)
     parser.add_argument('--visualize', type=bool, default=False)
-    parser.add_argument('--fr', type=int, default=5)
+    parser.add_argument('--fr', type=int, default=10)
     parser.add_argument('--depth', type=int, default=15)
     parser.add_argument('--model_id', type=str, default='base')
     parser.add_argument('--lr', type=float, default=1e-4)
@@ -198,12 +198,11 @@ def main():
     print("unique in validation", np.unique(validation_labels_text, return_counts=True))
     print("unique in test", np.unique(test_labels_text, return_counts=True))
 
-    # Define callbacks
     if args.model_id == 'base':
         input_shape = X_train.shape[1:]
         print(f"input_shape = {input_shape}")
         model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
-        tf.keras.utils.plot_model(model, "my_first_model.png", show_shapes=True)
+        # tf.keras.utils.plot_model(model, "my_first_model.png", show_shapes=True)
 
     opt = Adam(lr=args.lr)
     model.compile(
@@ -229,6 +228,9 @@ def main():
         epsilon=1e-4,
         mode='min'
     )
+    log_dir = os.path.join(FINAL_OUTPUT_DIR, "logs")
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
     print(model.summary())
 
     H = model.fit(
@@ -241,7 +243,7 @@ def main():
         class_weight=class_weight,
         use_multiprocessing=True,
         workers=2,  # Empirically best performance
-        callbacks=[earlyStopping, reduce_lr_loss],
+        callbacks=[earlyStopping, reduce_lr_loss, tensorboard_callback],
     )
 
     print('Evaluating network...')
@@ -334,9 +336,13 @@ def main():
             prediction = np.argmax(np.mean(current_predictions, axis=0))
             gt.append(true_label)
             preds.append(prediction)
+            print(f"video = {video}, true_label = {true_label}, prediction = {prediction}")
         return np.array(gt), np.array(preds)
+    print("-----------------------------TRAINING")
     train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
+    print("-----------------------------VALIDATION")
     validation_gt, validation_preds = calculate_patient_wise(validation_files, X_validation, Y_validation, model)
+    print("-----------------------------TESTING")
     test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
 
     printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, "trainReportPatients.csv")
