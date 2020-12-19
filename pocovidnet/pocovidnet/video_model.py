@@ -10,8 +10,9 @@ from tensorflow.keras.optimizers import Adam
 from .utils import fix_layers
 from pocovidnet.model import get_model
 
+MODEL_TYPE = "2D_CNN_average"
 
-def get_video_model(input_shape, nb_classes, model_type="2D_CNN_average"):
+def get_video_model(input_shape, nb_classes, model_type=MODEL_TYPE):
     if model_type == "CNN_LSTM":
         return get_CNN_LSTM_model(input_shape, nb_classes)
     elif model_type == "3D_CNN":

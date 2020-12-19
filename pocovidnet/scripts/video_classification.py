@@ -1,4 +1,6 @@
 seed_value = 1233
+import wandb
+from wandb.keras import WandbCallback
 import itertools
 import argparse
 import math
@@ -34,6 +36,7 @@ from pocovidnet.utils import fix_layers
 
 from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
+from pocovidnet.video_model import MODEL_TYPE
 from datetime import datetime
 from datetime import date
 # from vidaug import augmentors as va
@@ -64,6 +67,8 @@ def main():
     parser.add_argument('--visualize', type=bool, default=False)
     parser.add_argument('--fr', type=int, default=5)
     parser.add_argument('--depth', type=int, default=5)
+    parser.add_argument('--width', type=int, default=224)
+    parser.add_argument('--height', type=int, default=224)
     parser.add_argument('--model_id', type=str, default='base')
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--trainable_base_layers', type=int, default=0)
@@ -124,7 +129,7 @@ def main():
         full_video_train_files, full_video_validation_files, full_video_test_files, full_video_train_labels, full_video_validation_labels, full_video_test_labels = train_files, validation_files, test_files, train_labels, validation_labels, test_labels
 
         # Read in videos and transform to 3D
-        vid3d = Videoto3D(args.videos, width=224, height=224, depth=args.depth, framerate=args.fr)
+        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.fr)
         X_train, train_labels_text, train_files = vid3d.video3d(
             train_files,
             train_labels,
@@ -315,6 +320,20 @@ def main():
     # Define the per-epoch callback.
     cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
 
+    wandb.init(entity='tylerlum', project='covid-video')
+    config = wandb.config
+    config.learning_rate = args.lr
+    config.batch_size = args.batch
+    config.activation = 'relu'
+    config.optimizer = 'adam'
+    config.epochs = args.epoch
+    config.architecture = MODEL_TYPE
+    config.frame_rate = args.fr
+    config.depth = args.depth
+    config.width = args.width
+    config.height = args.height
+    config.output_dir = FINAL_OUTPUT_DIR
+
     print("ABOUT TO TRAIN THIS MODEL")
     print(model.summary())
 
@@ -328,7 +347,7 @@ def main():
         class_weight=class_weight,
         use_multiprocessing=True,
         workers=2,  # Empirically best performance
-        callbacks=[earlyStopping, reduce_lr_loss, tensorboard_callback, cm_callback],
+        callbacks=[earlyStopping, reduce_lr_loss, tensorboard_callback, cm_callback, WandbCallback()],
     )
 
     print('Evaluating network...')
