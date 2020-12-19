@@ -8,39 +8,45 @@ from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.optimizers import Adam
 from .utils import fix_layers
+from pocovidnet.model import get_model
 
 
-def get_video_model(input_shape, nb_classes, model_type="2D_CNN"):
-    if model_type == "LSTM":
-        return get_LSTM_model(input_shape, nb_classes)
+def get_video_model(input_shape, nb_classes, model_type="2D_CNN_average"):
+    if model_type == "CNN_LSTM":
+        return get_CNN_LSTM_model(input_shape, nb_classes)
     elif model_type == "3D_CNN":
         return get_3D_CNN_model(input_shape, nb_classes)
     elif model_type == "2+1D_CNN":
         return get_2plus1D_CNN_model(input_shape, nb_classes)
-    elif model_type == "transformer":
-        return get_transformer_model(input_shape, nb_classes)
-    elif model_type == "2D_CNN":
-        return get_2D_CNN_model(input_shape, nb_classes)
+    elif model_type == "CNN_transformer":
+        return get_CNN_transformer_model(input_shape, nb_classes)
+    elif model_type == "2D_CNN_average":
+        return get_2D_CNN_average_model(input_shape, nb_classes)
     elif model_type == "2stream":
         return get_2stream_model(input_shape, nb_classes)
+    elif model_type == "2D_then_1D":
+        return get_2D_then_1D_model(input_shape, nb_classes)
+    elif model_type == "gate_shift":
+        return get_gate_shift_model(input_shape, nb_classes)
+    elif model_type == "tea":
+        return get_tea_model(input_shape, nb_classes)
 
 
-def get_LSTM_model(input_shape, nb_classes):
+def get_CNN_LSTM_model(input_shape, nb_classes):
     # Use pretrained vgg-model
-    baseModel = VGG16(
-        weights="imagenet",
-        include_top=False,
-        input_tensor=Input(shape=(input_shape[1:]))
-    )
-    baseModel.trainable = False
-    baseModel.summary()
-    baseModelOut = GlobalAveragePooling2D()(baseModel.output)
+    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
 
-    intermediate_model = Model(inputs=baseModel.input, outputs=baseModelOut)
-    intermediate_model.summary()
+    # Remove the last activation+dropout layer for prediction
+    print("BEFORE")
+    print(vgg_model.summary())
+    vgg_model.layers.pop()
+    vgg_model.layers.pop()
+    print("AFTER")
+    print(vgg_model.summary())
 
+    # Run LSTM over CNN outputs
     input_tensor = Input(shape=(input_shape))
-    timeDistributed_layer = TimeDistributed(intermediate_model)(input_tensor)
+    timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
 
     number_of_hidden_units = 64
     model = LSTM(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
@@ -131,47 +137,38 @@ def get_2plus1D_CNN_model(input_shape, nb_classes):
     return model
 
 
-def get_2D_CNN_model(input_shape, nb_classes):
-    print(f"--------------input_shape = {input_shape}")
-    baseModel = VGG16(
-        weights="imagenet",
-        include_top=False,
-        input_tensor=Input(shape=(input_shape[1:]))
-    )
+def get_2D_CNN_average_model(input_shape, nb_classes):
+    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
 
-    # construct the head of the model that will be placed on top of the
-    # the base model
-    headModel = baseModel.output
-    headModel = AveragePooling2D(pool_size=(4, 4))(headModel)
-    headModel = Flatten(name="flatten")(headModel)
-    headModel = Dense(64)(headModel)
-    headModel = BatchNormalization()(headModel)
-    headModel = ReLU()(headModel)
-    headModel = Dropout(0.5)(headModel)
-    headModel = Dense(nb_classes, activation=tf.nn.softmax)(headModel)
-
-    # place the head FC model on top of the base model
-    cnn_model = Model(inputs=baseModel.input, outputs=headModel)
-
-    trainable_layers = 1
-    cnn_model = fix_layers(cnn_model, num_flex_layers=trainable_layers + 8)
-
+    # Run vgg model on each frame
     input_tensor = Input(shape=(input_shape))
     num_frames = input_shape[0]
-    print(f"num_frames = {num_frames}")
     frame_predictions = []
     for frame_i in range(num_frames):
         frame = Lambda(lambda x: x[:, frame_i, :, :, :])(input_tensor)
-        frame_prediction = cnn_model(frame)
+        frame_prediction = vgg_model(frame)
         frame_predictions.append(frame_prediction)
-    print(f"len(frame_predictions) = {len(frame_predictions)}")
+
+    # Average activations
     average = Average()(frame_predictions)
     return Model(inputs=input_tensor, outputs=average)
 
 
-def get_transformer_model(input_shape, nb_classes):
+def get_CNN_transformer_model(input_shape, nb_classes):
     return None
 
 
 def get_2stream_model(input_shape, nb_classes):
+    return None
+
+
+def get_2D_then_1D_model(input_shape, nb_classes):
+    return None
+
+
+def get_gate_shift_model(input_shape, nb_classes):
+    return None
+
+
+def get_tea_model(input_shape, nb_classes):
     return None
