@@ -205,15 +205,12 @@ def wandb_log_classification_report(report, name):
     for label, results_dict in report.items():
         columns.extend(list(results_dict.keys()))
         break
-    print(f"columns = {columns}")
 
     for label, results_dict in report.items():
-        print(f"label = {label}, results_dict = {results_dict}")
         next_data = [label]
         if isinstance(results_dict, dict):
             next_data.extend([results_dict[col] for col in columns[1:]])
         else:
             next_data.extend([results_dict for col in columns[1:]])
         data.append(next_data)
-    print(f"data = {data}")
     wandb.log({name: wandb.Table(data=data, columns=columns)})
