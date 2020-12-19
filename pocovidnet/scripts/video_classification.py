@@ -160,6 +160,11 @@ def main():
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
 
+    input_shape = X_train.shape[1:]
+    print(f"input_shape = {input_shape}")
+
+    generator = DataGenerator(X_train, Y_train, args.batch, input_shape, lb.classes_, True)
+
     ## VISUALIZE
     if args.visualize:
 #        for i in range(20):
@@ -193,32 +198,17 @@ def main():
                 print(f"np.min(frame) = {np.min(frame)}")
                 cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
 
+        batchX, batchY = generator[0]
+        i = 0
+        for frames, label in zip(batchX, batchY):
+            j = 0
+            for frame in frames:
+                import cv2
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augmented-Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
+                j += 1
+            i += 1
 
-    print("================= GENERATOR")
-    generator = DataGenerator(X_train, Y_train, args.batch, X_train.shape[1:], lb.classes_, True)
-    batchX, batchY = generator[0]
-    print(f"batchX.shape = {batchX.shape}")
-    print(f"batchY.shape = {batchY.shape}")
-    i = 0
-    for frames, label in zip(batchX, batchY):
-        j = 0
-        for frame in frames:
-            import cv2
-            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
-            j += 1
-        i += 1
 
-#        for i in range(X_train.shape[0]):
-#            example = X_train[i]
-#            label = Y_train[i]
-#            print(f"Label = {label}")
-#            for j in range(example.shape[0]):
-#                import cv2
-#                print(f"Frame {j}")
-#                frame = example[j]
-#                print(f"np.max(frame) = {np.max(frame)}")
-#                print(f"np.min(frame) = {np.min(frame)}")
-#                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
     # Verbose
     print("testing on split", args.fold)
     print(X_train.shape, Y_train.shape)
@@ -235,9 +225,6 @@ def main():
 
     class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
     print(f"class_weight = {class_weight}")
-
-    input_shape = X_train.shape[1:]
-    print(f"input_shape = {input_shape}")
 
     model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
 
@@ -355,7 +342,8 @@ def main():
     print(model.summary())
 
     H = model.fit(
-        X_train, Y_train,
+        # X_train, Y_train,
+        generator,
         validation_data=(X_validation, Y_validation),
         epochs=args.epoch,
         batch_size=args.batch,

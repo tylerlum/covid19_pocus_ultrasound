@@ -18,7 +18,6 @@ class DataGenerator(keras.utils.Sequence):
             iaa.Multiply((0.5, 1.5)),
             iaa.Add((-50, 50)),
             iaa.Fliplr(0.5),
-            iaa.Flipud(0.5),
             iaa.Affine(scale=(0.9, 1.1)),
             iaa.Affine(rotate=(-10, 10)),
             iaa.TranslateX(percent=(-0.1, 0.1)),
@@ -55,17 +54,12 @@ class DataGenerator(keras.utils.Sequence):
         x_list = []
 
         # For each video, use same augmentation for all frames
-        print(f"len(X_temp) = {len(X_temp)}")
         for x in X_temp:
-            print(f"x.shape = {x.shape}")
             augseq_det = self.augmentation.to_deterministic()
-            for frame in x:
-                print(f"frame.shape = {frame.shape}")
             augmented_x = [augseq_det.augment_image(cv2.normalize(frame, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)) for frame in x]
             x_list.append(augmented_x)
 
         X = np.array(x_list)
         Y = np.array(y_list)
-        print(f"X.shape = {X.shape}")
 
         return X/255.0, Y
