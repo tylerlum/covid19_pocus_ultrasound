@@ -121,16 +121,22 @@ def get_2D_CNN_average_model(input_shape, nb_classes):
 
     # Run vgg model on each frame
     input_tensor = Input(shape=(input_shape))
-    num_frames = input_shape[0]
-    frame_predictions = []
-    for frame_i in range(num_frames):
-        frame = Lambda(lambda x: x[:, frame_i, :, :, :])(input_tensor)
-        frame_prediction = vgg_model(frame)
-        frame_predictions.append(frame_prediction)
 
-    # Average activations
-    average = Average()(frame_predictions)
-    return Model(inputs=input_tensor, outputs=average)
+    num_frames = input_shape[0]
+    if num_frames == 1:
+        frame = Lambda(lambda x: x[:, 0, :, :, :])(input_tensor)
+        return Model(inputs=input_tensor, outputs=vgg_model(frame))
+
+    else:
+        frame_predictions = []
+        for frame_i in range(num_frames):
+            frame = Lambda(lambda x: x[:, frame_i, :, :, :])(input_tensor)
+            frame_prediction = vgg_model(frame)
+            frame_predictions.append(frame_prediction)
+
+        # Average activations
+        average = Average()(frame_predictions)
+        return Model(inputs=input_tensor, outputs=average)
 
 
 def get_CNN_transformer_model(input_shape, nb_classes):
