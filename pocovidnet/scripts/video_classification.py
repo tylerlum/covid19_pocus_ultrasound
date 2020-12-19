@@ -36,7 +36,7 @@ from pocovidnet.utils import fix_layers
 
 from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
-from pocovidnet.wandb import WandbClassificationCallback
+from pocovidnet.wandb import WandbClassificationCallback, wandb_log_classification_report
 from datetime import datetime
 from datetime import date
 # from vidaug import augmentors as va
@@ -383,6 +383,9 @@ def main():
         )
         reportDf = pd.DataFrame(report).transpose()
         reportDf.to_csv(os.path.join(directory, reportFilename))
+
+        wandb_log_classification_report(report, reportFilename)
+
     printAndSaveClassificationReport(Y_train, trainPredIdxs, lb.classes_, "trainReport.csv")
     printAndSaveClassificationReport(Y_validation, validationPredIdxs, lb.classes_, "validationReport.csv")
     printAndSaveClassificationReport(Y_test, testPredIdxs, lb.classes_, "testReport.csv")

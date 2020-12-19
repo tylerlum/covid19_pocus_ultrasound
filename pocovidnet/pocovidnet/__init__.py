@@ -2,7 +2,7 @@ from .model import (
     get_cam_model, get_model, get_mobilenet_v2_model, get_nasnet_model,
     get_dense_model
 )
-from .video_model import get_video_model, get_CNN_LSTM_model, get_3D_CNN_model, get_2plus1D_CNN_model, get_CNN_transformer_model, get_2D_CNN_average_model, get_2stream_model, get_2D_then_1D_model, get_gate_shift_model, get_tea_model
+from .video_model import get_CNN_LSTM_model, get_3D_CNN_model, get_2plus1D_CNN_model, get_CNN_transformer_model, get_2D_CNN_average_model, get_2stream_model, get_2D_then_1D_model, get_gate_shift_model, get_tea_model
 from .unet3d_genesis import unet_model_3d
 
 MODEL_FACTORY = {
