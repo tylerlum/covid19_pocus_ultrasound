@@ -10,28 +10,6 @@ from tensorflow.keras.optimizers import Adam
 from .utils import fix_layers
 from pocovidnet.model import get_model
 
-MODEL_TYPE = "2D_CNN_average"
-
-def get_video_model(input_shape, nb_classes, model_type=MODEL_TYPE):
-    if model_type == "CNN_LSTM":
-        return get_CNN_LSTM_model(input_shape, nb_classes)
-    elif model_type == "3D_CNN":
-        return get_3D_CNN_model(input_shape, nb_classes)
-    elif model_type == "2+1D_CNN":
-        return get_2plus1D_CNN_model(input_shape, nb_classes)
-    elif model_type == "CNN_transformer":
-        return get_CNN_transformer_model(input_shape, nb_classes)
-    elif model_type == "2D_CNN_average":
-        return get_2D_CNN_average_model(input_shape, nb_classes)
-    elif model_type == "2stream":
-        return get_2stream_model(input_shape, nb_classes)
-    elif model_type == "2D_then_1D":
-        return get_2D_then_1D_model(input_shape, nb_classes)
-    elif model_type == "gate_shift":
-        return get_gate_shift_model(input_shape, nb_classes)
-    elif model_type == "tea":
-        return get_tea_model(input_shape, nb_classes)
-
 
 def get_CNN_LSTM_model(input_shape, nb_classes):
     # Use pretrained vgg-model

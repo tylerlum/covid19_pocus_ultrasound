@@ -36,7 +36,6 @@ from pocovidnet.utils import fix_layers
 
 from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
-from pocovidnet.video_model import MODEL_TYPE
 from pocovidnet.wandb import WandbClassificationCallback
 from datetime import datetime
 from datetime import date
@@ -70,7 +69,7 @@ def main():
     parser.add_argument('--depth', type=int, default=5)
     parser.add_argument('--width', type=int, default=224)
     parser.add_argument('--height', type=int, default=224)
-    parser.add_argument('--model_id', type=str, default='base')
+    parser.add_argument('--model_id', type=str, default="2D_CNN_average")
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--trainable_base_layers', type=int, default=0)
     parser.add_argument(
@@ -211,12 +210,12 @@ def main():
     class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
     print(f"class_weight = {class_weight}")
 
-    if args.model_id == 'base':
-        input_shape = X_train.shape[1:]
-        print(f"input_shape = {input_shape}")
-        model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
+    input_shape = X_train.shape[1:]
+    print(f"input_shape = {input_shape}")
 
-    tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{MODEL_TYPE}.png"), show_shapes=True)
+    model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
+
+    tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.model_id}.png"), show_shapes=True)
 
     opt = Adam(lr=args.lr)
     model.compile(
@@ -319,7 +318,7 @@ def main():
     config.activation = 'relu'
     config.optimizer = 'adam'
     config.epochs = args.epoch
-    config.architecture = MODEL_TYPE
+    config.architecture = args.model_id
     config.frame_rate = args.fr
     config.depth = args.depth
     config.width = args.width
