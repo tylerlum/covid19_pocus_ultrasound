@@ -75,9 +75,7 @@ def main():
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--augment', type=bool, default=True)
     parser.add_argument('--trainable_base_layers', type=int, default=0)
-    parser.add_argument(
-        '--save', type=str, default='../data/video_input_data/'
-    )
+    parser.add_argument('--save', type=bool, default=False)
     parser.add_argument(
         '--weight_path', type=str, default='../Genesis_Chest_CT.h5'
     )
@@ -89,8 +87,13 @@ def main():
     if not os.path.isdir(MODEL_D):
         if not os.path.exists(MODEL_D):
             os.makedirs(args.output)
-    if not os.path.isdir(args.save):
-        os.makedirs(args.save)
+
+    SAVE_DIR = '../data/video_input_data/'
+    if not os.path.isdir(SAVE_DIR):
+        os.makedirs(SAVE_DIR)
+    train_save_path, validation_save_path, test_save_path = (os.path.join(SAVE_DIR, "conv3d_train_fold_" + str(args.fold) + ".dat"),
+                                                             os.path.join(SAVE_DIR, "conv3d_validation_fold_" + str(args.fold) + ".dat"),
+                                                             os.path.join(SAVE_DIR, "conv3d_test_fold_" + str(args.fold) + ".dat"))
 
     FINAL_OUTPUT_DIR = os.path.join(MODEL_D, datestring)
     if not os.path.exists(FINAL_OUTPUT_DIR):
@@ -98,23 +101,11 @@ def main():
 
     # Load saved data or read in videos
     if args.load:
-        with open(
-            os.path.join(
-                args.save, 'conv3d_test_fold_' + str(args.fold) + '.dat'
-            ), 'rb'
-        ) as infile:
+        with open(test_save_path, 'rb') as infile:
             X_test, test_labels_text, test_files = pickle.load(infile)
-        with open(
-            os.path.join(
-                args.save, 'conv3d_validation_fold_' + str(args.fold) + '.dat'
-            ), 'rb'
-        ) as infile:
+        with open(validation_save_path, 'rb') as infile:
             X_validation, validation_labels_text, validation_files = pickle.load(infile)
-        with open(
-            os.path.join(
-                args.save, 'conv3d_train_fold_' + str(args.fold) + '.dat'
-            ), 'rb'
-        ) as infile:
+        with open(train_save_path, 'rb') as infile:
             X_train, train_labels_text, train_files = pickle.load(infile)
     else:
         # SPLIT NO CROSSVAL
@@ -133,26 +124,23 @@ def main():
 
         # Read in videos and transform to 3D
         vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.fr)
+
+        if not args.save:
+            train_save_path, validation_save_path, test_save_path = None, None, None
         X_train, train_labels_text, train_files = vid3d.video3d(
             train_files,
             train_labels,
-            save=os.path.join(
-                args.save, "conv3d_train_fold_" + str(args.fold) + ".dat"
-            )
+            save=train_save_path
         )
         X_validation, validation_labels_text, validation_files = vid3d.video3d(
             validation_files,
             validation_labels,
-            save=os.path.join(
-                args.save, "conv3d_validation_fold_" + str(args.fold) + ".dat"
-            )
+            save=validation_save_path
         )
         X_test, test_labels_text, test_files = vid3d.video3d(
             test_files,
             test_labels,
-            save=os.path.join(
-                args.save, "conv3d_test_fold_" + str(args.fold) + ".dat"
-            )
+            save=test_save_path
         )
 
     # One-hot encoding
@@ -164,6 +152,11 @@ def main():
 
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
+    if args.depth != input_shape[0] or args.height != input_shape[1] or args.width != input_shape[2]:
+        print("WARNING: Loaded shape is not same as desired shape")
+        print("args.depth != input_shape[1] or args.height != input_shape[2] or args.width != input_shape[3]")
+        print(f"{args.depth} != {input_shape[1]} or {args.height} != {input_shape[2]} or {args.width} != {input_shape[3]}")
+        print(f"{args.depth != input_shape[1]} or {args.height != input_shape[2]} or {args.width != input_shape[3]}")
 
     generator = DataGenerator(X_train, Y_train, args.batch, input_shape, lb.classes_, shuffle=False)
 
@@ -199,6 +192,8 @@ def main():
                 print(f"np.max(frame) = {np.max(frame)}")
                 print(f"np.min(frame) = {np.min(frame)}")
                 cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
+            if i > 8:
+                break
 
         batchX, batchY = generator[0]
         i = 0
@@ -326,7 +321,7 @@ def main():
     # Define the per-epoch callback
     cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
 
-    wandb.init(entity='tylerlum', project='covid-video-overnight')
+    wandb.init(entity='tylerlum', project='covid-video-daytime-2')
     config = wandb.config
     config.learning_rate = args.lr
     config.batch_size = args.batch
