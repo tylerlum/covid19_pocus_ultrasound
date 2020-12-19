@@ -11,6 +11,8 @@ import sys
 # 2. Set `python` built-in pseudo-random generator at a fixed value
 import random
 random.seed(seed_value)
+import imgaug
+imgaug.random.seed(seed_value)
 import pickle
 import warnings
 
@@ -40,7 +42,6 @@ from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import WandbClassificationCallback, wandb_log_classification_report
 from datetime import datetime
 from datetime import date
-# from vidaug import augmentors as va
 
 
 warnings.filterwarnings("ignore")
@@ -72,6 +73,7 @@ def main():
     parser.add_argument('--height', type=int, default=224)
     parser.add_argument('--model_id', type=str, default="2D_CNN_average")
     parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--augment', type=bool, default=True)
     parser.add_argument('--trainable_base_layers', type=int, default=0)
     parser.add_argument(
         '--save', type=str, default='../data/video_input_data/'
@@ -163,7 +165,7 @@ def main():
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
 
-    generator = DataGenerator(X_train, Y_train, args.batch, input_shape, lb.classes_, True)
+    generator = DataGenerator(X_train, Y_train, args.batch, input_shape, lb.classes_, shuffle=False)
 
     ## VISUALIZE
     if args.visualize:
@@ -337,24 +339,39 @@ def main():
     config.width = args.width
     config.height = args.height
     config.output_dir = FINAL_OUTPUT_DIR
+    config.augment = args.augment
 
     print("ABOUT TO TRAIN THIS MODEL")
     print(model.summary())
 
-    H = model.fit(
-        # X_train, Y_train,
-        generator,
-        validation_data=(X_validation, Y_validation),
-        epochs=args.epoch,
-        batch_size=args.batch,
-        verbose=1,
-        shuffle=False,
-        class_weight=class_weight,
-        use_multiprocessing=True,
-        workers=2,  # Empirically best performance
-        # callbacks=[earlyStopping, reduce_lr_loss, tensorboard_callback, cm_callback, WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)],
-        callbacks=[WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)],
-    )
+    if args.augment:
+        H = model.fit(
+            generator,
+            validation_data=(X_validation, Y_validation),
+            epochs=args.epoch,
+            batch_size=args.batch,
+            verbose=1,
+            shuffle=False,
+            class_weight=class_weight,
+            use_multiprocessing=True,
+            workers=2,  # Empirically best performance
+            # callbacks=[earlyStopping, reduce_lr_loss, tensorboard_callback, cm_callback, WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)],
+            callbacks=[WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)],
+        )
+    else:
+        H = model.fit(
+            X_train, Y_train,
+            validation_data=(X_validation, Y_validation),
+            epochs=args.epoch,
+            batch_size=args.batch,
+            verbose=1,
+            shuffle=False,
+            class_weight=class_weight,
+            use_multiprocessing=True,
+            workers=2,  # Empirically best performance
+            callbacks=[WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)],
+        )
+
 
     print('Evaluating network...')
     trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)

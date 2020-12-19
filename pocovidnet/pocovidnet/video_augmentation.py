@@ -5,7 +5,7 @@ import cv2
 
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
-    def __init__(self, X, Y, batch_size, dim, n_classes, shuffle=True):
+    def __init__(self, X, Y, batch_size, dim, n_classes, shuffle):
         'Initialization'
         self.dim = dim
         self.batch_size = batch_size
