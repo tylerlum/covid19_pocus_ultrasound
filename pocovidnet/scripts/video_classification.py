@@ -214,23 +214,27 @@ def main():
     print(X_test.shape, Y_test.shape)
     nb_classes = len(np.unique(train_labels_text))
     print(nb_classes, np.max(X_train))
-    print("unique in train", np.unique(train_labels_text, return_counts=True))
-    print("unique in validation", np.unique(validation_labels_text, return_counts=True))
-    print("unique in test", np.unique(test_labels_text, return_counts=True))
+    train_uniques, train_counts = np.unique(train_labels_text, return_counts=True)
+    validation_uniques, validation_counts = np.unique(validation_labels_text, return_counts=True)
+    test_uniques, test_counts = np.unique(test_labels_text, return_counts=True)
+    print("unique in train", (train_uniques, train_counts))
+    print("unique in validation", (validation_uniques, validation_counts))
+    print("unique in test", (test_uniques, test_counts))
+
+    class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
+    print(f"class_weight = {class_weight}")
 
     if args.model_id == 'base':
         input_shape = X_train.shape[1:]
         print(f"input_shape = {input_shape}")
         model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
-        tf.keras.utils.plot_model(model, "my_first_model.png", show_shapes=True)
+
+    tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{MODEL_TYPE}.png"), show_shapes=True)
 
     opt = Adam(lr=args.lr)
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
     )
-    class_weight = {0: 1.,
-                    1: 2.,
-                    2: 1.}
 
     # Define callbacks
     earlyStopping = EarlyStopping(
@@ -318,7 +322,7 @@ def main():
         tf.summary.image("Validation Confusion Matrix", validation_cm, step=epoch)
         tf.summary.image("Test Confusion Matrix", test_cm, step=epoch)
 
-    # Define the per-epoch callback.
+    # Define the per-epoch callback
     cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
 
     wandb.init(entity='tylerlum', project='covid-video')
@@ -348,7 +352,8 @@ def main():
         class_weight=class_weight,
         use_multiprocessing=True,
         workers=2,  # Empirically best performance
-        callbacks=[earlyStopping, reduce_lr_loss, tensorboard_callback, cm_callback, WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), labels=lb.classes_)],
+        # callbacks=[earlyStopping, reduce_lr_loss, tensorboard_callback, cm_callback, WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)],
+        callbacks=[WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)],
     )
 
     print('Evaluating network...')
@@ -456,8 +461,6 @@ def main():
     printAndSaveConfusionMatrix(train_gt, train_preds, lb.classes_, "trainConfusionMatrixPatients.png")
     printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, "validationConfusionMatrixPatients.png")
     printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, "testConfusionMatrixPatients.png")
-
-    log_confusion_matrix(args.epoch, 0)
 
 if __name__ == '__main__':
     main()
