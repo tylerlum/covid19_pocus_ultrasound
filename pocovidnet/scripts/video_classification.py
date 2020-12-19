@@ -134,37 +134,24 @@ def main():
         X_train, train_labels_text, train_files = vid3d.video3d(
             train_files,
             train_labels,
+            # save=os.path.join(
+            #     args.save, "conv3d_train_fold_" + str(args.fold) + ".dat"
+            # )
         )
         X_validation, validation_labels_text, validation_files = vid3d.video3d(
             validation_files,
             validation_labels,
+            # save=os.path.join(
+            #     args.save, "conv3d_validation_fold_" + str(args.fold) + ".dat"
+            # )
         )
         X_test, test_labels_text, test_files = vid3d.video3d(
             test_files,
             test_labels,
+            # save=os.path.join(
+            #     args.save, "conv3d_test_fold_" + str(args.fold) + ".dat"
+            # )
         )
-
-#        X_train, train_labels_text, train_files = vid3d.video3d(
-#            train_files,
-#            train_labels,
-#            save=os.path.join(
-#                args.save, "conv3d_train_fold_" + str(args.fold) + ".dat"
-#            )
-#        )
-#        X_validation, validation_labels_text, validation_files = vid3d.video3d(
-#            validation_files,
-#            validation_labels,
-#            save=os.path.join(
-#                args.save, "conv3d_validation_fold_" + str(args.fold) + ".dat"
-#            )
-#        )
-#        X_test, test_labels_text, test_files = vid3d.video3d(
-#            test_files,
-#            test_labels,
-#            save=os.path.join(
-#                args.save, "conv3d_test_fold_" + str(args.fold) + ".dat"
-#            )
-#        )
 
     # One-hot encoding
     lb = LabelBinarizer()
