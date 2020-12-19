@@ -58,11 +58,11 @@ def main():
         '--json', type=str, default="../data/cross_val.json"
     )
     parser.add_argument('--output', type=str, default="video_model_outputs")
-    parser.add_argument('--fold', type=int, default=4)
+    parser.add_argument('--fold', type=int, default=5)
     parser.add_argument('--load', type=bool, default=False)
     parser.add_argument('--visualize', type=bool, default=False)
     parser.add_argument('--fr', type=int, default=10)
-    parser.add_argument('--depth', type=int, default=15)
+    parser.add_argument('--depth', type=int, default=10)
     parser.add_argument('--model_id', type=str, default='base')
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--trainable_base_layers', type=int, default=0)
@@ -123,28 +123,41 @@ def main():
         full_video_train_files, full_video_validation_files, full_video_test_files, full_video_train_labels, full_video_validation_labels, full_video_test_labels = train_files, validation_files, test_files, train_labels, validation_labels, test_labels
 
         # Read in videos and transform to 3D
-        vid3d = Videoto3D(args.videos, width=64, height=64, depth=args.depth, framerate=args.fr)
+        vid3d = Videoto3D(args.videos, width=224, height=224, depth=args.depth, framerate=args.fr)
         X_train, train_labels_text, train_files = vid3d.video3d(
             train_files,
             train_labels,
-            save=os.path.join(
-                args.save, "conv3d_train_fold_" + str(args.fold) + ".dat"
-            )
         )
         X_validation, validation_labels_text, validation_files = vid3d.video3d(
             validation_files,
             validation_labels,
-            save=os.path.join(
-                args.save, "conv3d_validation_fold_" + str(args.fold) + ".dat"
-            )
         )
         X_test, test_labels_text, test_files = vid3d.video3d(
             test_files,
             test_labels,
-            save=os.path.join(
-                args.save, "conv3d_test_fold_" + str(args.fold) + ".dat"
-            )
         )
+
+#        X_train, train_labels_text, train_files = vid3d.video3d(
+#            train_files,
+#            train_labels,
+#            save=os.path.join(
+#                args.save, "conv3d_train_fold_" + str(args.fold) + ".dat"
+#            )
+#        )
+#        X_validation, validation_labels_text, validation_files = vid3d.video3d(
+#            validation_files,
+#            validation_labels,
+#            save=os.path.join(
+#                args.save, "conv3d_validation_fold_" + str(args.fold) + ".dat"
+#            )
+#        )
+#        X_test, test_labels_text, test_files = vid3d.video3d(
+#            test_files,
+#            test_labels,
+#            save=os.path.join(
+#                args.save, "conv3d_test_fold_" + str(args.fold) + ".dat"
+#            )
+#        )
 
     # One-hot encoding
     lb = LabelBinarizer()
@@ -202,7 +215,7 @@ def main():
         input_shape = X_train.shape[1:]
         print(f"input_shape = {input_shape}")
         model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
-        # tf.keras.utils.plot_model(model, "my_first_model.png", show_shapes=True)
+        tf.keras.utils.plot_model(model, "my_first_model.png", show_shapes=True)
 
     opt = Adam(lr=args.lr)
     model.compile(
