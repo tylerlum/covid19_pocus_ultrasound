@@ -33,6 +33,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.utils import Sequence
 
 from pocovidnet.utils import fix_layers
+from pocovidnet.video_augmentation import DataGenerator
 
 from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
@@ -193,6 +194,31 @@ def main():
                 cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
 
 
+    print("================= GENERATOR")
+    generator = DataGenerator(X_train, Y_train, args.batch, X_train.shape[1:], lb.classes_, True)
+    batchX, batchY = generator[0]
+    print(f"batchX.shape = {batchX.shape}")
+    print(f"batchY.shape = {batchY.shape}")
+    i = 0
+    for frames, label in zip(batchX, batchY):
+        j = 0
+        for frame in frames:
+            import cv2
+            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
+            j += 1
+        i += 1
+
+#        for i in range(X_train.shape[0]):
+#            example = X_train[i]
+#            label = Y_train[i]
+#            print(f"Label = {label}")
+#            for j in range(example.shape[0]):
+#                import cv2
+#                print(f"Frame {j}")
+#                frame = example[j]
+#                print(f"np.max(frame) = {np.max(frame)}")
+#                print(f"np.min(frame) = {np.min(frame)}")
+#                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
     # Verbose
     print("testing on split", args.fold)
     print(X_train.shape, Y_train.shape)
