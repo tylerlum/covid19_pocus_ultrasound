@@ -65,22 +65,23 @@ def main():
     )
     parser.add_argument('--output', type=str, default="video_model_outputs")
     parser.add_argument('--fold', type=int, default=5)
-    parser.add_argument('--load', type=bool, default=False)
-    parser.add_argument('--visualize', type=bool, default=False)
+    parser.add_argument('--load', action='store_true')
+    parser.add_argument('--visualize', action='store_true')
     parser.add_argument('--fr', type=int, default=5)
     parser.add_argument('--depth', type=int, default=5)
     parser.add_argument('--width', type=int, default=224)
     parser.add_argument('--height', type=int, default=224)
     parser.add_argument('--model_id', type=str, default="2D_CNN_average")
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--augment', type=bool, default=True)
+    parser.add_argument('--augment', action='store_true')
     parser.add_argument('--trainable_base_layers', type=int, default=0)
-    parser.add_argument('--save', type=bool, default=False)
+    parser.add_argument('--save', action='store_true')
     parser.add_argument(
         '--weight_path', type=str, default='../Genesis_Chest_CT.h5'
     )
 
     args = parser.parse_args()
+    print(args)
 
     # Out model directory
     MODEL_D = args.output
@@ -321,7 +322,7 @@ def main():
     # Define the per-epoch callback
     cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
 
-    wandb.init(entity='tylerlum', project='covid-video-daytime-2')
+    wandb.init(entity='tylerlum', project='covid-video-debugging')
     config = wandb.config
     config.learning_rate = args.lr
     config.batch_size = args.batch
