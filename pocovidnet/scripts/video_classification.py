@@ -37,6 +37,7 @@ from pocovidnet.utils import fix_layers
 from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.video_model import MODEL_TYPE
+from pocovidnet.wandb import WandbClassificationCallback
 from datetime import datetime
 from datetime import date
 # from vidaug import augmentors as va
@@ -347,7 +348,7 @@ def main():
         class_weight=class_weight,
         use_multiprocessing=True,
         workers=2,  # Empirically best performance
-        callbacks=[earlyStopping, reduce_lr_loss, tensorboard_callback, cm_callback, WandbCallback()],
+        callbacks=[earlyStopping, reduce_lr_loss, tensorboard_callback, cm_callback, WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), labels=lb.classes_)],
     )
 
     print('Evaluating network...')
