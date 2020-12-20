@@ -214,3 +214,22 @@ def wandb_log_classification_report(report, name):
             next_data.extend([results_dict for col in columns[1:]])
         data.append(next_data)
     wandb.log({name: wandb.Table(data=data, columns=columns)})
+
+
+def wandb_log_classification_table_and_plots(report, name):
+    data = []
+    columns = ["label"]
+    for label, results_dict in report.items():
+        columns.extend(list(results_dict.keys()))
+        break
+
+    for label, results_dict in report.items():
+        next_data = [label]
+        if isinstance(results_dict, dict):
+            wandb.log({str(name) + " " + str(label) + " " + str(col): results_dict[col] for col in columns[1:]}, commit=False)
+            next_data.extend([results_dict[col] for col in columns[1:]])
+        else:
+            wandb.log({str(name) + " " + str(label): results_dict}, commit=False)
+            next_data.extend([results_dict for col in columns[1:]])
+        data.append(next_data)
+    wandb.log({name: wandb.Table(data=data, columns=columns)}, commit=True)

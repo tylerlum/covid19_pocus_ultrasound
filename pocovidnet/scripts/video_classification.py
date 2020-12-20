@@ -322,7 +322,7 @@ def main():
     # Define the per-epoch callback
     cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
 
-    wandb.init(entity='tylerlum', project='covid-video-debugging')
+    wandb.init(entity='tylerlum', project='covid-video-daytime-4')
     config = wandb.config
     config.learning_rate = args.lr
     config.batch_size = args.batch
