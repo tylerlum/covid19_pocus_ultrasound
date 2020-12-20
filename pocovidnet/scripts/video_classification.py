@@ -165,25 +165,6 @@ def main():
 
     ## VISUALIZE
     if args.visualize:
-#        for i in range(20):
-#            # 'video' should be either a list of images from type of numpy array or PIL images
-#            orig_video = X_train[i]
-#            video = np.squeeze(orig_video)
-#            video = [video, video, video]
-#            video = np.stack(video, axis=3)
-#            print(video.shape)
-#            video_aug = seq(video*255)
-#            print(len(video_aug))
-#            print(video_aug[0].shape)
-#            for j in range(1):
-#                import cv2
-#                print(f"Frame {j}")
-#                frame = video_aug[j]
-#                print(f"np.max(frame) = {np.max(frame)}")
-#                print(f"np.min(frame) = {np.min(frame)}")
-#                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"video_aug-{i}_Frame-{j}.jpg"), frame)
-#                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"video_aug-{i}_Frame-{j}org.jpg"), 255*orig_video[j])
-#
         for i in range(X_train.shape[0]):
             example = X_train[i]
             label = Y_train[i]
@@ -251,78 +232,7 @@ def main():
         epsilon=1e-4,
         mode='min'
     )
-    log_dir = os.path.join(FINAL_OUTPUT_DIR, "logs")
-    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
 
-
-    file_writer_cm = tf.summary.create_file_writer(os.path.join(log_dir, "confusion_matrix"))
-    def plot_confusion_matrix(cm, class_names):
-      """
-      Returns a matplotlib figure containing the plotted confusion matrix.
-
-      Args:
-        cm (array, shape = [n, n]): a confusion matrix of integer classes
-        class_names (array, shape = [n]): String names of the integer classes
-      """
-      figure = plt.figure(figsize=(8, 8))
-      plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-      plt.title("Confusion matrix")
-      plt.colorbar()
-      tick_marks = np.arange(len(class_names))
-      plt.xticks(tick_marks, class_names, rotation=45)
-      plt.yticks(tick_marks, class_names)
-
-      # Compute the labels from the normalized confusion matrix.
-      labels = np.around(cm.astype('float') / cm.sum(axis=1)[:, np.newaxis], decimals=2)
-
-      # Use white text if squares are dark; otherwise black.
-      threshold = cm.max() / 2.
-      for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-        color = "white" if cm[i, j] > threshold else "black"
-        plt.text(j, i, labels[i, j], horizontalalignment="center", color=color)
-
-      plt.tight_layout()
-      plt.ylabel('True label')
-      plt.xlabel('Predicted label')
-      return figure
-    def plot_to_image(figure):
-      """Converts the matplotlib plot specified by 'figure' to a PNG image and
-      returns it. The supplied figure is closed and inaccessible after this call."""
-      # Save the plot to a PNG in memory.
-      import io
-      buf = io.BytesIO()
-      plt.savefig(buf, format='png')
-      # Closing the figure prevents it from being displayed directly inside
-      # the notebook.
-      plt.close(figure)
-      buf.seek(0)
-      # Convert PNG buffer to TF image
-      image = tf.image.decode_png(buf.getvalue(), channels=4)
-      # Add the batch dimension
-      image = tf.expand_dims(image, 0)
-      return image
-    def log_confusion_matrix(epoch, logs):
-      # Use the model to predict the values from the validation dataset.
-      def get_cm_image(X, Y):
-          test_pred_raw = model.predict(X)
-          test_pred = np.argmax(test_pred_raw, axis=1)
-
-          # Calculate the confusion matrix.
-          cm = confusion_matrix(np.argmax(Y, axis=1), test_pred)
-          # Log the confusion matrix as an image summary.
-          figure = plot_confusion_matrix(cm, class_names=lb.classes_)
-          cm_image = plot_to_image(figure)
-          return cm_image
-
-      validation_cm = get_cm_image(X_validation, Y_validation)
-      test_cm = get_cm_image(X_test, Y_test)
-      # Log the confusion matrix as an image summary.
-      with file_writer_cm.as_default():
-        tf.summary.image("Validation Confusion Matrix", validation_cm, step=epoch)
-        tf.summary.image("Test Confusion Matrix", test_cm, step=epoch)
-
-    # Define the per-epoch callback
-    cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
     wandb.init(entity='tylerlum', project=args.wandb_project)
     config = wandb.config
     config.learning_rate = args.lr
@@ -361,8 +271,6 @@ def main():
             verbose=1,
             shuffle=False,
             class_weight=class_weight,
-            # use_multiprocessing=True,
-            # workers=2,  # Empirically best performance
             callbacks=callbacks,
         )
     else:
@@ -374,8 +282,6 @@ def main():
             verbose=1,
             shuffle=False,
             class_weight=class_weight,
-            # use_multiprocessing=True,
-            # workers=2,  # Empirically best performance
             callbacks=callbacks,
         )
 
