@@ -76,6 +76,7 @@ def main():
     parser.add_argument('--augment', action='store_true')
     parser.add_argument('--trainable_base_layers', type=int, default=0)
     parser.add_argument('--save', action='store_true')
+    parser.add_argument('--wandb_project', type=str, default="covid-video-debugging")
     parser.add_argument(
         '--weight_path', type=str, default='../Genesis_Chest_CT.h5'
     )
@@ -322,7 +323,7 @@ def main():
     # Define the per-epoch callback
     cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
 
-    wandb.init(entity='tylerlum', project='covid-video-debugging')
+    wandb.init(entity='tylerlum', project=args.wandb_project)
     config = wandb.config
     config.learning_rate = args.lr
     config.batch_size = args.batch
