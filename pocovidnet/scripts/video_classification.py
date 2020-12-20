@@ -363,8 +363,7 @@ def main():
             class_weight=class_weight,
             # use_multiprocessing=True,
             # workers=2,  # Empirically best performance
-            # callbacks=[earlyStopping, reduce_lr_loss, tensorboard_callback, cm_callback, WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)],
-            callbacks=[WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)],
+            callbacks=callbacks,
         )
     else:
         H = model.fit(
@@ -377,7 +376,7 @@ def main():
             class_weight=class_weight,
             # use_multiprocessing=True,
             # workers=2,  # Empirically best performance
-            callbacks=[WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)],
+            callbacks=callbacks,
         )
 
 
