@@ -77,6 +77,7 @@ def main():
     parser.add_argument('--trainable_base_layers', type=int, default=0)
     parser.add_argument('--save', action='store_true')
     parser.add_argument('--wandb_project', type=str, default="covid-video-debugging")
+    parser.add_argument('--reduce_lr', action='store_true')
     parser.add_argument(
         '--weight_path', type=str, default='../Genesis_Chest_CT.h5'
     )
@@ -322,7 +323,6 @@ def main():
 
     # Define the per-epoch callback
     cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
-
     wandb.init(entity='tylerlum', project=args.wandb_project)
     config = wandb.config
     config.learning_rate = args.lr
@@ -337,6 +337,17 @@ def main():
     config.height = args.height
     config.output_dir = FINAL_OUTPUT_DIR
     config.augment = args.augment
+    if args.reduce_lr:
+        config.reduce_lr_monitor = reduce_lr_loss.monitor
+        config.reduce_lr_factor = reduce_lr_loss.factor
+        config.reduce_lr_patience = reduce_lr_loss.patience
+        config.reduce_lr_mode = reduce_lr_loss.mode
+
+    wandb_callback = WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)
+
+    callbacks = [wandb_callback]
+    if args.reduce_lr:
+        callbacks.append(reduce_lr_loss)
 
     print("ABOUT TO TRAIN THIS MODEL")
     print(model.summary())
@@ -374,10 +385,10 @@ def main():
     trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
     print('train loss:', trainLoss)
     print('train accuracy:', trainAcc)
-    validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=0)
+    validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=1)
     print('Validation loss:', validationLoss)
     print('Validation accuracy:', validationAcc)
-    testLoss, testAcc = model.evaluate(X_test, Y_test, verbose=0)
+    testLoss, testAcc = model.evaluate(X_test, Y_test, verbose=1)
     print('Test loss:', testLoss)
     print('Test accuracy:', testAcc)
 
@@ -465,11 +476,11 @@ def main():
             preds.append(prediction)
             print(f"video = {video}, true_label = {true_label}, prediction = {prediction}")
         return np.array(gt), np.array(preds)
-    print("-----------------------------TRAINING")
+    print("-----------------------------TRAINING-----------------------------")
     train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
-    print("-----------------------------VALIDATION")
+    print("-----------------------------VALIDATION-----------------------------")
     validation_gt, validation_preds = calculate_patient_wise(validation_files, X_validation, Y_validation, model)
-    print("-----------------------------TESTING")
+    print("-----------------------------TESTING-----------------------------")
     test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
 
     printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, "trainReportPatients.csv")
