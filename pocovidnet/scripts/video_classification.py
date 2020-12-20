@@ -39,7 +39,7 @@ from pocovidnet.video_augmentation import DataGenerator
 
 from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
-from pocovidnet.wandb import WandbClassificationCallback, wandb_log_classification_report
+from pocovidnet.wandb import WandbClassificationCallback, wandb_log_classification_report, wandb_log_classification_table_and_plots
 from datetime import datetime
 from datetime import date
 
@@ -322,7 +322,7 @@ def main():
     # Define the per-epoch callback
     cm_callback = tf.keras.callbacks.LambdaCallback(on_epoch_end=log_confusion_matrix)
 
-    wandb.init(entity='tylerlum', project='covid-video-daytime-4')
+    wandb.init(entity='tylerlum', project='covid-video-debugging')
     config = wandb.config
     config.learning_rate = args.lr
     config.batch_size = args.batch
@@ -411,7 +411,7 @@ def main():
         reportDf = pd.DataFrame(report).transpose()
         reportDf.to_csv(os.path.join(directory, reportFilename))
 
-        wandb_log_classification_report(report, reportFilename)
+        wandb_log_classification_table_and_plots(report, reportFilename)
 
     printAndSaveClassificationReport(Y_train, trainPredIdxs, lb.classes_, "trainReport.csv")
     printAndSaveClassificationReport(Y_validation, validationPredIdxs, lb.classes_, "validationReport.csv")
