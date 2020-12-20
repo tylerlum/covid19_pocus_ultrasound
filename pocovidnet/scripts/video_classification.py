@@ -1,13 +1,8 @@
 seed_value = 1233
 import wandb
-from wandb.keras import WandbCallback
-import itertools
 import argparse
-import math
-import json
 import os
-os.environ['PYTHONHASHSEED']=str(seed_value)
-import sys
+os.environ['PYTHONHASHSEED'] = str(seed_value)
 # 2. Set `python` built-in pseudo-random generator at a fixed value
 import random
 random.seed(seed_value)
@@ -20,26 +15,23 @@ import numpy as np
 np.random.seed(seed_value)
 import matplotlib.pyplot as plt
 import pandas as pd
+import cv2
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
 tf.random.set_seed(seed_value)
 from tensorflow.keras.callbacks import (
-    EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
+    EarlyStopping, ReduceLROnPlateau
 )
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import Dense, GlobalAveragePooling3D
 from tensorflow.keras.losses import categorical_crossentropy
-from tensorflow.keras.models import Model
-from tensorflow.keras.utils import Sequence
 
-from pocovidnet.utils import fix_layers
 from pocovidnet.video_augmentation import DataGenerator
 
 from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
-from pocovidnet.wandb import WandbClassificationCallback, wandb_log_classification_report, wandb_log_classification_table_and_plots
+from pocovidnet.wandb import WandbClassificationCallback, wandb_log_classification_table_and_plots
 from datetime import datetime
 from datetime import date
 
@@ -123,7 +115,6 @@ def main():
         train_files, validation_files, train_labels, validation_labels = train_test_split(
             train_files, train_labels, stratify=train_labels, test_size=0.2, random_state=seed_value
         )
-        full_video_train_files, full_video_validation_files, full_video_test_files, full_video_train_labels, full_video_validation_labels, full_video_test_labels = train_files, validation_files, test_files, train_labels, validation_labels, test_labels
 
         # Read in videos and transform to 3D
         vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.fr)
@@ -163,14 +154,13 @@ def main():
 
     generator = DataGenerator(X_train, Y_train, args.batch, input_shape, lb.classes_, shuffle=False)
 
-    ## VISUALIZE
+    # VISUALIZE
     if args.visualize:
         for i in range(X_train.shape[0]):
             example = X_train[i]
             label = Y_train[i]
             print(f"Label = {label}")
             for j in range(example.shape[0]):
-                import cv2
                 print(f"Frame {j}")
                 frame = example[j]
                 print(f"np.max(frame) = {np.max(frame)}")
@@ -184,11 +174,9 @@ def main():
         for frames, label in zip(batchX, batchY):
             j = 0
             for frame in frames:
-                import cv2
                 cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augmented-Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
                 j += 1
             i += 1
-
 
     # Verbose
     print("testing on split", args.fold)
@@ -285,7 +273,6 @@ def main():
             callbacks=callbacks,
         )
 
-
     print('Evaluating network...')
     trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
     print('train loss:', trainLoss)
@@ -300,6 +287,7 @@ def main():
     trainPredIdxs = model.predict(X_train, batch_size=args.batch)
     validationPredIdxs = model.predict(X_validation, batch_size=args.batch)
     testPredIdxs = model.predict(X_test, batch_size=args.batch)
+
     def savePredictionsToCSV(predIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
         df = pd.DataFrame(predIdxs)
         df.to_csv(os.path.join(directory, csvFilename))
@@ -365,8 +353,6 @@ def main():
     plt.legend(loc='lower left')
     plt.savefig(os.path.join(FINAL_OUTPUT_DIR, 'loss.png'))
 
-
-    # going patient-wise #################
     def calculate_patient_wise(files, x, y, model):
         gt = []
         preds = []
@@ -394,6 +380,7 @@ def main():
     printAndSaveConfusionMatrix(train_gt, train_preds, lb.classes_, "trainConfusionMatrixPatients.png")
     printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, "validationConfusionMatrixPatients.png")
     printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, "testConfusionMatrixPatients.png")
+
 
 if __name__ == '__main__':
     main()
