@@ -1,18 +1,12 @@
-seed_value = 1233
 import wandb
 import argparse
 import os
-os.environ['PYTHONHASHSEED'] = str(seed_value)
-# 2. Set `python` built-in pseudo-random generator at a fixed value
 import random
-random.seed(seed_value)
 import imgaug
-imgaug.random.seed(seed_value)
 import pickle
 import warnings
 
 import numpy as np
-np.random.seed(seed_value)
 import matplotlib.pyplot as plt
 import pandas as pd
 import cv2
@@ -20,7 +14,6 @@ from sklearn.metrics import classification_report, confusion_matrix, ConfusionMa
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
-tf.random.set_seed(seed_value)
 from tensorflow.keras.callbacks import (
     EarlyStopping, ReduceLROnPlateau
 )
@@ -38,6 +31,15 @@ from datetime import date
 
 warnings.filterwarnings("ignore")
 datestring = date.today().strftime("%b-%d-%Y") + "_" + datetime.now().strftime('%H-%M-%S')
+
+
+def set_random_seed(seed_value):
+    print(f"Setting random seed with {seed_value}")
+    os.environ['PYTHONHASHSEED'] = str(seed_value)
+    random.seed(seed_value)
+    imgaug.random.seed(seed_value)
+    np.random.seed(seed_value)
+    tf.random.set_seed(seed_value)
 
 
 def main():
@@ -70,12 +72,15 @@ def main():
     parser.add_argument('--save', action='store_true')
     parser.add_argument('--wandb_project', type=str, default="covid-video-debugging")
     parser.add_argument('--reduce_lr', action='store_true')
+    parser.add_argument('--random_seed', type=int, default=1233)
     parser.add_argument(
         '--weight_path', type=str, default='../Genesis_Chest_CT.h5'
     )
 
     args = parser.parse_args()
     print(args)
+
+    set_random_seed(args.random_seed)
 
     # Out model directory
     MODEL_D = args.output
@@ -110,10 +115,10 @@ def main():
         ]
         labels = [vid[:3].lower() for vid in vid_files]
         train_files, test_files, train_labels, test_labels = train_test_split(
-            vid_files, labels, stratify=labels, test_size=0.2, random_state=seed_value
+            vid_files, labels, stratify=labels, test_size=0.2, random_state=args.random_seed
         )
         train_files, validation_files, train_labels, validation_labels = train_test_split(
-            train_files, train_labels, stratify=train_labels, test_size=0.2, random_state=seed_value
+            train_files, train_labels, stratify=train_labels, test_size=0.2, random_state=args.random_seed
         )
 
         # Read in videos and transform to 3D
@@ -235,6 +240,7 @@ def main():
     config.height = args.height
     config.output_dir = FINAL_OUTPUT_DIR
     config.augment = args.augment
+    config.random_seed = args.random_seed
     if args.reduce_lr:
         config.reduce_lr_monitor = reduce_lr_loss.monitor
         config.reduce_lr_factor = reduce_lr_loss.factor
