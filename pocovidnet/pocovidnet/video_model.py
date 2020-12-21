@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import (
-    Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, Conv2D, MaxPooling2D, Input, GlobalAveragePooling2D, Lambda, GlobalAveragePooling3D, Average, AveragePooling2D, ReLU, ZeroPadding3D, Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN
+    Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, Conv2D, MaxPooling2D, Input, GlobalAveragePooling2D, Lambda, GlobalAveragePooling3D, Average, AveragePooling2D, ReLU, ZeroPadding3D, Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional
 )
 from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile
 from tensorflow.keras.layers import BatchNormalization
@@ -10,6 +10,8 @@ from tensorflow.keras.optimizers import Adam
 from .utils import fix_layers
 from pocovidnet.model import get_model
 
+
+BIDIRECTIONAL = True
 
 def get_CNN_LSTM_model(input_shape, nb_classes):
     # Use pretrained vgg-model
@@ -25,8 +27,14 @@ def get_CNN_LSTM_model(input_shape, nb_classes):
     timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
 
     number_of_hidden_units = 64
-    model = LSTM(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
-    model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
+    if BIDIRECTIONAL:
+        model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
+    else:
+        model = LSTM(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
+    if BIDIRECTIONAL:
+        model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
+    else:
+        model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
     model = Dense(2048, activation='relu')(model)
     model = Dense(128, activation='relu')(model)
     model = Dropout(0.5)(model)
@@ -50,8 +58,14 @@ def get_CNN_GRU_model(input_shape, nb_classes):
     timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
 
     number_of_hidden_units = 64
-    model = GRU(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
-    model = GRU(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
+    if BIDIRECTIONAL:
+        model = Bidirectional(GRU(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
+    else:
+        model = GRU(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
+    if BIDIRECTIONAL:
+        model = Bidirectional(GRU(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
+    else:
+        model = GRU(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
     model = Dense(2048, activation='relu')(model)
     model = Dense(128, activation='relu')(model)
     model = Dropout(0.5)(model)
@@ -75,8 +89,14 @@ def get_CNN_RNN_model(input_shape, nb_classes):
     timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
 
     number_of_hidden_units = 64
-    model = SimpleRNN(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
-    model = SimpleRNN(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
+    if BIDIRECTIONAL:
+        model = Bidirectional(SimpleRNN(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
+    else:
+        model = SimpleRNN(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
+    if BIDIRECTIONAL:
+        model = Bidirectional(SimpleRNN(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
+    else:
+        model = SimpleRNN(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
     model = Dense(2048, activation='relu')(model)
     model = Dense(128, activation='relu')(model)
     model = Dropout(0.5)(model)
@@ -106,10 +126,16 @@ def get_CNN_LSTM_integrated_model(input_shape, nb_classes):
     timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
 
     number_of_hidden_units = 32
-    model = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
+    if BIDIRECTIONAL:
+        model = Bidirectional(ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
+    else:
+        model = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
     time_length = model.shape[1]
     model = Reshape((time_length, -1))(model)
-    model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
+    if BIDIRECTIONAL:
+        model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
+    else:
+        model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
     model = Dense(2048, activation='relu')(model)
     model = Dense(128, activation='relu')(model)
     model = Dropout(0.5)(model)
