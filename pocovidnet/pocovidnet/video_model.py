@@ -18,8 +18,9 @@ def get_CNN_LSTM_model(input_shape, nb_classes):
     # Remove the last activation+dropout layer for prediction
     print("BEFORE")
     print(vgg_model.summary())
-    vgg_model.layers.pop()
-    vgg_model.layers.pop()
+    vgg_model._layers.pop()
+    vgg_model._layers.pop()
+    vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
     print("AFTER")
     print(vgg_model.summary())
 
