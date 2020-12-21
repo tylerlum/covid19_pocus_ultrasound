@@ -16,7 +16,7 @@ MODEL_FACTORY = {
 VIDEO_MODEL_FACTORY = {
     "CNN_LSTM": get_CNN_LSTM_model,
     "3D_CNN": get_3D_CNN_model,
-    "2+1D_CNN": get_2plus1D_CNN_model,
+    "2plus1D_CNN": get_2plus1D_CNN_model,
     "CNN_transformer": get_CNN_transformer_model,
     "2D_CNN_average": get_2D_CNN_average_model,
     "2stream": get_2stream_model,
