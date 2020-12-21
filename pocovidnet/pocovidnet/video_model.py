@@ -16,13 +16,9 @@ def get_CNN_LSTM_model(input_shape, nb_classes):
     vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
 
     # Remove the last activation+dropout layer for prediction
-    print("BEFORE")
-    print(vgg_model.summary())
     vgg_model._layers.pop()
     vgg_model._layers.pop()
     vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
-    print("AFTER")
-    print(vgg_model.summary())
 
     # Run LSTM over CNN outputs
     input_tensor = Input(shape=(input_shape))
