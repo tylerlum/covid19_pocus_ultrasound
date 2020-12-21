@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import (
-    Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, Conv2D, MaxPooling2D, Input, GlobalAveragePooling2D, Lambda, GlobalAveragePooling3D, Average, AveragePooling2D, ReLU, ZeroPadding3D, Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional
+    Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, Conv2D, MaxPooling2D, Input, GlobalAveragePooling2D, Lambda, GlobalAveragePooling3D, Average, AveragePooling2D, ReLU, ZeroPadding3D, Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, LayerNormalization, Layer, GlobalAveragePooling1D
 )
 from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile
 from tensorflow.keras.layers import BatchNormalization
@@ -9,6 +9,7 @@ from tensorflow.keras.losses import categorical_crossentropy
 from tensorflow.keras.optimizers import Adam
 from .utils import fix_layers
 from pocovidnet.model import get_model
+from tensorflow import keras
 
 
 ''' Simple '''
@@ -306,7 +307,93 @@ def get_2D_then_1D_model(input_shape, nb_classes):
 
 ''' Transformer '''
 def get_CNN_transformer_model(input_shape, nb_classes):
-    return None
+    # Use pretrained vgg-model
+    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
+
+    # Remove the last activation+dropout layer for prediction
+    vgg_model._layers.pop()
+    vgg_model._layers.pop()
+    vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
+
+    # Run Conv1D over CNN outputs
+    input_tensor = Input(shape=(input_shape))
+    timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
+
+    class MultiHeadSelfAttention(Layer):
+        def __init__(self, embed_dim, num_heads=8):
+            super(MultiHeadSelfAttention, self).__init__()
+            self.embed_dim = embed_dim
+            self.num_heads = num_heads
+            if embed_dim % num_heads != 0:
+                raise ValueError(f"embedding dimension = {embed_dim} should be divisible by number of heads = {num_heads}")
+            self.projection_dim = embed_dim // num_heads
+            self.query_dense = Dense(embed_dim)
+            self.key_dense = Dense(embed_dim)
+            self.value_dense = Dense(embed_dim)
+            self.combine_heads = Dense(embed_dim)
+
+        def attention(self, query, key, value):
+            score = tf.matmul(query, key, transpose_b=True)
+            dim_key = tf.cast(tf.shape(key)[-1], tf.float32)
+            scaled_score = score / tf.math.sqrt(dim_key)
+            weights = tf.nn.softmax(scaled_score, axis=-1)
+            output = tf.matmul(weights, value)
+            return output, weights
+
+        def separate_heads(self, x, batch_size):
+            x = tf.reshape(x, (batch_size, -1, self.num_heads, self.projection_dim))
+            return tf.transpose(x, perm=[0, 2, 1, 3])
+
+        def call(self, inputs):
+            # inputs.shape = [batch_size, seq_len, embedding_dim]
+            batch_size = tf.shape(inputs)[0]
+            query = self.query_dense(inputs)
+            key = self.key_dense(inputs)
+            value = self.value_dense(inputs)
+            query = self.separate_heads(query, batch_size)
+            key = self.separate_heads(key, batch_size)
+            value = self.separate_heads(value, batch_size)
+            attention, weights = self.attention(query, key, value)
+            attention = tf.transpose(attention, perm=[0, 2, 1, 3])
+            concat_attention = tf.reshape(attention, (batch_size, -1, self.embed_dim))
+            output = self.combine_heads(concat_attention)
+            return output
+
+    class TransformerBlock(Layer):
+        def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1):
+            super(TransformerBlock, self).__init__()
+            self.att = MultiHeadSelfAttention(embed_dim, num_heads)
+            # NEED tf-nightly for this package import tf.keras.layers MultiHeadAttention
+            # self.att = MultiHeadAttention(num_heads, embed_dim)
+            self.ffn = keras.Sequential(
+                [Dense(ff_dim, activation="relu"), Dense(embed_dim)]
+            )
+            self.layernorm1 = LayerNormalization(epsilon=1e-6)
+            self.layernorm2 = LayerNormalization(epsilon=1e-6)
+            self.dropout1 = Dropout(rate)
+            self.dropout2 = Dropout(rate)
+
+        def call(self, inputs, training):
+            attn_output = self.att(inputs)
+            attn_output = self.dropout1(attn_output, training=training)
+            out1 = self.layernorm1(inputs + attn_output)
+            ffn_output = self.ffn(out1)
+            ffn_output = self.dropout2(ffn_output, training=training)
+            return self.layernorm2(out1 + ffn_output)
+    # timeDistributed_layer.shape = (batch_size, timesteps, embed_dim)
+    embed_dim = timeDistributed_layer.shape[2]
+    num_heads = 4
+    number_of_hidden_units = 64
+    transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units)
+    model = transformer_block(timeDistributed_layer)
+    model = GlobalAveragePooling1D()(model)
+    model = Dense(256, activation='relu')(model)
+    model = Dense(64, activation='relu')(model)
+    model = Dropout(0.5)(model)
+    model = Dense(nb_classes, activation='softmax')(model)
+    model = Model(inputs=input_tensor, outputs=model)
+
+    return model
 
 
 ''' Two stream optical flow '''
