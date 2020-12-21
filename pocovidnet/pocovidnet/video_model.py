@@ -11,9 +11,64 @@ from .utils import fix_layers
 from pocovidnet.model import get_model
 
 
-BIDIRECTIONAL = True
+''' Simple '''
+def get_2D_CNN_average_model(input_shape, nb_classes):
+    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
 
+    # Run vgg model on each frame
+    input_tensor = Input(shape=(input_shape))
+
+    num_frames = input_shape[0]
+    if num_frames == 1:
+        frame = Lambda(lambda x: x[:, 0, :, :, :])(input_tensor)
+        return Model(inputs=input_tensor, outputs=vgg_model(frame))
+
+    else:
+        frame_predictions = []
+        for frame_i in range(num_frames):
+            frame = Lambda(lambda x: x[:, frame_i, :, :, :])(input_tensor)
+            frame_prediction = vgg_model(frame)
+            frame_predictions.append(frame_prediction)
+
+        # Average activations
+        average = Average()(frame_predictions)
+        return Model(inputs=input_tensor, outputs=average)
+
+
+''' Recurrent '''
 def get_CNN_LSTM_model(input_shape, nb_classes):
+    return get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional=False)
+
+
+def get_CNN_GRU_model(input_shape, nb_classes):
+    return get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional=False)
+
+
+def get_CNN_RNN_model(input_shape, nb_classes):
+    return get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional=False)
+
+
+def get_CNN_LSTM_integrated_model(input_shape, nb_classes):
+    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional=False)
+
+
+def get_CNN_LSTM_bidirectional_model(input_shape, nb_classes):
+    return get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional=True)
+
+
+def get_CNN_GRU_bidirectional_model(input_shape, nb_classes):
+    return get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional=True)
+
+
+def get_CNN_RNN_bidirectional_model(input_shape, nb_classes):
+    return get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional=True)
+
+
+def get_CNN_LSTM_integrated_bidirectional_model(input_shape, nb_classes):
+    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional=True)
+
+
+def get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional):
     # Use pretrained vgg-model
     vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
 
@@ -27,11 +82,11 @@ def get_CNN_LSTM_model(input_shape, nb_classes):
     timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
 
     number_of_hidden_units = 64
-    if BIDIRECTIONAL:
+    if bidirectional:
         model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
     else:
         model = LSTM(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
-    if BIDIRECTIONAL:
+    if bidirectional:
         model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
     else:
         model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
@@ -44,7 +99,7 @@ def get_CNN_LSTM_model(input_shape, nb_classes):
     return model
 
 
-def get_CNN_GRU_model(input_shape, nb_classes):
+def get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional):
     # Use pretrained vgg-model
     vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
 
@@ -58,11 +113,11 @@ def get_CNN_GRU_model(input_shape, nb_classes):
     timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
 
     number_of_hidden_units = 64
-    if BIDIRECTIONAL:
+    if bidirectional:
         model = Bidirectional(GRU(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
     else:
         model = GRU(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
-    if BIDIRECTIONAL:
+    if bidirectional:
         model = Bidirectional(GRU(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
     else:
         model = GRU(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
@@ -75,7 +130,7 @@ def get_CNN_GRU_model(input_shape, nb_classes):
     return model
 
 
-def get_CNN_RNN_model(input_shape, nb_classes):
+def get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional):
     # Use pretrained vgg-model
     vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
 
@@ -89,11 +144,11 @@ def get_CNN_RNN_model(input_shape, nb_classes):
     timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
 
     number_of_hidden_units = 64
-    if BIDIRECTIONAL:
+    if bidirectional:
         model = Bidirectional(SimpleRNN(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
     else:
         model = SimpleRNN(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
-    if BIDIRECTIONAL:
+    if bidirectional:
         model = Bidirectional(SimpleRNN(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
     else:
         model = SimpleRNN(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
@@ -106,7 +161,7 @@ def get_CNN_RNN_model(input_shape, nb_classes):
     return model
 
 
-def get_CNN_LSTM_integrated_model(input_shape, nb_classes):
+def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional):
     # Use pretrained vgg-model
     vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
 
@@ -126,13 +181,13 @@ def get_CNN_LSTM_integrated_model(input_shape, nb_classes):
     timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
 
     number_of_hidden_units = 32
-    if BIDIRECTIONAL:
+    if bidirectional:
         model = Bidirectional(ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
     else:
         model = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
     time_length = model.shape[1]
     model = Reshape((time_length, -1))(model)
-    if BIDIRECTIONAL:
+    if bidirectional:
         model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
     else:
         model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
@@ -145,6 +200,7 @@ def get_CNN_LSTM_integrated_model(input_shape, nb_classes):
     return model
 
 
+''' Convolutional '''
 def get_3D_CNN_model(input_shape, nb_classes):
     # Define model
     model = Sequential()
@@ -222,37 +278,6 @@ def get_2plus1D_CNN_model(input_shape, nb_classes):
     return model
 
 
-def get_2D_CNN_average_model(input_shape, nb_classes):
-    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
-
-    # Run vgg model on each frame
-    input_tensor = Input(shape=(input_shape))
-
-    num_frames = input_shape[0]
-    if num_frames == 1:
-        frame = Lambda(lambda x: x[:, 0, :, :, :])(input_tensor)
-        return Model(inputs=input_tensor, outputs=vgg_model(frame))
-
-    else:
-        frame_predictions = []
-        for frame_i in range(num_frames):
-            frame = Lambda(lambda x: x[:, frame_i, :, :, :])(input_tensor)
-            frame_prediction = vgg_model(frame)
-            frame_predictions.append(frame_prediction)
-
-        # Average activations
-        average = Average()(frame_predictions)
-        return Model(inputs=input_tensor, outputs=average)
-
-
-def get_CNN_transformer_model(input_shape, nb_classes):
-    return None
-
-
-def get_2stream_model(input_shape, nb_classes):
-    return None
-
-
 def get_2D_then_1D_model(input_shape, nb_classes):
     # Use pretrained vgg-model
     vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
@@ -279,6 +304,17 @@ def get_2D_then_1D_model(input_shape, nb_classes):
     return model
 
 
+''' Transformer '''
+def get_CNN_transformer_model(input_shape, nb_classes):
+    return None
+
+
+''' Two stream optical flow '''
+def get_2stream_model(input_shape, nb_classes):
+    return None
+
+
+''' CVPR '''
 def get_gate_shift_model(input_shape, nb_classes):
     return None
 
