@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import (
-    Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, Conv2D, MaxPooling2D, Input, GlobalAveragePooling2D, Lambda, GlobalAveragePooling3D, Average, AveragePooling2D, ReLU, ZeroPadding3D
+    Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, Conv2D, MaxPooling2D, Input, GlobalAveragePooling2D, Lambda, GlobalAveragePooling3D, Average, AveragePooling2D, ReLU, ZeroPadding3D, Conv1D
 )
 from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile
 from tensorflow.keras.layers import BatchNormalization
@@ -145,7 +145,29 @@ def get_2stream_model(input_shape, nb_classes):
 
 
 def get_2D_then_1D_model(input_shape, nb_classes):
-    return None
+    # Use pretrained vgg-model
+    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
+
+    # Remove the last activation+dropout layer for prediction
+    vgg_model._layers.pop()
+    vgg_model._layers.pop()
+    vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
+
+    # Run Conv1D over CNN outputs
+    input_tensor = Input(shape=(input_shape))
+    timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
+
+    number_of_hidden_units = 64
+    model = Conv1D(number_of_hidden_units, kernel_size=8, padding='same')(timeDistributed_layer)
+    model = Conv1D(number_of_hidden_units, kernel_size=8, padding='same')(model)
+    model = Flatten()(model)
+    model = Dense(256, activation='relu')(model)
+    model = Dense(64, activation='relu')(model)
+    model = Dropout(0.5)(model)
+    model = Dense(nb_classes, activation='softmax')(model)
+    model = Model(inputs=input_tensor, outputs=model)
+
+    return model
 
 
 def get_gate_shift_model(input_shape, nb_classes):
