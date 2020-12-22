@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+import numpy as np
 
 
 # Source: https://keras.io/examples/nlp/text_classification_with_transformer/
@@ -60,9 +61,44 @@ class TransformerBlock(layers.Layer):
         self.dropout2 = layers.Dropout(rate)
 
     def call(self, inputs, training):
-        attn_output = self.att(inputs)
+        # inputs_with_position = self._add_position_embedding(inputs)
+        inputs_with_position = inputs
+        attn_output = self.att(inputs_with_position)
         attn_output = self.dropout1(attn_output, training=training)
-        out1 = self.layernorm1(inputs + attn_output)
+        out1 = self.layernorm1(inputs_with_position + attn_output)
         ffn_output = self.ffn(out1)
         ffn_output = self.dropout2(ffn_output, training=training)
         return self.layernorm2(out1 + ffn_output)
+
+#https://www.tensorflow.org/tutorials/text/transformer 
+#    def positional_encoding(self, position, d_model):
+#      angle_rads = get_angles(np.arange(position)[:, np.newaxis],
+#                              np.arange(d_model)[np.newaxis, :],
+#                              d_model)
+#
+#      # apply sin to even indices in the array; 2i
+#      angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2])
+#
+#      # apply cos to odd indices in the array; 2i+1
+#      angle_rads[:, 1::2] = np.cos(angle_rads[:, 1::2])
+#
+#      pos_encoding = angle_rads[np.newaxis, ...]
+#
+#      return tf.cast(pos_encoding, dtype=tf.float32)
+##     def _add_position_embedding(self, inputs):
+#         # inputs.shape = [batch_size, seq_len, embedding_dim]
+#         batch_size, seq_len, embedding_dim = inputs.shape
+# 
+#         position_embedding = np.zeros_like(inputs)
+#         for pos in range(seq_len):
+#             for index in range(embedding_dim):
+#                 i = index // 2
+#                 divisor = np.power(10000, (2 * i / np.float32(embedding_dim)))
+#                 if index % 2 == 0:
+#                     for batch in range(batch_size):
+#                         position_embedding[batch, pos, index] = np.sin(pos / divisor)
+#                 else:
+#                     for batch in range(batch_size):
+#                         position_embedding[batch, pos, index] = np.cos(pos / divisor)
+#         return inputs + position_embedding
+# 
