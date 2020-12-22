@@ -13,6 +13,33 @@ from pocovidnet.transformer import TransformerBlock
 from tensorflow import keras
 
 
+''' No information baseline '''
+def get_baseline_model(input_shape, nb_classes):
+    # Scales input by 0 right off the bat, so has no opportunity to improve
+    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
+    print("get_baseline_model")
+
+    # Run vgg model on each frame
+    input_tensor = Input(shape=(input_shape))
+    zero_input = Lambda(lambda y: y*0)(input_tensor)
+
+    num_frames = input_shape[0]
+    if num_frames == 1:
+        frame = Lambda(lambda x: x[:, 0, :, :, :])(zero_input)
+        return Model(inputs=input_tensor, outputs=vgg_model(frame))
+
+    else:
+        frame_predictions = []
+        for frame_i in range(num_frames):
+            frame = Lambda(lambda x: x[:, frame_i, :, :, :])(zero_input)
+            frame_prediction = vgg_model(frame)
+            frame_predictions.append(frame_prediction)
+
+        # Average activations
+        average = Average()(frame_predictions)
+        return Model(inputs=input_tensor, outputs=average)
+
+
 ''' Simple '''
 def get_2D_CNN_average_model(input_shape, nb_classes):
     vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
@@ -336,6 +363,11 @@ def get_CNN_transformer_model(input_shape, nb_classes):
     model = Model(inputs=input_tensor, outputs=model)
 
     return model
+
+
+''' Model Genesis '''
+def get_model_genesis_model(input_shape, nb_classes):
+    return None
 
 
 ''' Two stream optical flow '''
