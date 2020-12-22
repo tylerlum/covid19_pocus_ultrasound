@@ -324,8 +324,10 @@ def get_CNN_transformer_model(input_shape, nb_classes):
     embed_dim = timeDistributed_layer.shape[2]
     num_heads = 4  # Requres embed_dim % num_heads == 0
     number_of_hidden_units = 64
-    transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units)
-    model = transformer_block(timeDistributed_layer)
+    transformer_block1 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units)
+    transformer_block2 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units)
+    model = transformer_block1(timeDistributed_layer)
+    model = transformer_block2(model)
     model = GlobalAveragePooling1D()(model)
     model = Dense(256, activation='relu')(model)
     model = Dense(64, activation='relu')(model)

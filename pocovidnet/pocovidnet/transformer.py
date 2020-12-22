@@ -44,6 +44,7 @@ class MultiHeadSelfAttention(layers.Layer):
         output = self.combine_heads(concat_attention)
         return output
 
+
 class TransformerBlock(layers.Layer):
     def __init__(self, embed_dim, num_heads, ff_dim, rate=0.1):
         super(TransformerBlock, self).__init__()
