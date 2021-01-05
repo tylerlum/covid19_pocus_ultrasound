@@ -63,13 +63,15 @@ class TransformerBlock(layers.Layer):
         self.dropout1 = layers.Dropout(rate)
         self.dropout2 = layers.Dropout(rate)
 
-    def call(self, inputs, training):
-        inputs_with_position = inputs + self.pos_encoding
+    def call(self, inputs):
+        # Rescale inputs to be in [0, sqrt(embed_dim)] to ensure positional encoding is not too large, following
+        # https://stackoverflow.com/questions/56930821/why-does-embedding-vector-multiplied-by-a-constant-in-transformer-model
+        inputs_with_position = inputs * tf.math.sqrt(tf.cast(self.att.embed_dim, tf.float32)) + self.pos_encoding
         attn_output = self.att(inputs_with_position)
-        attn_output = self.dropout1(attn_output, training=training)
+        attn_output = self.dropout1(attn_output)
         out1 = self.layernorm1(inputs_with_position + attn_output)
         ffn_output = self.ffn(out1)
-        ffn_output = self.dropout2(ffn_output, training=training)
+        ffn_output = self.dropout2(ffn_output)
         return self.layernorm2(out1 + ffn_output)
 
     def _positional_encoding(self, position, d_model):

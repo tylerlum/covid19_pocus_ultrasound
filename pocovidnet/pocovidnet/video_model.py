@@ -17,7 +17,6 @@ from tensorflow import keras
 def get_baseline_model(input_shape, nb_classes):
     # Scales input by 0 right off the bat, so has no opportunity to improve
     vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
-    print("get_baseline_model")
 
     # Run vgg model on each frame
     input_tensor = Input(shape=(input_shape))
