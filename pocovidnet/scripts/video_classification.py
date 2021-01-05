@@ -14,6 +14,7 @@ from sklearn.metrics import classification_report, confusion_matrix, ConfusionMa
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
+from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import (
     EarlyStopping, ReduceLROnPlateau
 )
@@ -290,6 +291,16 @@ def main():
     testLoss, testAcc = model.evaluate(X_test, Y_test, verbose=1)
     print('Test loss:', testLoss)
     print('Test accuracy:', testAcc)
+
+    # ONLY FOR SEEING IS SCALING IS WORKING
+    temp_model = Model(inputs=model.input, outputs=model.get_layer("time_distributed").output)
+    temp_output = temp_model.predict(X_train, batch_size=args.batch)
+    print(f"temp_output.shape = {temp_output.shape}")
+    print(f"type(temp_output) = {type(temp_output)}")
+    print(f"temp_output = {temp_output}")
+    print(f"temp_output[0,0].shape = {temp_output[0,0].shape}")
+    print(f"temp_output[0,0] = {temp_output[0,0]}")
+    print(f"np.sum(temp_output[0,0]) = {np.sum(temp_output[0,0])}")
 
     trainPredIdxs = model.predict(X_train, batch_size=args.batch)
     validationPredIdxs = model.predict(X_validation, batch_size=args.batch)
