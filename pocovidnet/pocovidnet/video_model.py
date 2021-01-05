@@ -337,36 +337,6 @@ def get_2D_then_1D_model(input_shape, nb_classes):
 def get_CNN_transformer_model(input_shape, nb_classes):
     return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=True)
 
-    # Use pretrained vgg-model
-    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
-
-    # Remove the last activation+dropout layer for prediction
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
-
-    # Run Conv1D over CNN outputs
-    input_tensor = Input(shape=(input_shape))
-    timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
-
-    # timeDistributed_layer.shape = (batch_size, timesteps, embed_dim)
-    timesteps = timeDistributed_layer.shape[1]
-    embed_dim = timeDistributed_layer.shape[2]
-    num_heads = 4  # Requres embed_dim % num_heads == 0
-    number_of_hidden_units = 64
-    transformer_block1 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps)
-    transformer_block2 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps)
-    model = transformer_block1(timeDistributed_layer)
-    model = transformer_block2(model)
-    model = GlobalAveragePooling1D()(model)
-    model = Dense(256, activation='relu')(model)
-    model = Dense(64, activation='relu')(model)
-    model = Dropout(0.5)(model)
-    model = Dense(nb_classes, activation='softmax')(model)
-    model = Model(inputs=input_tensor, outputs=model)
-
-    return model
-
 
 def get_CNN_transformer_no_pos_model(input_shape, nb_classes):
     return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=False)
