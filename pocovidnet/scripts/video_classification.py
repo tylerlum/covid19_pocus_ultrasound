@@ -280,9 +280,10 @@ def main():
         )
 
     print('Evaluating network...')
-    trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
-    print('train loss:', trainLoss)
-    print('train accuracy:', trainAcc)
+    # Can cause out of memory issue when using larger framerate
+    # trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
+    # print('train loss:', trainLoss)
+    # print('train accuracy:', trainAcc)
     validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=1)
     print('Validation loss:', validationLoss)
     print('Validation accuracy:', validationAcc)
