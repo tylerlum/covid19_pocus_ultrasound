@@ -347,12 +347,13 @@ def get_CNN_transformer_model(input_shape, nb_classes):
     input_tensor = Input(shape=(input_shape))
     timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
 
-   # timeDistributed_layer.shape = (batch_size, timesteps, embed_dim)
+    # timeDistributed_layer.shape = (batch_size, timesteps, embed_dim)
+    timesteps = timeDistributed_layer.shape[1]
     embed_dim = timeDistributed_layer.shape[2]
     num_heads = 4  # Requres embed_dim % num_heads == 0
     number_of_hidden_units = 64
-    transformer_block1 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units)
-    transformer_block2 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units)
+    transformer_block1 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps)
+    transformer_block2 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps)
     model = transformer_block1(timeDistributed_layer)
     model = transformer_block2(model)
     model = GlobalAveragePooling1D()(model)
