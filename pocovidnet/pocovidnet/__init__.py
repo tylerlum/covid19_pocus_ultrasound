@@ -2,7 +2,7 @@ from .model import (
     get_cam_model, get_model, get_mobilenet_v2_model, get_nasnet_model,
     get_dense_model
 )
-from .video_model import get_CNN_LSTM_model, get_3D_CNN_model, get_2plus1D_CNN_model, get_CNN_transformer_model, get_2D_CNN_average_model, get_2stream_model, get_2D_then_1D_model, get_gate_shift_model, get_tea_model, get_CNN_GRU_model, get_CNN_LSTM_integrated_model, get_CNN_RNN_model, get_CNN_LSTM_bidirectional_model, get_CNN_GRU_bidirectional_model, get_CNN_RNN_bidirectional_model, get_CNN_LSTM_integrated_bidirectional_model, get_baseline_model, get_model_genesis_model
+from .video_model import get_CNN_LSTM_model, get_3D_CNN_model, get_2plus1D_CNN_model, get_CNN_transformer_no_pos_model, get_CNN_transformer_model, get_2D_CNN_average_model, get_2stream_model, get_2D_then_1D_model, get_gate_shift_model, get_tea_model, get_CNN_GRU_model, get_CNN_LSTM_integrated_model, get_CNN_RNN_model, get_CNN_LSTM_bidirectional_model, get_CNN_GRU_bidirectional_model, get_CNN_RNN_bidirectional_model, get_CNN_LSTM_integrated_bidirectional_model, get_baseline_model, get_model_genesis_model
 from .unet3d_genesis import unet_model_3d
 
 MODEL_FACTORY = {
@@ -38,6 +38,7 @@ VIDEO_MODEL_FACTORY = {
 
     # Transformer
     "CNN_transformer": get_CNN_transformer_model,
+    "CNN_transformer_no_pos": get_CNN_transformer_no_pos_model,
 
     # Model Genesis
     "model_genesis": get_model_genesis_model,

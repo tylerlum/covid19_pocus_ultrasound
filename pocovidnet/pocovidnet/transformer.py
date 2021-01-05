@@ -47,14 +47,14 @@ class MultiHeadSelfAttention(layers.Layer):
 
 
 class TransformerBlock(layers.Layer):
-    def __init__(self, embed_dim, num_heads, ff_dim, timesteps, rate=0.1):
+    def __init__(self, embed_dim, num_heads, ff_dim, timesteps, positional_encoding, rate=0.1):
         super(TransformerBlock, self).__init__()
         self.att = MultiHeadSelfAttention(embed_dim, num_heads)
 
         # self.att = MultiHeadAttention(num_heads, embed_dim) NEED tf-nightly for this package
                                                             # import tf.keras.layers MultiHeadAttention
 
-        self.pos_encoding = self._positional_encoding(timesteps, embed_dim)
+        self.pos_encoding = self._positional_encoding(timesteps, embed_dim) if positional_encoding else 0
         self.ffn = keras.Sequential(
             [layers.Dense(ff_dim, activation="relu"), layers.Dense(embed_dim)]
         )
