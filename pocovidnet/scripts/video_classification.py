@@ -14,7 +14,6 @@ from sklearn.metrics import classification_report, confusion_matrix, ConfusionMa
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
-from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import (
     EarlyStopping, ReduceLROnPlateau
 )
@@ -47,36 +46,30 @@ def main():
     parser = argparse.ArgumentParser(
         description='simple 3D convolution for action recognition'
     )
-    parser.add_argument('--batch', type=int, default=8)
-    parser.add_argument('--epoch', type=int, default=60)
+    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--epochs', type=int, default=60)
     parser.add_argument(
         '--videos',
         type=str,
         default='../data/pocus_videos/convex',
         help='directory where videos are stored'
     )
-    parser.add_argument(
-        '--json', type=str, default="../data/cross_val.json"
-    )
     parser.add_argument('--output', type=str, default="video_model_outputs")
     parser.add_argument('--fold', type=int, default=5)
     parser.add_argument('--load', action='store_true')
     parser.add_argument('--visualize', action='store_true')
-    parser.add_argument('--fr', type=int, default=5)
+    parser.add_argument('--frame_rate', type=int, default=5)
     parser.add_argument('--depth', type=int, default=5)
     parser.add_argument('--width', type=int, default=224)
     parser.add_argument('--height', type=int, default=224)
-    parser.add_argument('--model_id', type=str, default="2D_CNN_average")
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--architecture', type=str, default="2D_CNN_average")
+    parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--augment', action='store_true')
     parser.add_argument('--trainable_base_layers', type=int, default=0)
     parser.add_argument('--save', action='store_true')
     parser.add_argument('--wandb_project', type=str, default="covid-video-debugging")
-    parser.add_argument('--reduce_lr', action='store_true')
+    parser.add_argument('--reduce_learning_rate', action='store_true')
     parser.add_argument('--random_seed', type=int, default=1233)
-    parser.add_argument(
-        '--weight_path', type=str, default='../Genesis_Chest_CT.h5'
-    )
 
     args = parser.parse_args()
     print(args)
@@ -123,7 +116,7 @@ def main():
         )
 
         # Read in videos and transform to 3D
-        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.fr)
+        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.frame_rate)
 
         if not args.save:
             train_save_path, validation_save_path, test_save_path = None, None, None
@@ -158,7 +151,7 @@ def main():
         print(f"{args.depth} != {input_shape[1]} or {args.height} != {input_shape[2]} or {args.width} != {input_shape[3]}")
         print(f"{args.depth != input_shape[1]} or {args.height != input_shape[2]} or {args.width != input_shape[3]}")
 
-    generator = DataGenerator(X_train, Y_train, args.batch, input_shape, lb.classes_, shuffle=False)
+    generator = DataGenerator(X_train, Y_train, args.batch_size, input_shape, lb.classes_, shuffle=False)
 
     # VISUALIZE
     if args.visualize:
@@ -201,11 +194,11 @@ def main():
     class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
     print(f"class_weight = {class_weight}")
 
-    model = VIDEO_MODEL_FACTORY[args.model_id](input_shape, nb_classes)
+    model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes)
 
-    tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.model_id}.png"), show_shapes=True)
+    tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
-    opt = Adam(lr=args.lr)
+    opt = Adam(lr=args.learning_rate)
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
     )
@@ -218,7 +211,7 @@ def main():
         mode='min',
         restore_best_weights=True
     )
-    reduce_lr_loss = ReduceLROnPlateau(
+    reduce_learning_rate_loss = ReduceLROnPlateau(
         monitor='val_loss',
         factor=0.1,
         patience=7,
@@ -229,30 +222,31 @@ def main():
 
     wandb.init(entity='tylerlum', project=args.wandb_project)
     config = wandb.config
-    config.learning_rate = args.lr
-    config.batch_size = args.batch
+    config.learning_rate = args.learning_rate
+    config.batch_size = args.batch_size
     config.activation = 'relu'
     config.optimizer = 'adam'
-    config.epochs = args.epoch
-    config.architecture = args.model_id
-    config.frame_rate = args.fr
+    config.epochs = args.epochs
+    config.architecture = args.architecture
+    config.frame_rate = args.frame_rate
     config.depth = args.depth
     config.width = args.width
     config.height = args.height
     config.output_dir = FINAL_OUTPUT_DIR
     config.augment = args.augment
     config.random_seed = args.random_seed
-    if args.reduce_lr:
-        config.reduce_lr_monitor = reduce_lr_loss.monitor
-        config.reduce_lr_factor = reduce_lr_loss.factor
-        config.reduce_lr_patience = reduce_lr_loss.patience
-        config.reduce_lr_mode = reduce_lr_loss.mode
+    config.reduce_learning_rate = args.reduce_learning_rate
+    if args.reduce_learning_rate:
+        config.reduce_learning_rate_monitor = reduce_learning_rate_loss.monitor
+        config.reduce_learning_rate_factor = reduce_learning_rate_loss.factor
+        config.reduce_learning_rate_patience = reduce_learning_rate_loss.patience
+        config.reduce_learning_rate_mode = reduce_learning_rate_loss.mode
 
     wandb_callback = WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)
 
     callbacks = [wandb_callback]
-    if args.reduce_lr:
-        callbacks.append(reduce_lr_loss)
+    if args.reduce_learning_rate:
+        callbacks.append(reduce_learning_rate_loss)
 
     print("ABOUT TO TRAIN THIS MODEL")
     print(model.summary())
@@ -261,8 +255,8 @@ def main():
         H = model.fit(
             generator,
             validation_data=(X_validation, Y_validation),
-            epochs=args.epoch,
-            batch_size=args.batch,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
             verbose=1,
             shuffle=False,
             class_weight=class_weight,
@@ -272,8 +266,8 @@ def main():
         H = model.fit(
             X_train, Y_train,
             validation_data=(X_validation, Y_validation),
-            epochs=args.epoch,
-            batch_size=args.batch,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
             verbose=1,
             shuffle=False,
             class_weight=class_weight,
@@ -292,19 +286,9 @@ def main():
     print('Test loss:', testLoss)
     print('Test accuracy:', testAcc)
 
-    # ONLY FOR SEEING IS SCALING IS WORKING
-    temp_model = Model(inputs=model.input, outputs=model.get_layer("time_distributed").output)
-    temp_output = temp_model.predict(X_train, batch_size=args.batch)
-    print(f"temp_output.shape = {temp_output.shape}")
-    print(f"type(temp_output) = {type(temp_output)}")
-    print(f"temp_output = {temp_output}")
-    print(f"temp_output[0,0].shape = {temp_output[0,0].shape}")
-    print(f"temp_output[0,0] = {temp_output[0,0]}")
-    print(f"np.sum(temp_output[0,0]) = {np.sum(temp_output[0,0])}")
-
-    trainPredIdxs = model.predict(X_train, batch_size=args.batch)
-    validationPredIdxs = model.predict(X_validation, batch_size=args.batch)
-    testPredIdxs = model.predict(X_test, batch_size=args.batch)
+    trainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
+    validationPredIdxs = model.predict(X_validation, batch_size=args.batch_size)
+    testPredIdxs = model.predict(X_test, batch_size=args.batch_size)
 
     def savePredictionsToCSV(predIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
         df = pd.DataFrame(predIdxs)
