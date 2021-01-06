@@ -391,6 +391,36 @@ def main():
     printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, "validationConfusionMatrixPatients.png")
     printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, "testConfusionMatrixPatients.png")
 
+    # del X_train, X_validation, Y_train, Y_validation
+    def run_on_all_frames():
+        for test_file, test_label in zip(test_files, test_labels):
+            cap = cv2.VideoCapture(os.path.join(args.videos, test_file))
+
+            current_data = []
+            video_num_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+            while cap.isOpened():
+                frame_id = cap.get(cv2.CAP_PROP_POS_FRAMES)
+                ret, frame = cap.read()
+                if (ret != True):
+                    break
+
+                image = frame if not args.grayscale else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                image = cv2.resize(image, (args.width, args.height))
+
+                current_data.append(image)
+
+                # Store video clip
+                reached_last_frame = (frame_id == video_num_frames - 1)
+                if reached_last_frame:
+                    model_input = np.asarray(current_data) / 255
+                    print(model_input.shape)
+                    print(test_label)
+                    sdfd = model.predict(np.array([model_input]))
+                    print(sdfd)
+                    print("----------")
+                    current_data = []
+
+            cap.release()
 
 if __name__ == '__main__':
     main()
