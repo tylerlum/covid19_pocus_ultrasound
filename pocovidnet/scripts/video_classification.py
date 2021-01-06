@@ -294,7 +294,7 @@ def main():
     print('Test loss:', testLoss)
     print('Test accuracy:', testAcc)
 
-    trainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
+    # trainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
     validationPredIdxs = model.predict(X_validation, batch_size=args.batch_size)
     testPredIdxs = model.predict(X_test, batch_size=args.batch_size)
 
@@ -306,7 +306,7 @@ def main():
 
     # for each image in the testing set we need to find the index of the
     # label with corresponding largest predicted probability
-    trainPredIdxs = np.argmax(trainPredIdxs, axis=1)
+    # trainPredIdxs = np.argmax(trainPredIdxs, axis=1)
     validationPredIdxs = np.argmax(validationPredIdxs, axis=1)
     testPredIdxs = np.argmax(testPredIdxs, axis=1)
 
@@ -328,7 +328,7 @@ def main():
 
         wandb_log_classification_table_and_plots(report, reportFilename)
 
-    printAndSaveClassificationReport(Y_train, trainPredIdxs, lb.classes_, "trainReport.csv")
+    # printAndSaveClassificationReport(Y_train, trainPredIdxs, lb.classes_, "trainReport.csv")
     printAndSaveClassificationReport(Y_validation, validationPredIdxs, lb.classes_, "validationReport.csv")
     printAndSaveClassificationReport(Y_test, testPredIdxs, lb.classes_, "testReport.csv")
 
@@ -343,7 +343,7 @@ def main():
         cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
         cmDisplay.plot()
         plt.savefig(os.path.join(directory, confusionMatrixFilename))
-    printAndSaveConfusionMatrix(Y_train, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
+    # printAndSaveConfusionMatrix(Y_train, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
     printAndSaveConfusionMatrix(Y_validation, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
     printAndSaveConfusionMatrix(Y_test, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
