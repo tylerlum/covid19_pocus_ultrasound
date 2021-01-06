@@ -11,6 +11,8 @@ from .utils import fix_layers
 from pocovidnet.model import get_model
 from pocovidnet.transformer import TransformerBlock
 from tensorflow import keras
+from .unet3d_genesis import unet_model_3d
+
 
 
 ''' No information baseline '''
@@ -375,7 +377,24 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encodin
 
 ''' Model Genesis '''
 def get_model_genesis_model(input_shape, nb_classes):
-    return None
+    import os
+    required_input_shape = 1, 64, 64, 32  # channels, width, height, depth
+    if input_shape != required_input_shape:
+        import sys
+        print(f"Model Genesis input_shape {input_shape} != required_input_shape {required_input_shape}")
+        sys.exit()
+
+    weights_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'Genesis_Chest_CT.h5')
+    model = unet_model_3d(required_input_shape, batch_normalization=True)
+    model.load_weights(weights_dir)
+    x = model.get_layer('depth_7_relu').output
+    x = GlobalAveragePooling3D()(x)
+    x = Dense(1024, activation='relu')(x)
+    output = Dense(nb_classes, activation='softmax')(x)
+    model = Model(inputs=model.input, outputs=output)
+    model = fix_layers(model, num_flex_layers=4)
+
+    return model
 
 
 ''' Two stream optical flow '''

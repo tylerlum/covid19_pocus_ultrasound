@@ -6,7 +6,7 @@ import os
 
 class Videoto3D:
 
-    def __init__(self, vid_path, width=224, height=224, depth=5, framerate=5):
+    def __init__(self, vid_path, width=224, height=224, depth=5, framerate=5, grayscale=False):
         self.vid_path = vid_path
         self.width = width
         self.height = height
@@ -14,6 +14,7 @@ class Videoto3D:
         self.framerate = framerate
         # self.max_vid = {"cov": 10, "pne": 10, "reg": 10}
         self.max_vid = {"cov": 100, "pne": 100, "reg": 100}
+        self.grayscale = grayscale
 
     def save_data(self, data_3d, labels_3d, files_3d, save_path):
         print("SAVE DATA", data_3d.shape, np.max(data_3d))
@@ -47,8 +48,7 @@ class Videoto3D:
                     break
                 # plt.imshow(image)
                 # plt.show()
-                # image = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                image = frame
+                image = frame if not self.grayscale else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 image = cv2.resize(image, (self.width, self.height))
 
                 if frame_id % show_every == 0 or (
@@ -65,8 +65,9 @@ class Videoto3D:
                     print("already 5 parts of this video")
                     break
             cap.release()
-        # data = np.expand_dims(np.asarray(data_3d), 4) / 255
-        data = np.asarray(data_3d) / 255
+        # If grayscale, still want a channel size of 1
+        data = np.asarray(data_3d) if not self.grayscale else np.expand_dims(np.asarray(data_3d), 4)
+        data = data / 255
         if save is not None:
             self.save_data(data, labels_3d, files_3d, save)
         return data, labels_3d, files_3d

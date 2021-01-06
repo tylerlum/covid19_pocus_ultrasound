@@ -62,6 +62,7 @@ def main():
     parser.add_argument('--depth', type=int, default=5)
     parser.add_argument('--width', type=int, default=224)
     parser.add_argument('--height', type=int, default=224)
+    parser.add_argument('--grayscale', action='store_true')
     parser.add_argument('--architecture', type=str, default="2D_CNN_average")
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--augment', action='store_true')
@@ -116,8 +117,7 @@ def main():
         )
 
         # Read in videos and transform to 3D
-        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.frame_rate)
-
+        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.frame_rate, grayscale=args.grayscale)
         if not args.save:
             train_save_path, validation_save_path, test_save_path = None, None, None
         X_train, train_labels_text, train_files = vid3d.video3d(
@@ -143,13 +143,20 @@ def main():
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
 
+    # Model genesis requires different dataset shape than VGG
+    if args.architecture == "model_genesis":
+        # Rearrange to put channels first and depth last
+        X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
+        X_validation = np.transpose(X_validation, [0, 4, 2, 3, 1])
+        X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
+
+        # Repeat frames since depth of model is 32
+        X_train = np.repeat(X_train, [6, 7, 7, 6, 6], axis=-1)
+        X_validation = np.repeat(X_validation, [6, 7, 7, 6, 6], axis=-1)
+        X_test = np.repeat(X_test, [6, 7, 7, 6, 6], axis=-1)
+
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
-    if args.depth != input_shape[0] or args.height != input_shape[1] or args.width != input_shape[2]:
-        print("WARNING: Loaded shape is not same as desired shape")
-        print("args.depth != input_shape[1] or args.height != input_shape[2] or args.width != input_shape[3]")
-        print(f"{args.depth} != {input_shape[1]} or {args.height} != {input_shape[2]} or {args.width} != {input_shape[3]}")
-        print(f"{args.depth != input_shape[1]} or {args.height != input_shape[2]} or {args.width != input_shape[3]}")
 
     generator = DataGenerator(X_train, Y_train, args.batch_size, input_shape, lb.classes_, shuffle=False)
 
@@ -232,6 +239,7 @@ def main():
     config.depth = args.depth
     config.width = args.width
     config.height = args.height
+    config.grayscale = args.grayscale
     config.output_dir = FINAL_OUTPUT_DIR
     config.augment = args.augment
     config.random_seed = args.random_seed
