@@ -46,18 +46,28 @@ def main():
     parser = argparse.ArgumentParser(
         description='simple 3D convolution for action recognition'
     )
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--epochs', type=int, default=60)
+    # Input and output parameters
     parser.add_argument(
         '--videos',
         type=str,
         default='../data/pocus_videos/convex',
         help='directory where videos are stored'
     )
-    parser.add_argument('--output', type=str, default="video_model_outputs")
-    parser.add_argument('--fold', type=int, default=5)
     parser.add_argument('--load', action='store_true')
+
+    # Options for viewing
     parser.add_argument('--visualize', action='store_true')
+    parser.add_argument('--save', action='store_true')
+
+    # Wandb setup
+    parser.add_argument('--wandb_project', type=str, default="covid-video-debugging")
+
+    # Random seed
+    parser.add_argument('--random_seed', type=int, default=1233)
+
+    # Hyperparameters
+    parser.add_argument('--batch_size', type=int, default=8)
+    parser.add_argument('--epochs', type=int, default=60)
     parser.add_argument('--frame_rate', type=int, default=5)
     parser.add_argument('--depth', type=int, default=5)
     parser.add_argument('--width', type=int, default=224)
@@ -66,33 +76,34 @@ def main():
     parser.add_argument('--architecture', type=str, default="2D_CNN_average")
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--augment', action='store_true')
-    parser.add_argument('--trainable_base_layers', type=int, default=0)
-    parser.add_argument('--save', action='store_true')
-    parser.add_argument('--wandb_project', type=str, default="covid-video-debugging")
+    parser.add_argument('--optimizer', type=str, default="adam")
+
     parser.add_argument('--reduce_learning_rate', action='store_true')
-    parser.add_argument('--random_seed', type=int, default=1233)
+    parser.add_argument('--reduce_learning_rate_monitor', type=str, default="val_loss")
+    parser.add_argument('--reduce_learning_rate_mode', type=str, default="min")
+    parser.add_argument('--reduce_learning_rate_factor', type=float, default=0.1)
+    parser.add_argument('--reduce_learning_rate_patience', type=int, default=7)
 
     args = parser.parse_args()
-    print(args)
 
+    # Deterministic behavior
     set_random_seed(args.random_seed)
 
-    # Out model directory
-    MODEL_D = args.output
-    if not os.path.isdir(MODEL_D):
-        if not os.path.exists(MODEL_D):
-            os.makedirs(args.output)
+    # Output directory
+    OUTPUT_DIR = "video_model_outputs"
+    if not os.path.isdir(OUTPUT_DIR):
+        if not os.path.exists(OUTPUT_DIR):
+            os.makedirs(OUTPUT_DIR)
+    FINAL_OUTPUT_DIR = os.path.join(OUTPUT_DIR, datestring)
+    if not os.path.exists(FINAL_OUTPUT_DIR):
+        os.makedirs(FINAL_OUTPUT_DIR)
 
     SAVE_DIR = '../data/video_input_data/'
     if not os.path.isdir(SAVE_DIR):
         os.makedirs(SAVE_DIR)
-    train_save_path, validation_save_path, test_save_path = (os.path.join(SAVE_DIR, "conv3d_train_fold_" + str(args.fold) + ".dat"),
-                                                             os.path.join(SAVE_DIR, "conv3d_validation_fold_" + str(args.fold) + ".dat"),
-                                                             os.path.join(SAVE_DIR, "conv3d_test_fold_" + str(args.fold) + ".dat"))
-
-    FINAL_OUTPUT_DIR = os.path.join(MODEL_D, datestring)
-    if not os.path.exists(FINAL_OUTPUT_DIR):
-        os.makedirs(FINAL_OUTPUT_DIR)
+    train_save_path, validation_save_path, test_save_path = (os.path.join(SAVE_DIR, "conv3d_train.dat"),
+                                                             os.path.join(SAVE_DIR, "conv3d_validation.dat"),
+                                                             os.path.join(SAVE_DIR, "conv3d_test.dat"))
 
     # Load saved data or read in videos
     if args.load:
@@ -185,7 +196,6 @@ def main():
             i += 1
 
     # Verbose
-    print("testing on split", args.fold)
     print(X_train.shape, Y_train.shape)
     print(X_validation.shape, Y_validation.shape)
     print(X_test.shape, Y_test.shape)
@@ -205,50 +215,28 @@ def main():
 
     tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
-    opt = Adam(lr=args.learning_rate)
+    if args.optimizer == "adam":
+        opt = Adam(lr=args.learning_rate)
+    else:
+        print(f"WARNING: invalid optimizer {args.optimizer}")
+
     model.compile(
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
     )
 
     # Define callbacks
-    earlyStopping = EarlyStopping(
-        monitor='val_loss',
-        patience=20,
-        verbose=1,
-        mode='min',
-        restore_best_weights=True
-    )
     reduce_learning_rate_loss = ReduceLROnPlateau(
-        monitor='val_loss',
-        factor=0.1,
-        patience=7,
+        monitor=args.reduce_learning_rate_monitor,
+        factor=args.reduce_learning_rate_factor,
+        patience=args.reduce_learning_rate_patience,
+        mode=args.reduce_learning_rate_mode,
         verbose=1,
         epsilon=1e-4,
-        mode='min'
     )
 
     wandb.init(entity='tylerlum', project=args.wandb_project)
-    config = wandb.config
-    config.learning_rate = args.learning_rate
-    config.batch_size = args.batch_size
-    config.activation = 'relu'
-    config.optimizer = 'adam'
-    config.epochs = args.epochs
-    config.architecture = args.architecture
-    config.frame_rate = args.frame_rate
-    config.depth = args.depth
-    config.width = args.width
-    config.height = args.height
-    config.grayscale = args.grayscale
-    config.output_dir = FINAL_OUTPUT_DIR
-    config.augment = args.augment
-    config.random_seed = args.random_seed
-    config.reduce_learning_rate = args.reduce_learning_rate
-    if args.reduce_learning_rate:
-        config.reduce_learning_rate_monitor = reduce_learning_rate_loss.monitor
-        config.reduce_learning_rate_factor = reduce_learning_rate_loss.factor
-        config.reduce_learning_rate_patience = reduce_learning_rate_loss.patience
-        config.reduce_learning_rate_mode = reduce_learning_rate_loss.mode
+    wandb.config.update(args)
+    wandb.config.final_output_dir = FINAL_OUTPUT_DIR
 
     wandb_callback = WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)
 
