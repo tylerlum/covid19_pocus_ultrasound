@@ -6,7 +6,7 @@ import numpy as np
 
 # Source: https://keras.io/examples/nlp/text_classification_with_transformer/
 class MultiHeadSelfAttention(layers.Layer):
-    def __init__(self, embed_dim, num_heads=8):
+    def __init__(self, embed_dim, num_heads):
         super(MultiHeadSelfAttention, self).__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
@@ -47,7 +47,7 @@ class MultiHeadSelfAttention(layers.Layer):
 
 
 class TransformerBlock(layers.Layer):
-    def __init__(self, embed_dim, num_heads, ff_dim, timesteps, positional_encoding, rate=0.1):
+    def __init__(self, embed_dim, num_heads, ff_dim, timesteps, positional_encoding, rate):
         super(TransformerBlock, self).__init__()
         self.att = MultiHeadSelfAttention(embed_dim, num_heads)
 

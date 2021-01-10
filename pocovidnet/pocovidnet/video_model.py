@@ -335,15 +335,15 @@ def get_2D_then_1D_model(input_shape, nb_classes):
 
 
 ''' Transformer '''
-def get_CNN_transformer_model(input_shape, nb_classes):
-    return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=True)
+def get_CNN_transformer_model(input_shape, nb_classes, heads, blocks, aggregation, dropout_rate, hidden_units):
+    return get_CNN_transformer_model_helper(input_shape, nb_classes, heads, blocks, aggregation, dropout_rate, hidden_units, positional_encoding=True)
 
 
-def get_CNN_transformer_no_pos_model(input_shape, nb_classes):
-    return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=False)
+def get_CNN_transformer_no_pos_model(input_shape, nb_classes, heads, blocks, aggregation, dropout_rate, hidden_units):
+    return get_CNN_transformer_model_helper(input_shape, nb_classes, heads, blocks, aggregation, dropout_rate, hidden_units, positional_encoding=False)
 
 
-def get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding):
+def get_CNN_transformer_model_helper(input_shape, nb_classes, heads, blocks, aggregation, dropout_rate, hidden_units, positional_encoding):
     # Use pretrained vgg-model
     vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
 
@@ -359,13 +359,16 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encodin
     # timeDistributed_layer.shape = (batch_size, timesteps, embed_dim)
     timesteps = timeDistributed_layer.shape[1]
     embed_dim = timeDistributed_layer.shape[2]
-    num_heads = 4  # Requres embed_dim % num_heads == 0
-    number_of_hidden_units = 64
-    transformer_block1 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=positional_encoding)
-    transformer_block2 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=positional_encoding)
-    model = transformer_block1(timeDistributed_layer)
-    model = transformer_block2(model)
-    model = GlobalAveragePooling1D()(model)
+    num_heads = heads  # Requires embed_dim % num_heads == 0
+    transformer_blocks = [TransformerBlock(embed_dim, num_heads, hidden_units, timesteps, positional_encoding, dropout_rate) for _ in range(blocks)]
+    model = timeDistributed_layer
+    for transformer_block in transformer_blocks:
+        model = transformer_block(model)
+    if aggregation == 'global_average_pool':
+        model = GlobalAveragePooling1D()(model)
+    else:
+        print(f"WARNING: invalid aggregation = {aggregation}")
+
     model = Dense(256, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)

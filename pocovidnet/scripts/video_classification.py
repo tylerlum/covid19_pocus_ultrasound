@@ -84,7 +84,14 @@ def main():
     parser.add_argument('--reduce_learning_rate_factor', type=float, default=0.1)
     parser.add_argument('--reduce_learning_rate_patience', type=int, default=7)
 
+    parser.add_argument('--transformer_heads', type=int, default=4)
+    parser.add_argument('--transformer_blocks', type=int, default=2)
+    parser.add_argument('--transformer_dropout_rate', type=float, default=0.1)
+    parser.add_argument('--transformer_aggregation', type=str, default='global_average_pool')
+    parser.add_argument('--transformer_hidden_units', type=int, default=64)
+
     args = parser.parse_args()
+    print(args)
 
     # Deterministic behavior
     set_random_seed(args.random_seed)
@@ -211,7 +218,10 @@ def main():
     class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
     print(f"class_weight = {class_weight}")
 
-    model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes)
+    if args.architecture != "CNN_transformer" and args.architecture != "CNN_transformer_no_pos":
+        model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes)
+    else:
+        model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.transformer_heads, args.transformer_blocks, args.transformer_aggregation, args.transformer_dropout_rate, args.transformer_hidden_units)
 
     tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
