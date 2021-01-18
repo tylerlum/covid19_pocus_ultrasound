@@ -87,10 +87,10 @@ class Videoto3D:
         for num, images in enumerate(data_3d):
             print(f"Working on image {num} of {len(data_3d)}")
             optical_flow_frames = []
-            for i in range(1, len(images)):
+            for i in range(len(images)):
                 is_already_grey = (len(images[i].shape) == 2 or images[i].shape[2] == 1)
-                prev_grey = images[i - 1]
                 curr_grey = images[i]
+                prev_grey = images[i - 1] if i > 0 else np.zeros_like(curr_grey)
                 if not is_already_grey:
                     prev_grey = cv2.cvtColor(prev_grey, cv2.COLOR_BGR2GRAY)
                     curr_grey = cv2.cvtColor(curr_grey, cv2.COLOR_BGR2GRAY)
@@ -112,9 +112,6 @@ class Videoto3D:
 
                 stacked_flow = np.array([flow_x, flow_y, flow_xy])
                 stacked_flow = np.transpose(stacked_flow, [1, 2, 0])  # Channels last
-                cv2.imwrite(f"flow_x_{num}_{i}.jpg", flow_x)
-                cv2.imwrite(f"flow_y_{num}_{i}.jpg", flow_y)
-                cv2.imwrite(f"flow_xy_{num}_{i}.jpg", flow_xy)
 
                 optical_flow_frames.append(stacked_flow)
 
@@ -134,6 +131,10 @@ class Videoto3D:
         # Normalize
         optical_flow_data = optical_flow_data / 255
         data = data / 255
+
+        # Bring together
+        data = np.concatenate([data, optical_flow_data], axis=4)
+        print(f"data.shape = {data.shape}")
 
         # Save
         if save is not None:
