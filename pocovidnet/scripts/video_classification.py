@@ -73,6 +73,7 @@ def main():
     parser.add_argument('--width', type=int, default=224)
     parser.add_argument('--height', type=int, default=224)
     parser.add_argument('--grayscale', action='store_true')
+    parser.add_argument('--optical_flow', action='store_true')
     parser.add_argument('--architecture', type=str, default="2D_CNN_average")
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--augment', action='store_true')
@@ -128,7 +129,7 @@ def main():
         )
 
         # Read in videos and transform to 3D
-        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.frame_rate, grayscale=args.grayscale)
+        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.frame_rate, grayscale=args.grayscale, optical_flow=args.optical_flow)
         if not args.save:
             train_save_path, validation_save_path, test_save_path = None, None, None
         X_train, train_labels_text, train_files = vid3d.video3d(
