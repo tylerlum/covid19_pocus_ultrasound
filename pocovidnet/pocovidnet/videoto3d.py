@@ -47,6 +47,8 @@ class Videoto3D:
 
                 image = frame if not self.grayscale else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 image = cv2.resize(image, (self.width, self.height))
+                from tensorflow.keras.applications.efficientnet import preprocess_input
+                # image = preprocess_input(image)
 
                 # Grab image every X frames
                 if frame_id % show_every == 0:
@@ -119,17 +121,15 @@ class Videoto3D:
                 optical_flows.append(optical_flow_frames)
 
             optical_flow_data = np.asarray(optical_flows)
-            optical_flow_data = optical_flow_data / 255
 
         # If grayscale, still want a channel size of 1
         data = np.asarray(data_3d) if not self.grayscale else np.expand_dims(np.asarray(data_3d), 4)
 
-        # Normalize
-        data = data / 255
-
         # Bring together
         if self.optical_flow:
             data = np.concatenate([data, optical_flow_data], axis=4)
+
+        data = data / 255.0
 
         # Save
         if save is not None:

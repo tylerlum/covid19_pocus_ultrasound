@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import (
-    Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, Conv2D, MaxPooling2D, Input, GlobalAveragePooling2D, Lambda, GlobalAveragePooling3D, Average, AveragePooling2D, ReLU, ZeroPadding3D, Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, LayerNormalization, Layer, GlobalAveragePooling1D
+    Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, Conv2D, MaxPooling2D, Input, GlobalAveragePooling2D, Lambda, GlobalAveragePooling3D, Average, AveragePooling2D, ReLU, ZeroPadding3D, Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, LayerNormalization, Layer, GlobalAveragePooling1D, Concatenate
 )
 from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile
 from tensorflow.keras.layers import BatchNormalization
@@ -399,7 +399,65 @@ def get_model_genesis_model(input_shape, nb_classes):
 
 ''' Two stream optical flow '''
 def get_2stream_model(input_shape, nb_classes):
-    return None
+    n_frames, n_height, n_width, n_channels = input_shape
+    if n_channels != 6:
+        print(f"ERROR: Expected n_channels = 6, but got {n_channels}")
+
+    vgg_model_1 = get_model(input_size=(n_height, n_width, 3), log_softmax=False,)
+    vgg_model_2 = get_model(input_size=(n_height, n_width, 3), log_softmax=False,)
+
+    # Remove everything after flattening
+    vgg_model_1._layers.pop()
+    vgg_model_1._layers.pop()
+    vgg_model_1._layers.pop()
+    vgg_model_1._layers.pop()
+    vgg_model_1._layers.pop()
+    vgg_model_1 = Model(vgg_model_1.input, vgg_model_1._layers[-1].output)
+
+    # Remove everything after flattening
+    vgg_model_2._layers.pop()
+    vgg_model_2._layers.pop()
+    vgg_model_2._layers.pop()
+    vgg_model_2._layers.pop()
+    vgg_model_2._layers.pop()
+    vgg_model_2 = Model(vgg_model_2.input, vgg_model_2._layers[-1].output)
+
+    frame_input_tensor = Input(shape=(n_height, n_width, 6))
+    color = Lambda(lambda x: x[:, :, :, :3])(frame_input_tensor)
+    optical_flow = Lambda(lambda x: x[:, :, :, 3:])(frame_input_tensor)
+    color = vgg_model_1(color)
+    optical_flow = vgg_model_2(optical_flow)
+    merged = Concatenate(axis=1)([color, optical_flow])
+    merged = Dense(2048)(merged)
+    merged = Dense(64)(merged)
+    merged = BatchNormalization()(merged)
+    merged = ReLU()(merged)
+    merged = Dropout(0.5)(merged)
+    merged = Dense(3, activation=tf.nn.softmax)(merged)
+
+    merged_vgg_model = Model(inputs=frame_input_tensor, outputs=merged)
+    print(merged_vgg_model.summary())
+    tf.keras.utils.plot_model(merged_vgg_model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}2.png"), show_shapes=True)
+
+
+    # Run merged vgg model on each frame
+    multi_frame_input_tensor = Input(shape=(n_frames, n_height, n_width, 6))
+
+    num_frames = input_shape[0]
+    if num_frames == 1:
+        frame = Lambda(lambda x: x[:, 0, :, :, :])(multi_frame_input_tensor)
+        return Model(inputs=multi_frame_input_tensor, outputs=merged_vgg_model(frame))
+
+    else:
+        frame_predictions = []
+        for frame_i in range(num_frames):
+            frame = Lambda(lambda x: x[:, frame_i, :, :, :])(multi_frame_input_tensor)
+            frame_prediction = merged_vgg_model(frame)
+            frame_predictions.append(frame_prediction)
+
+        # Average activations
+        average = Average()(frame_predictions)
+        return Model(inputs=multi_frame_input_tensor, outputs=average)
 
 
 ''' CVPR '''
