@@ -154,7 +154,7 @@ def main():
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
 
-    # Model genesis requires different dataset shape than VGG
+    # Model genesis requires different dataset shape than VGG. Requires width = height = 64, grayscale
     if args.architecture == "model_genesis":
         # Rearrange to put channels first and depth last
         X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
