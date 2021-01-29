@@ -377,8 +377,8 @@ def get_model_genesis_model(input_shape, nb_classes, pretrained_cnn):
     return model
 
 
-def get_2stream_model(input_shape, nb_classes, pretrained_cnn):
-    ''' Two stream optical flow '''
+def get_2stream_average_model(input_shape, nb_classes, pretrained_cnn):
+    ''' Two stream optical flow average '''
     n_frames, n_height, n_width, n_channels = input_shape
     if n_channels != 6:
         raise ValueError(f"ERROR: Expected n_channels = 6, but got {n_channels}")
@@ -422,6 +422,98 @@ def get_2stream_model(input_shape, nb_classes, pretrained_cnn):
         # Average activations
         average = Average()(frame_predictions)
         return Model(inputs=multi_frame_input_tensor, outputs=average)
+
+
+def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
+    ''' Two stream optical flow LSTM integrated bidirectional '''
+    n_frames, n_height, n_width, n_channels = input_shape
+    if n_channels != 6:
+        raise ValueError(f"ERROR: Expected n_channels = 6, but got {n_channels}")
+
+    # Use pretrained cnn_model
+    # Remove the layers after convolution
+    cnn_model_1 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=8, pretrained_cnn=pretrained_cnn)
+    cnn_model_2 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=8, pretrained_cnn=pretrained_cnn)
+
+    frame_input_tensor = Input(shape=(n_height, n_width, 6))
+    color = Lambda(lambda x: x[:, :, :, :3])(frame_input_tensor)
+    optical_flow = Lambda(lambda x: x[:, :, :, 3:])(frame_input_tensor)
+    color = cnn_model_1(color)
+    optical_flow = cnn_model_2(optical_flow)
+    merged = Concatenate(axis=-1)([color, optical_flow])
+
+    merged_cnn_model = Model(inputs=frame_input_tensor, outputs=merged)
+    print(merged_cnn_model.summary())
+    tf.keras.utils.plot_model(merged_cnn_model, f"2stream2.png", show_shapes=True)
+
+    # Run LSTM over CNN outputs
+    multi_frame_input_tensor = Input(shape=(n_frames, n_height, n_width, 6))
+    timeDistributed_layer = TimeDistributed(merged_cnn_model)(multi_frame_input_tensor)
+
+    number_of_hidden_units = 32
+    bidirectional = True
+    if bidirectional:
+        model = Bidirectional(ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
+    else:
+        model = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
+    time_length = model.shape[1]
+    model = Reshape((time_length, -1))(model)
+    if bidirectional:
+        model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
+    else:
+        model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
+    model = Dense(2048, activation='relu')(model)
+    model = Dense(128, activation='relu')(model)
+    model = Dropout(0.5)(model)
+    model = Dense(nb_classes, activation='softmax')(model)
+    model = Model(inputs=multi_frame_input_tensor, outputs=model)
+
+    return model
+
+
+def get_2stream_transformer_model(input_shape, nb_classes, pretrained_cnn):
+    ''' Two stream optical flow transformer '''
+    n_frames, n_height, n_width, n_channels = input_shape
+    if n_channels != 6:
+        raise ValueError(f"ERROR: Expected n_channels = 6, but got {n_channels}")
+
+    # Use pretrained cnn_model
+    # Remove everything after flattening
+    cnn_model_1 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, pretrained_cnn=pretrained_cnn)
+    cnn_model_2 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, pretrained_cnn=pretrained_cnn)
+
+    frame_input_tensor = Input(shape=(n_height, n_width, 6))
+    color = Lambda(lambda x: x[:, :, :, :3])(frame_input_tensor)
+    optical_flow = Lambda(lambda x: x[:, :, :, 3:])(frame_input_tensor)
+    color = cnn_model_1(color)
+    optical_flow = cnn_model_2(optical_flow)
+    merged = Concatenate(axis=1)([color, optical_flow])
+    merged_cnn_model = Model(inputs=frame_input_tensor, outputs=merged)
+    print(merged_cnn_model.summary())
+    tf.keras.utils.plot_model(merged_cnn_model, f"2stream3.png", show_shapes=True)
+
+    # Run LSTM over CNN outputs
+    multi_frame_input_tensor = Input(shape=(n_frames, n_height, n_width, 6))
+    timeDistributed_layer = TimeDistributed(merged_cnn_model)(multi_frame_input_tensor)
+
+    # timeDistributed_layer.shape = (batch_size, timesteps, embed_dim)
+    timesteps = timeDistributed_layer.shape[1]
+    embed_dim = timeDistributed_layer.shape[2]
+    num_heads = 4  # Requres embed_dim % num_heads == 0
+    number_of_hidden_units = 64
+    transformer_block1 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=True)
+    transformer_block2 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=True)
+    model = transformer_block1(timeDistributed_layer)
+    model = transformer_block2(model)
+    model = GlobalAveragePooling1D()(model)
+    model = Dense(256, activation='relu')(model)
+    model = Dense(64, activation='relu')(model)
+    model = Dropout(0.5)(model)
+    model = Dense(nb_classes, activation='softmax')(model)
+    model = Model(inputs=multi_frame_input_tensor, outputs=model)
+
+    return model
+
 
 
 def get_gate_shift_model(input_shape, nb_classes, pretrained_cnn):

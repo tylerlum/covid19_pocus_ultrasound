@@ -89,7 +89,7 @@ def main():
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--optimizer', type=str, default="adam")
-    parser.add_argument('--pretrained_cnn', type=str, default="vgg")
+    parser.add_argument('--pretrained_cnn', type=str, default="vgg16")
 
     parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--reduce_learning_rate_monitor', type=str, default="val_loss")
@@ -171,7 +171,7 @@ def main():
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
 
-    # Model genesis requires different dataset shape than VGG. Requires width = height = 64, grayscale
+    # Model genesis requires different dataset shape than other cnns. Requires width = height = 64, grayscale
     if args.architecture == "model_genesis":
         # Rearrange to put channels first and depth last
         X_train = np.transpose(X_train, [0, 4, 2, 3, 1])

@@ -18,13 +18,13 @@ def get_model(
     trainable_layers: int = 1,
     log_softmax: bool = True,
     mc_dropout: bool = False,
-    pretrained_cnn: str = 'vgg',
+    pretrained_cnn: str = 'vgg16',
     **kwargs
 ):
     act_fn = tf.nn.softmax if not log_softmax else tf.nn.log_softmax
 
     # load the VGG16 network, ensuring the head FC layer sets are left off
-    if pretrained_cnn == 'vgg':
+    if pretrained_cnn == 'vgg16':
         baseModel = VGG16(
             weights="imagenet",
             include_top=False,
