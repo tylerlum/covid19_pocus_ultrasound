@@ -12,6 +12,7 @@ from pocovidnet.model import get_model
 from pocovidnet.transformer import TransformerBlock
 from tensorflow import keras
 from .unet3d_genesis import unet_model_3d
+import os
 
 
 
@@ -380,9 +381,7 @@ def get_model_genesis_model(input_shape, nb_classes):
     import os
     required_input_shape = 1, 64, 64, 32  # channels, width, height, depth
     if input_shape != required_input_shape:
-        import sys
-        print(f"Model Genesis input_shape {input_shape} != required_input_shape {required_input_shape}")
-        sys.exit()
+        raise ValueError(f"Model Genesis input_shape {input_shape} != required_input_shape {required_input_shape}")
 
     weights_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'Genesis_Chest_CT.h5')
     model = unet_model_3d(required_input_shape, batch_normalization=True)
@@ -401,7 +400,7 @@ def get_model_genesis_model(input_shape, nb_classes):
 def get_2stream_model(input_shape, nb_classes):
     n_frames, n_height, n_width, n_channels = input_shape
     if n_channels != 6:
-        print(f"ERROR: Expected n_channels = 6, but got {n_channels}")
+        raise ValueError(f"ERROR: Expected n_channels = 6, but got {n_channels}")
 
     vgg_model_1 = get_model(input_size=(n_height, n_width, 3), log_softmax=False,)
     vgg_model_2 = get_model(input_size=(n_height, n_width, 3), log_softmax=False,)
@@ -437,8 +436,6 @@ def get_2stream_model(input_shape, nb_classes):
 
     merged_vgg_model = Model(inputs=frame_input_tensor, outputs=merged)
     print(merged_vgg_model.summary())
-    tf.keras.utils.plot_model(merged_vgg_model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}2.png"), show_shapes=True)
-
 
     # Run merged vgg model on each frame
     multi_frame_input_tensor = Input(shape=(n_frames, n_height, n_width, 6))
