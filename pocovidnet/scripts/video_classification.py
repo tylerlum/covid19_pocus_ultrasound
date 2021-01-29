@@ -42,6 +42,17 @@ def set_random_seed(seed_value):
     tf.random.set_seed(seed_value)
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='simple 3D convolution for action recognition'
@@ -53,11 +64,11 @@ def main():
         default='../data/pocus_videos/convex',
         help='directory where videos are stored'
     )
-    parser.add_argument('--load', action='store_true')
+    parser.add_argument('--load', type=str2bool, nargs='?', const=True, default=False)
 
     # Options for viewing
-    parser.add_argument('--visualize', action='store_true')
-    parser.add_argument('--save', action='store_true')
+    parser.add_argument('--visualize', type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument('--save', type=str2bool, nargs='?', const=True, default=False)
 
     # Wandb setup
     parser.add_argument('--wandb_project', type=str, default="covid-video-debugging")
@@ -72,14 +83,14 @@ def main():
     parser.add_argument('--depth', type=int, default=5)
     parser.add_argument('--width', type=int, default=224)
     parser.add_argument('--height', type=int, default=224)
-    parser.add_argument('--grayscale', action='store_true')
-    parser.add_argument('--optical_flow', action='store_true')
+    parser.add_argument('--grayscale', type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument('--optical_flow', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--architecture', type=str, default="2D_CNN_average")
     parser.add_argument('--learning_rate', type=float, default=1e-4)
-    parser.add_argument('--augment', action='store_true')
+    parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--optimizer', type=str, default="adam")
 
-    parser.add_argument('--reduce_learning_rate', action='store_true')
+    parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--reduce_learning_rate_monitor', type=str, default="val_loss")
     parser.add_argument('--reduce_learning_rate_mode', type=str, default="min")
     parser.add_argument('--reduce_learning_rate_factor', type=float, default=0.1)
@@ -184,10 +195,13 @@ def main():
             print(f"Label = {label}")
             for j in range(example.shape[0]):
                 print(f"Frame {j}")
-                frame = example[j]
+                frame = example[j][:, :, :3]
+                print(f"frame.shape {frame.shape}")
                 print(f"np.max(frame) = {np.max(frame)}")
                 print(f"np.min(frame) = {np.min(frame)}")
                 cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
+                if example[j].shape[2] == 6:
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}-opt.jpg"), 255*example[j][:,:,3:])
             if i > 8:
                 break
 
@@ -196,7 +210,10 @@ def main():
         for frames, label in zip(batchX, batchY):
             j = 0
             for frame in frames:
-                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augmented-Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
+                myframe = frame[:, :, :3]
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augmented-Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*myframe)
+                if frame.shape[2] == 6:
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augmented-Example-{i}_Frame-{j}_Label-{label}-opt.jpg"), 255*frame[:,:,3:])
                 j += 1
             i += 1
 
