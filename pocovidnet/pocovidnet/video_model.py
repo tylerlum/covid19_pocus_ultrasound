@@ -14,9 +14,10 @@ from tensorflow import keras
 from .unet3d_genesis import unet_model_3d
 
 
-def get_model_remove_last_n_layers(input_shape, n_remove):
+def get_model_remove_last_n_layers(input_shape, n_remove, pretrained_cnn):
+    '''Helper function for getting base cnn_model'''
     # Use pretrained cnn_model
-    cnn_model = get_model(input_size=input_shape, log_softmax=False,)
+    cnn_model = get_model(input_size=input_shape, log_softmax=False, pretrained_cnn=pretrained_cnn)
 
     # Remove the last n layers
     for _ in range(n_remove):
@@ -26,10 +27,10 @@ def get_model_remove_last_n_layers(input_shape, n_remove):
     return cnn_model
 
 
-def get_baseline_model(input_shape, nb_classes):
+def get_baseline_model(input_shape, nb_classes, pretrained_cnn):
     ''' No information baseline '''
     # Scales input by 0 right off the bat, so has no opportunity to improve
-    cnn_model = get_model(input_size=input_shape[1:], log_softmax=False,)
+    cnn_model = get_model(input_size=input_shape[1:], log_softmax=False, pretrained_cnn=pretrained_cnn)
 
     # Run cnn model on each frame
     input_tensor = Input(shape=(input_shape))
@@ -52,9 +53,9 @@ def get_baseline_model(input_shape, nb_classes):
         return Model(inputs=input_tensor, outputs=average)
 
 
-def get_2D_CNN_average_model(input_shape, nb_classes):
+def get_2D_CNN_average_model(input_shape, nb_classes, pretrained_cnn):
     ''' Simple '''
-    cnn_model = get_model(input_size=input_shape[1:], log_softmax=False,)
+    cnn_model = get_model(input_size=input_shape[1:], log_softmax=False, pretrained_cnn=pretrained_cnn)
 
     # Run cnn model on each frame
     input_tensor = Input(shape=(input_shape))
@@ -76,43 +77,43 @@ def get_2D_CNN_average_model(input_shape, nb_classes):
         return Model(inputs=input_tensor, outputs=average)
 
 
-def get_CNN_LSTM_model(input_shape, nb_classes):
+def get_CNN_LSTM_model(input_shape, nb_classes, pretrained_cnn):
     ''' Recurrent '''
     return get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional=False)
 
 
-def get_CNN_GRU_model(input_shape, nb_classes):
+def get_CNN_GRU_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional=False)
 
 
-def get_CNN_RNN_model(input_shape, nb_classes):
+def get_CNN_RNN_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional=False)
 
 
-def get_CNN_LSTM_integrated_model(input_shape, nb_classes):
+def get_CNN_LSTM_integrated_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional=False)
 
 
-def get_CNN_LSTM_bidirectional_model(input_shape, nb_classes):
+def get_CNN_LSTM_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional=True)
 
 
-def get_CNN_GRU_bidirectional_model(input_shape, nb_classes):
+def get_CNN_GRU_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional=True)
 
 
-def get_CNN_RNN_bidirectional_model(input_shape, nb_classes):
+def get_CNN_RNN_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional=True)
 
 
-def get_CNN_LSTM_integrated_bidirectional_model(input_shape, nb_classes):
+def get_CNN_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional=True)
 
 
-def get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional):
+def get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional, pretrained_cnn):
     # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
 
     # Run LSTM over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -136,10 +137,10 @@ def get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional):
     return model
 
 
-def get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional):
+def get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional, pretrained_cnn):
     # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
 
     # Run GRU over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -163,10 +164,10 @@ def get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional):
     return model
 
 
-def get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional):
+def get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional, pretrained_cnn):
     # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
 
     # Run RNN over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -190,10 +191,10 @@ def get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional):
     return model
 
 
-def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional):
+def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional, pretrained_cnn):
     # Use pretrained cnn_model
     # Remove the layers after convolution
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, pretrained_cnn=pretrained_cnn)
 
     # Run GRU over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -219,7 +220,7 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional)
     return model
 
 
-def get_3D_CNN_model(input_shape, nb_classes):
+def get_3D_CNN_model(input_shape, nb_classes, pretrained_cnn):
     ''' Convolutional '''
     # Define model
     model = Sequential()
@@ -254,7 +255,7 @@ def get_3D_CNN_model(input_shape, nb_classes):
     return model
 
 
-def get_2plus1D_CNN_model(input_shape, nb_classes):
+def get_2plus1D_CNN_model(input_shape, nb_classes, pretrained_cnn):
     # Define model
     model = Sequential()
     model.add(ZeroPadding3D(padding=(0, 1, 1), input_shape=(input_shape)))
@@ -297,10 +298,10 @@ def get_2plus1D_CNN_model(input_shape, nb_classes):
     return model
 
 
-def get_2D_then_1D_model(input_shape, nb_classes):
+def get_2D_then_1D_model(input_shape, nb_classes, pretrained_cnn):
     # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
 
     # Run Conv1D over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -319,19 +320,19 @@ def get_2D_then_1D_model(input_shape, nb_classes):
     return model
 
 
-def get_CNN_transformer_model(input_shape, nb_classes):
+def get_CNN_transformer_model(input_shape, nb_classes, pretrained_cnn):
     ''' Transformer '''
     return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=True)
 
 
-def get_CNN_transformer_no_pos_model(input_shape, nb_classes):
+def get_CNN_transformer_no_pos_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=False)
 
 
-def get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding):
+def get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding, pretrained_cnn):
     # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
 
     # Run Conv1D over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -356,7 +357,7 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encodin
     return model
 
 
-def get_model_genesis_model(input_shape, nb_classes):
+def get_model_genesis_model(input_shape, nb_classes, pretrained_cnn):
     ''' Model Genesis '''
     import os
     required_input_shape = 1, 64, 64, 32  # channels, width, height, depth
@@ -376,7 +377,7 @@ def get_model_genesis_model(input_shape, nb_classes):
     return model
 
 
-def get_2stream_model(input_shape, nb_classes):
+def get_2stream_model(input_shape, nb_classes, pretrained_cnn):
     ''' Two stream optical flow '''
     n_frames, n_height, n_width, n_channels = input_shape
     if n_channels != 6:
@@ -384,8 +385,8 @@ def get_2stream_model(input_shape, nb_classes):
 
     # Use pretrained cnn_model
     # Remove everything after flattening
-    cnn_model_1 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5)
-    cnn_model_2 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5)
+    cnn_model_1 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, pretrained_cnn=pretrained_cnn)
+    cnn_model_2 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, pretrained_cnn=pretrained_cnn)
 
     frame_input_tensor = Input(shape=(n_height, n_width, 6))
     color = Lambda(lambda x: x[:, :, :, :3])(frame_input_tensor)
@@ -423,10 +424,10 @@ def get_2stream_model(input_shape, nb_classes):
         return Model(inputs=multi_frame_input_tensor, outputs=average)
 
 
-def get_gate_shift_model(input_shape, nb_classes):
+def get_gate_shift_model(input_shape, nb_classes, pretrained_cnn):
     ''' CVPR '''
     return None
 
 
-def get_tea_model(input_shape, nb_classes):
+def get_tea_model(input_shape, nb_classes, pretrained_cnn):
     return None

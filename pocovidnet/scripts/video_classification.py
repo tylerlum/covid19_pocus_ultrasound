@@ -89,6 +89,7 @@ def main():
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--optimizer', type=str, default="adam")
+    parser.add_argument('--pretrained_cnn', type=str, default="vgg")
 
     parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False)
     parser.add_argument('--reduce_learning_rate_monitor', type=str, default="val_loss")
@@ -237,7 +238,7 @@ def main():
     class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
     print(f"class_weight = {class_weight}")
 
-    model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes)
+    model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
 
     tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
