@@ -107,6 +107,10 @@ def main():
                                                              os.path.join(SAVE_DIR, "conv3d_test.dat"))
 
     # Load saved data or read in videos
+    print()
+    print("===========================")
+    print("Converting videos to 4D video clips")
+    print("===========================")
     if args.load:
         with open(test_save_path, 'rb') as infile:
             X_test, test_labels_text, test_files = pickle.load(infile)
@@ -197,6 +201,10 @@ def main():
             i += 1
 
     # Verbose
+    print()
+    print("===========================")
+    print("Printing details about dataset")
+    print("===========================")
     print(X_train.shape, Y_train.shape)
     print(X_validation.shape, Y_validation.shape)
     print(X_test.shape, Y_test.shape)
@@ -245,7 +253,10 @@ def main():
     if args.reduce_learning_rate:
         callbacks.append(reduce_learning_rate_loss)
 
-    print("ABOUT TO TRAIN THIS MODEL")
+    print()
+    print("===========================")
+    print("About to train model")
+    print("===========================")
     print(model.summary())
 
     if args.augment:
@@ -271,11 +282,14 @@ def main():
             callbacks=callbacks,
         )
 
-    print('Evaluating network...')
+    print()
+    print("===========================")
+    print("Evaluating network...")
+    print("===========================")
     # Can cause out of memory issue when using larger framerate
-    # trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
-    # print('train loss:', trainLoss)
-    # print('train accuracy:', trainAcc)
+    trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
+    print('train loss:', trainLoss)
+    print('train accuracy:', trainAcc)
     validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=1)
     print('Validation loss:', validationLoss)
     print('Validation accuracy:', validationAcc)
@@ -283,7 +297,7 @@ def main():
     print('Test loss:', testLoss)
     print('Test accuracy:', testAcc)
 
-    # trainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
+    trainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
     validationPredIdxs = model.predict(X_validation, batch_size=args.batch_size)
     testPredIdxs = model.predict(X_test, batch_size=args.batch_size)
 
@@ -295,7 +309,7 @@ def main():
 
     # for each image in the testing set we need to find the index of the
     # label with corresponding largest predicted probability
-    # trainPredIdxs = np.argmax(trainPredIdxs, axis=1)
+    trainPredIdxs = np.argmax(trainPredIdxs, axis=1)
     validationPredIdxs = np.argmax(validationPredIdxs, axis=1)
     testPredIdxs = np.argmax(testPredIdxs, axis=1)
 
@@ -317,7 +331,7 @@ def main():
 
         wandb_log_classification_table_and_plots(report, reportFilename)
 
-    # printAndSaveClassificationReport(Y_train, trainPredIdxs, lb.classes_, "trainReport.csv")
+    printAndSaveClassificationReport(Y_train, trainPredIdxs, lb.classes_, "trainReport.csv")
     printAndSaveClassificationReport(Y_validation, validationPredIdxs, lb.classes_, "validationReport.csv")
     printAndSaveClassificationReport(Y_test, testPredIdxs, lb.classes_, "testReport.csv")
 
@@ -332,11 +346,11 @@ def main():
         cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
         cmDisplay.plot()
         plt.savefig(os.path.join(directory, confusionMatrixFilename))
-    # printAndSaveConfusionMatrix(Y_train, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
+    printAndSaveConfusionMatrix(Y_train, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
     printAndSaveConfusionMatrix(Y_validation, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
     printAndSaveConfusionMatrix(Y_test, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
-    print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
+    # print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
     # model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
 
     # plot the training loss and accuracy
