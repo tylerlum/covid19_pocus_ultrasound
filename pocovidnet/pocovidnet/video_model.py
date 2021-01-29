@@ -12,29 +12,39 @@ from pocovidnet.model import get_model
 from pocovidnet.transformer import TransformerBlock
 from tensorflow import keras
 from .unet3d_genesis import unet_model_3d
-import os
 
 
+def get_model_remove_last_n_layers(input_shape, n_remove):
+    # Use pretrained cnn_model
+    cnn_model = get_model(input_size=input_shape, log_softmax=False,)
 
-''' No information baseline '''
+    # Remove the last n layers
+    for _ in range(n_remove):
+        cnn_model._layers.pop()
+
+    cnn_model = Model(cnn_model.input, cnn_model._layers[-1].output)
+    return cnn_model
+
+
 def get_baseline_model(input_shape, nb_classes):
+    ''' No information baseline '''
     # Scales input by 0 right off the bat, so has no opportunity to improve
-    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
+    cnn_model = get_model(input_size=input_shape[1:], log_softmax=False,)
 
-    # Run vgg model on each frame
+    # Run cnn model on each frame
     input_tensor = Input(shape=(input_shape))
     zero_input = Lambda(lambda y: y*0)(input_tensor)
 
     num_frames = input_shape[0]
     if num_frames == 1:
         frame = Lambda(lambda x: x[:, 0, :, :, :])(zero_input)
-        return Model(inputs=input_tensor, outputs=vgg_model(frame))
+        return Model(inputs=input_tensor, outputs=cnn_model(frame))
 
     else:
         frame_predictions = []
         for frame_i in range(num_frames):
             frame = Lambda(lambda x: x[:, frame_i, :, :, :])(zero_input)
-            frame_prediction = vgg_model(frame)
+            frame_prediction = cnn_model(frame)
             frame_predictions.append(frame_prediction)
 
         # Average activations
@@ -42,23 +52,23 @@ def get_baseline_model(input_shape, nb_classes):
         return Model(inputs=input_tensor, outputs=average)
 
 
-''' Simple '''
 def get_2D_CNN_average_model(input_shape, nb_classes):
-    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
+    ''' Simple '''
+    cnn_model = get_model(input_size=input_shape[1:], log_softmax=False,)
 
-    # Run vgg model on each frame
+    # Run cnn model on each frame
     input_tensor = Input(shape=(input_shape))
 
     num_frames = input_shape[0]
     if num_frames == 1:
         frame = Lambda(lambda x: x[:, 0, :, :, :])(input_tensor)
-        return Model(inputs=input_tensor, outputs=vgg_model(frame))
+        return Model(inputs=input_tensor, outputs=cnn_model(frame))
 
     else:
         frame_predictions = []
         for frame_i in range(num_frames):
             frame = Lambda(lambda x: x[:, frame_i, :, :, :])(input_tensor)
-            frame_prediction = vgg_model(frame)
+            frame_prediction = cnn_model(frame)
             frame_predictions.append(frame_prediction)
 
         # Average activations
@@ -66,8 +76,8 @@ def get_2D_CNN_average_model(input_shape, nb_classes):
         return Model(inputs=input_tensor, outputs=average)
 
 
-''' Recurrent '''
 def get_CNN_LSTM_model(input_shape, nb_classes):
+    ''' Recurrent '''
     return get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional=False)
 
 
@@ -100,17 +110,13 @@ def get_CNN_LSTM_integrated_bidirectional_model(input_shape, nb_classes):
 
 
 def get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional):
-    # Use pretrained vgg-model
-    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
-
+    # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2)
 
     # Run LSTM over CNN outputs
     input_tensor = Input(shape=(input_shape))
-    timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
+    timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
     number_of_hidden_units = 64
     if bidirectional:
@@ -131,17 +137,13 @@ def get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional):
 
 
 def get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional):
-    # Use pretrained vgg-model
-    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
-
+    # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2)
 
     # Run GRU over CNN outputs
     input_tensor = Input(shape=(input_shape))
-    timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
+    timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
     number_of_hidden_units = 64
     if bidirectional:
@@ -162,17 +164,13 @@ def get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional):
 
 
 def get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional):
-    # Use pretrained vgg-model
-    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
-
+    # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2)
 
     # Run RNN over CNN outputs
     input_tensor = Input(shape=(input_shape))
-    timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
+    timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
     number_of_hidden_units = 64
     if bidirectional:
@@ -193,23 +191,13 @@ def get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional):
 
 
 def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional):
-    # Use pretrained vgg-model
-    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
-
+    # Use pretrained cnn_model
     # Remove the layers after convolution
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8)
 
     # Run GRU over CNN outputs
     input_tensor = Input(shape=(input_shape))
-    timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
+    timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
     number_of_hidden_units = 32
     if bidirectional:
@@ -231,8 +219,8 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional)
     return model
 
 
-''' Convolutional '''
 def get_3D_CNN_model(input_shape, nb_classes):
+    ''' Convolutional '''
     # Define model
     model = Sequential()
     model.add(
@@ -310,17 +298,13 @@ def get_2plus1D_CNN_model(input_shape, nb_classes):
 
 
 def get_2D_then_1D_model(input_shape, nb_classes):
-    # Use pretrained vgg-model
-    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
-
+    # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2)
 
     # Run Conv1D over CNN outputs
     input_tensor = Input(shape=(input_shape))
-    timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
+    timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
     number_of_hidden_units = 64
     model = Conv1D(number_of_hidden_units, kernel_size=8, padding='same')(timeDistributed_layer)
@@ -335,8 +319,8 @@ def get_2D_then_1D_model(input_shape, nb_classes):
     return model
 
 
-''' Transformer '''
 def get_CNN_transformer_model(input_shape, nb_classes):
+    ''' Transformer '''
     return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=True)
 
 
@@ -345,17 +329,13 @@ def get_CNN_transformer_no_pos_model(input_shape, nb_classes):
 
 
 def get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding):
-    # Use pretrained vgg-model
-    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
-
+    # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
-    vgg_model._layers.pop()
-    vgg_model._layers.pop()
-    vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2)
 
     # Run Conv1D over CNN outputs
     input_tensor = Input(shape=(input_shape))
-    timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
+    timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
     # timeDistributed_layer.shape = (batch_size, timesteps, embed_dim)
     timesteps = timeDistributed_layer.shape[1]
@@ -376,8 +356,8 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encodin
     return model
 
 
-''' Model Genesis '''
 def get_model_genesis_model(input_shape, nb_classes):
+    ''' Model Genesis '''
     import os
     required_input_shape = 1, 64, 64, 32  # channels, width, height, depth
     if input_shape != required_input_shape:
@@ -396,36 +376,22 @@ def get_model_genesis_model(input_shape, nb_classes):
     return model
 
 
-''' Two stream optical flow '''
 def get_2stream_model(input_shape, nb_classes):
+    ''' Two stream optical flow '''
     n_frames, n_height, n_width, n_channels = input_shape
     if n_channels != 6:
         raise ValueError(f"ERROR: Expected n_channels = 6, but got {n_channels}")
 
-    vgg_model_1 = get_model(input_size=(n_height, n_width, 3), log_softmax=False,)
-    vgg_model_2 = get_model(input_size=(n_height, n_width, 3), log_softmax=False,)
-
+    # Use pretrained cnn_model
     # Remove everything after flattening
-    vgg_model_1._layers.pop()
-    vgg_model_1._layers.pop()
-    vgg_model_1._layers.pop()
-    vgg_model_1._layers.pop()
-    vgg_model_1._layers.pop()
-    vgg_model_1 = Model(vgg_model_1.input, vgg_model_1._layers[-1].output)
-
-    # Remove everything after flattening
-    vgg_model_2._layers.pop()
-    vgg_model_2._layers.pop()
-    vgg_model_2._layers.pop()
-    vgg_model_2._layers.pop()
-    vgg_model_2._layers.pop()
-    vgg_model_2 = Model(vgg_model_2.input, vgg_model_2._layers[-1].output)
+    cnn_model_1 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5)
+    cnn_model_2 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5)
 
     frame_input_tensor = Input(shape=(n_height, n_width, 6))
     color = Lambda(lambda x: x[:, :, :, :3])(frame_input_tensor)
     optical_flow = Lambda(lambda x: x[:, :, :, 3:])(frame_input_tensor)
-    color = vgg_model_1(color)
-    optical_flow = vgg_model_2(optical_flow)
+    color = cnn_model_1(color)
+    optical_flow = cnn_model_2(optical_flow)
     merged = Concatenate(axis=1)([color, optical_flow])
     merged = Dense(2048)(merged)
     merged = Dense(64)(merged)
@@ -434,22 +400,22 @@ def get_2stream_model(input_shape, nb_classes):
     merged = Dropout(0.5)(merged)
     merged = Dense(3, activation=tf.nn.softmax)(merged)
 
-    merged_vgg_model = Model(inputs=frame_input_tensor, outputs=merged)
-    print(merged_vgg_model.summary())
+    merged_cnn_model = Model(inputs=frame_input_tensor, outputs=merged)
+    print(merged_cnn_model.summary())
 
-    # Run merged vgg model on each frame
+    # Run merged cnn model on each frame
     multi_frame_input_tensor = Input(shape=(n_frames, n_height, n_width, 6))
 
     num_frames = input_shape[0]
     if num_frames == 1:
         frame = Lambda(lambda x: x[:, 0, :, :, :])(multi_frame_input_tensor)
-        return Model(inputs=multi_frame_input_tensor, outputs=merged_vgg_model(frame))
+        return Model(inputs=multi_frame_input_tensor, outputs=merged_cnn_model(frame))
 
     else:
         frame_predictions = []
         for frame_i in range(num_frames):
             frame = Lambda(lambda x: x[:, frame_i, :, :, :])(multi_frame_input_tensor)
-            frame_prediction = merged_vgg_model(frame)
+            frame_prediction = merged_cnn_model(frame)
             frame_predictions.append(frame_prediction)
 
         # Average activations
@@ -457,8 +423,8 @@ def get_2stream_model(input_shape, nb_classes):
         return Model(inputs=multi_frame_input_tensor, outputs=average)
 
 
-''' CVPR '''
 def get_gate_shift_model(input_shape, nb_classes):
+    ''' CVPR '''
     return None
 
 
