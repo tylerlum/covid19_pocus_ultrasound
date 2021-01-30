@@ -87,7 +87,13 @@ class Videoto3D:
                 return flow
 
             # Optical flow of video clips
-            dtvl1 = cv2.optflow.createOptFlow_DualTVL1()
+            flow_type = self.optical_flow_type.lower()
+            if flow_type == "farneback":
+                optical_flow_interface = cv2.optflow.createOptFlow_Farneback()
+            elif flow_type == "dtvl1":
+                optical_flow_interface = cv2.optflow.createOptFlow_DualTVL1()
+            else:
+                raise ValueError(f"Invalid flow_type = {flow_type}")
             optical_flows = []
             for num, images in enumerate(tqdm(data_3d)):
                 optical_flow_frames = []
@@ -99,14 +105,7 @@ class Videoto3D:
                         prev_grey = cv2.cvtColor(prev_grey, cv2.COLOR_BGR2GRAY)
                         curr_grey = cv2.cvtColor(curr_grey, cv2.COLOR_BGR2GRAY)
 
-                    flow_type = self.optical_flow_type.lower()
-                    if flow_type == "dtvl1":
-                        flow = dtvl1.calc(cv2.resize(prev_grey, (self.width // 2, self.height // 2)), cv2.resize(curr_grey, (self.width // 2, self.height // 2)), None)
-                        flow = cv2.resize(flow, (self.width, self.height))
-                    elif flow_type == "farneback":
-                        flow = cv2.calcOpticalFlowFarneback(prev_grey, curr_grey, None, 0.5, 3, 15, 3, 5, 1.2, 0)
-                    else:
-                        raise ValueError(f"Invalid flow_type = {flow_type}")
+                    flow = optical_flow_interface.calc(prev_grey, curr_grey, None)
 
                     bound = 15
                     flow_x = flow_to_img(flow[..., 0], bound)
