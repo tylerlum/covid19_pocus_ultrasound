@@ -2,6 +2,7 @@ from .model import (
     get_cam_model, get_model, get_mobilenet_v2_model, get_nasnet_model,
     get_dense_model
 )
+import cv2
 from .video_model import get_CNN_LSTM_model, get_3D_CNN_model, get_2plus1D_CNN_model, get_CNN_transformer_no_pos_model, get_CNN_transformer_model, get_2D_CNN_average_model, get_2D_then_1D_model, get_gate_shift_model, get_tea_model, get_CNN_GRU_model, get_CNN_LSTM_integrated_model, get_CNN_RNN_model, get_CNN_LSTM_bidirectional_model, get_CNN_GRU_bidirectional_model, get_CNN_RNN_bidirectional_model, get_CNN_LSTM_integrated_bidirectional_model, get_baseline_model, get_model_genesis_model, get_2stream_average_model, get_2stream_LSTM_integrated_bidirectional_model, get_2stream_transformer_model
 
 MODEL_FACTORY = {
@@ -50,4 +51,15 @@ VIDEO_MODEL_FACTORY = {
     # CVPR
     "gate_shift": get_gate_shift_model,
     "tea": get_tea_model,
+}
+
+OPTICAL_FLOW_ALGORITHM_FACTORY = {
+    "farneback": cv2.optflow.createOptFlow_Farneback,
+    "dtvl1": cv2.optflow.createOptFlow_DualTVL1,
+    "deepflow": cv2.optflow.createOptFlow_DeepFlow,
+    "denserlof": cv2.optflow.createOptFlow_DenseRLOF,
+    "pcaflow": cv2.optflow.createOptFlow_PCAFlow,
+    "simpleflow": cv2.optflow.createOptFlow_SimpleFlow,
+    "sparserlof": cv2.optflow.createOptFlow_SparseRLOF,
+    "sparsetodense": cv2.optflow.createOptFlow_SparseToDense,
 }

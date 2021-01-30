@@ -4,7 +4,7 @@ import pickle
 import os
 import math
 from tqdm import tqdm
-
+from pocovidnet import OPTICAL_FLOW_ALGORITHM_FACTORY
 
 class Videoto3D:
 
@@ -88,24 +88,7 @@ class Videoto3D:
 
             # Optical flow of video clips
             flow_type = self.optical_flow_type.lower()
-            if flow_type == "farneback":
-                optical_flow_interface = cv2.optflow.createOptFlow_Farneback()
-            elif flow_type == "dtvl1":
-                optical_flow_interface = cv2.optflow.createOptFlow_DualTVL1()
-            elif flow_type == "deepflow":
-                optical_flow_interface = cv2.optflow.createOptFlow_DeepFlow()
-            elif flow_type == "denserlof":
-                optical_flow_interface = cv2.optflow.createOptFlow_DenseRLOF()
-            elif flow_type == "pcaflow":
-                optical_flow_interface = cv2.optflow.createOptFlow_PCAFlow()
-            elif flow_type == "simpleflow":
-                optical_flow_interface = cv2.optflow.createOptFlow_SimpleFlow()
-            elif flow_type == "sparserlof":
-                optical_flow_interface = cv2.optflow.createOptFlow_SparseRLOF()
-            elif flow_type == "sparsetodense":
-                optical_flow_interface = cv2.optflow.createOptFlow_SparseToDense()
-            else:
-                raise ValueError(f"Invalid flow_type = {flow_type}")
+            optical_flow_interface = OPTICAL_FLOW_ALGORITHM_FACTORY[flow_type]()
             optical_flows = []
             for num, images in enumerate(tqdm(data_3d)):
                 optical_flow_frames = []

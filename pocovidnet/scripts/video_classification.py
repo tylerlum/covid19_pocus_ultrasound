@@ -22,7 +22,7 @@ from tensorflow.keras.losses import categorical_crossentropy
 
 from pocovidnet.video_augmentation import DataGenerator
 
-from pocovidnet import VIDEO_MODEL_FACTORY
+from pocovidnet import VIDEO_MODEL_FACTORY, OPTICAL_FLOW_ALGORITHM_FACTORY
 from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import WandbClassificationCallback, wandb_log_classification_table_and_plots
 from datetime import datetime
@@ -99,6 +99,8 @@ def main():
 
     args = parser.parse_args()
     print(f"args = {args}")
+    if args.optical_flow_type not in OPTICAL_FLOW_ALGORITHM_FACTORY:
+        args.optical_flow_type = None
 
     # Deterministic behavior
     set_random_seed(args.random_seed)
@@ -150,18 +152,18 @@ def main():
         if not args.save:
             train_save_path, validation_save_path, test_save_path = None, None, None
         X_train, train_labels_text, train_files = vid3d.video3d(
-                train_files[:3],
-                train_labels[:3],
+            train_files,
+            train_labels,
             save=train_save_path
         )
         X_validation, validation_labels_text, validation_files = vid3d.video3d(
-                validation_files[:3],
-                validation_labels[:3],
+            validation_files,
+            validation_labels,
             save=validation_save_path
         )
         X_test, test_labels_text, test_files = vid3d.video3d(
-                test_files[:3],
-                test_labels[:3],
+            test_files,
+            test_labels,
             save=test_save_path
         )
 
