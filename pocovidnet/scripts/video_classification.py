@@ -84,7 +84,7 @@ def main():
     parser.add_argument('--width', type=int, default=224)
     parser.add_argument('--height', type=int, default=224)
     parser.add_argument('--grayscale', type=str2bool, nargs='?', const=True, default=False)
-    parser.add_argument('--optical_flow', type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument('--optical_flow_type', type=str, default="")
     parser.add_argument('--architecture', type=str, default="2D_CNN_average")
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False)
@@ -98,6 +98,7 @@ def main():
     parser.add_argument('--reduce_learning_rate_patience', type=int, default=7)
 
     args = parser.parse_args()
+    print(f"args = {args}")
 
     # Deterministic behavior
     set_random_seed(args.random_seed)
@@ -145,22 +146,22 @@ def main():
         )
 
         # Read in videos and transform to 3D
-        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.frame_rate, grayscale=args.grayscale, optical_flow=args.optical_flow)
+        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
         if not args.save:
             train_save_path, validation_save_path, test_save_path = None, None, None
         X_train, train_labels_text, train_files = vid3d.video3d(
-            train_files,
-            train_labels,
+                train_files[:3],
+                train_labels[:3],
             save=train_save_path
         )
         X_validation, validation_labels_text, validation_files = vid3d.video3d(
-            validation_files,
-            validation_labels,
+                validation_files[:3],
+                validation_labels[:3],
             save=validation_save_path
         )
         X_test, test_labels_text, test_files = vid3d.video3d(
-            test_files,
-            test_labels,
+                test_files[:3],
+                test_labels[:3],
             save=test_save_path
         )
 
@@ -223,17 +224,17 @@ def main():
     print("===========================")
     print("Printing details about dataset")
     print("===========================")
-    print(X_train.shape, Y_train.shape)
-    print(X_validation.shape, Y_validation.shape)
-    print(X_test.shape, Y_test.shape)
+    print(f"X_train.shape, Y_train.shape = {X_train.shape}, {Y_train.shape}")
+    print(f"X_validation.shape, Y_validation.shape = {X_validation.shape}, {Y_validation.shape}")
+    print(f"X_test.shape, Y_test.shape = {X_test.shape}, {Y_test.shape}")
     nb_classes = len(np.unique(train_labels_text))
-    print(nb_classes, np.max(X_train))
+    print(f"nb_classes, np.max(X_train) = {nb_classes}, {np.max(X_train)}")
     train_uniques, train_counts = np.unique(train_labels_text, return_counts=True)
     validation_uniques, validation_counts = np.unique(validation_labels_text, return_counts=True)
     test_uniques, test_counts = np.unique(test_labels_text, return_counts=True)
-    print("unique in train", (train_uniques, train_counts))
-    print("unique in validation", (validation_uniques, validation_counts))
-    print("unique in test", (test_uniques, test_counts))
+    print("unique labels in train", (train_uniques, train_counts))
+    print("unique labels in validation", (validation_uniques, validation_counts))
+    print("unique labels in test", (test_uniques, test_counts))
 
     class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
     print(f"class_weight = {class_weight}")

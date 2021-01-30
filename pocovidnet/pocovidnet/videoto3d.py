@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 class Videoto3D:
 
-    def __init__(self, vid_path, width=224, height=224, depth=5, framerate=5, grayscale=False, optical_flow=False):
+    def __init__(self, vid_path, width=224, height=224, depth=5, framerate=5, grayscale=False, optical_flow_type=None):
         self.vid_path = vid_path
         self.width = width
         self.height = height
@@ -17,7 +17,7 @@ class Videoto3D:
         # self.max_vid = {"cov": 10, "pne": 10, "reg": 10}
         self.max_vid = {"cov": 100, "pne": 100, "reg": 100}
         self.grayscale = grayscale
-        self.optical_flow = optical_flow
+        self.optical_flow_type = optical_flow_type
 
     def save_data(self, data_3d, labels_3d, files_3d, save_path):
         print("SAVE DATA", data_3d.shape, np.max(data_3d))
@@ -70,7 +70,7 @@ class Videoto3D:
 
             cap.release()
 
-        if self.optical_flow:
+        if self.optical_flow_type is not None:
             def flow_to_img(raw_flow, bound):
                 '''
                 this function scale the input pixels to 0-255 with bi-bound
@@ -99,15 +99,14 @@ class Videoto3D:
                         prev_grey = cv2.cvtColor(prev_grey, cv2.COLOR_BGR2GRAY)
                         curr_grey = cv2.cvtColor(curr_grey, cv2.COLOR_BGR2GRAY)
 
-                    # flow_type = "dtvl1"
-                    flow_type = "farneback"
-                    if flow_type.lower() == "dtvl1":
-                        flow = dtvl1.calc(prev_grey, curr_grey, None)
-                    elif flow_type.lower() == "farneback":
+                    flow_type = self.optical_flow_type.lower()
+                    if flow_type == "dtvl1":
+                        flow = dtvl1.calc(cv2.resize(prev_grey, (self.width // 2, self.height // 2)), cv2.resize(curr_grey, (self.width // 2, self.height // 2)), None)
+                        flow = cv2.resize(flow, (self.width, self.height))
+                    elif flow_type == "farneback":
                         flow = cv2.calcOpticalFlowFarneback(prev_grey, curr_grey, None, 0.5, 3, 15, 3, 5, 1.2, 0)
                     else:
-                        # Default dtvl1
-                        flow = dtvl1.calc(prev_grey, curr_grey, None)
+                        raise ValueError(f"Invalid flow_type = {flow_type}")
 
                     bound = 15
                     flow_x = flow_to_img(flow[..., 0], bound)
@@ -127,7 +126,7 @@ class Videoto3D:
         data = np.asarray(data_3d) if not self.grayscale else np.expand_dims(np.asarray(data_3d), 4)
 
         # Bring together
-        if self.optical_flow:
+        if self.optical_flow_type is not None:
             data = np.concatenate([data, optical_flow_data], axis=4)
 
         data = data / 255.0
