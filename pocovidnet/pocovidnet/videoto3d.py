@@ -3,6 +3,7 @@ import cv2
 import pickle
 import os
 import math
+from tqdm import tqdm
 
 
 class Videoto3D:
@@ -88,7 +89,7 @@ class Videoto3D:
             # Optical flow of video clips
             dtvl1 = cv2.optflow.createOptFlow_DualTVL1()
             optical_flows = []
-            for num, images in enumerate(data_3d):
+            for num, images in enumerate(tqdm(data_3d)):
                 optical_flow_frames = []
                 for i in range(len(images)):
                     is_already_grey = (len(images[i].shape) == 2 or images[i].shape[2] == 1)
