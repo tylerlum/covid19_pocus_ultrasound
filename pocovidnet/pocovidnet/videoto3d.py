@@ -92,6 +92,18 @@ class Videoto3D:
                 optical_flow_interface = cv2.optflow.createOptFlow_Farneback()
             elif flow_type == "dtvl1":
                 optical_flow_interface = cv2.optflow.createOptFlow_DualTVL1()
+            elif flow_type == "deepflow":
+                optical_flow_interface = cv2.optflow.createOptFlow_DeepFlow()
+            elif flow_type == "denserlof":
+                optical_flow_interface = cv2.optflow.createOptFlow_DenseRLOF()
+            elif flow_type == "pcaflow":
+                optical_flow_interface = cv2.optflow.createOptFlow_PCAFlow()
+            elif flow_type == "simpleflow":
+                optical_flow_interface = cv2.optflow.createOptFlow_SimpleFlow()
+            elif flow_type == "sparserlof":
+                optical_flow_interface = cv2.optflow.createOptFlow_SparseRLOF()
+            elif flow_type == "sparsetodense":
+                optical_flow_interface = cv2.optflow.createOptFlow_SparseToDense()
             else:
                 raise ValueError(f"Invalid flow_type = {flow_type}")
             optical_flows = []
