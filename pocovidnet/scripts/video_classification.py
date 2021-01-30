@@ -61,7 +61,7 @@ def main():
     parser.add_argument(
         '--videos',
         type=str,
-        default='../data/pocus_videos/convex',
+        default='../data/pocus_videos_Jan_30_2021/convex',
         help='directory where videos are stored'
     )
     parser.add_argument('--load', type=str2bool, nargs='?', const=True, default=False)
