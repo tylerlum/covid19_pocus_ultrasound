@@ -353,10 +353,13 @@ def main():
     validationTrueIdxs = np.argmax(Y_validation, axis=1)
     testTrueIdxs = np.argmax(Y_test, axis=1)
 
+    classes_with_validation = [f"{c} Validation" for c in lb.classes_]
     wandb.sklearn.plot_classifier(model, X_train, X_validation, trainTrueIdxs, validationTrueIdxs, validationPredIdxs,
-                                  rawValidationPredIdxs, lb.classes_, model_name=f"{args.architecture} Validation")
-    wandb.sklearn.plot_classifier(model, X_train, X_test, trainTrueIdxs, testTrueIdxs, testPredIdxs,
-                                  rawTestPredIdxs, lb.classes_, model_name=f"{args.architecture} Test")
+                                  rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
+    classes_with_test = [f"{c} Test" for c in lb.classes_]
+    wandb.log({'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_text, classes_with_text,
+                                                            matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
+                                                            show_text=True)})
 
     # compute the confusion matrix and and use it to derive the raw
     # accuracy, sensitivity, and specificity

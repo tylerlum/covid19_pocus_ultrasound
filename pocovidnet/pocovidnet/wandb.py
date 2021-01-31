@@ -6,6 +6,7 @@ from wandb.keras import WandbCallback
 from sklearn.metrics import confusion_matrix
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
+import copy
 
 
 class ConfusionMatrixEachEpochCallback(tf.keras.callbacks.Callback):
@@ -18,9 +19,10 @@ class ConfusionMatrixEachEpochCallback(tf.keras.callbacks.Callback):
     def on_epoch_end(self, epoch, logs={}):
         predIdxs = np.argmax(self.model.predict(self.X_validation), axis=1)
         trueIdxs = np.argmax(self.Y_validation, axis=1)
+        classes_with_epoch = [f"{c} E-{epoch}" for c in self.class_labels]
         cm = confusion_matrix(trueIdxs, predIdxs)
         wandb.log({f'Confusion Matrix. Epoch {epoch}':
-                   wandb.plots.HeatMap(self.class_labels, self.class_labels, matrix_values=cm, show_text=True)})
+                   wandb.plots.HeatMap(classes_with_epoch, classes_with_epoch, matrix_values=cm, show_text=True)})
 
 
 class WandbClassificationCallback(WandbCallback):
