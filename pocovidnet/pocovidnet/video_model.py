@@ -79,35 +79,35 @@ def get_2D_CNN_average_model(input_shape, nb_classes, pretrained_cnn):
 
 def get_CNN_LSTM_model(input_shape, nb_classes, pretrained_cnn):
     ''' Recurrent '''
-    return get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional=False)
+    return get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional=False, pretrained_cnn=pretrained_cnn)
 
 
 def get_CNN_GRU_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional=False)
+    return get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional=False, pretrained_cnn=pretrained_cnn)
 
 
 def get_CNN_RNN_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional=False)
+    return get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional=False, pretrained_cnn=pretrained_cnn)
 
 
 def get_CNN_LSTM_integrated_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional=False)
+    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional=False, pretrained_cnn=pretrained_cnn)
 
 
 def get_CNN_LSTM_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional=True)
+    return get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional=True, pretrained_cnn=pretrained_cnn)
 
 
 def get_CNN_GRU_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional=True)
+    return get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional=True, pretrained_cnn=pretrained_cnn)
 
 
 def get_CNN_RNN_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional=True)
+    return get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional=True, pretrained_cnn=pretrained_cnn)
 
 
 def get_CNN_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional=True)
+    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional=True, pretrained_cnn=pretrained_cnn)
 
 
 def get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional, pretrained_cnn):
@@ -322,11 +322,11 @@ def get_2D_then_1D_model(input_shape, nb_classes, pretrained_cnn):
 
 def get_CNN_transformer_model(input_shape, nb_classes, pretrained_cnn):
     ''' Transformer '''
-    return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=True)
+    return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=True, pretrained_cnn=pretrained_cnn)
 
 
 def get_CNN_transformer_no_pos_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=False)
+    return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=False, pretrained_cnn=pretrained_cnn)
 
 
 def get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding, pretrained_cnn):
