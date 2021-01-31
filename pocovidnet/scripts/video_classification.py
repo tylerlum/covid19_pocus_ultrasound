@@ -24,7 +24,7 @@ from pocovidnet.video_augmentation import DataGenerator
 
 from pocovidnet import VIDEO_MODEL_FACTORY, OPTICAL_FLOW_ALGORITHM_FACTORY
 from pocovidnet.videoto3d import Videoto3D
-from pocovidnet.wandb import WandbClassificationCallback, wandb_log_classification_table_and_plots
+from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, WandbClassificationCallback, wandb_log_classification_table_and_plots
 from datetime import datetime
 from datetime import date
 
@@ -75,6 +75,12 @@ def main():
 
     # Random seed
     parser.add_argument('--random_seed', type=int, default=1233)
+
+    # Save confusion matrix for each epoch
+    parser.add_argument('--confusion_matrix_each_epoch', type=str2bool, nargs='?', const=True, default=False)
+
+    # Save deep learning model
+    parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False)
 
     # Hyperparameters
     parser.add_argument('--batch_size', type=int, default=8)
@@ -264,26 +270,23 @@ def main():
         optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
     )
 
-    # Define callbacks
-    reduce_learning_rate_loss = ReduceLROnPlateau(
-        monitor=args.reduce_learning_rate_monitor,
-        factor=args.reduce_learning_rate_factor,
-        patience=args.reduce_learning_rate_patience,
-        mode=args.reduce_learning_rate_mode,
-        verbose=1,
-        epsilon=1e-4,
-    )
-
     wandb.init(entity='tylerlum', project=args.wandb_project)
     wandb.config.update(args)
     wandb.config.final_output_dir = FINAL_OUTPUT_DIR
 
-    wandb_callback = WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_),
-                                                 validation_data=(X_validation, Y_validation), labels=lb.classes_)
-
-    callbacks = [wandb_callback]
+    callbacks = []
     if args.reduce_learning_rate:
+        reduce_learning_rate_loss = ReduceLROnPlateau(
+            monitor=args.reduce_learning_rate_monitor,
+            factor=args.reduce_learning_rate_factor,
+            patience=args.reduce_learning_rate_patience,
+            mode=args.reduce_learning_rate_mode,
+            verbose=1,
+            epsilon=1e-4,
+        )
         callbacks.append(reduce_learning_rate_loss)
+    if args.confusion_matrix_each_epoch:
+        callbacks.append(ConfusionMatrixEachEpochCallback(X_validation, Y_validation, lb.classes_))
 
     print()
     print("===========================")
@@ -351,7 +354,9 @@ def main():
     testTrueIdxs = np.argmax(Y_test, axis=1)
 
     wandb.sklearn.plot_classifier(model, X_train, X_validation, trainTrueIdxs, validationTrueIdxs, validationPredIdxs,
-                                  rawValidationPredIdxs, lb.classes_, model_name=args.architecture)
+                                  rawValidationPredIdxs, lb.classes_, model_name=f"{args.architecture} Validation")
+    wandb.sklearn.plot_classifier(model, X_train, X_test, trainTrueIdxs, testTrueIdxs, testPredIdxs,
+                                  rawTestPredIdxs, lb.classes_, model_name=f"{args.architecture} Test")
 
     # compute the confusion matrix and and use it to derive the raw
     # accuracy, sensitivity, and specificity
@@ -390,8 +395,9 @@ def main():
     printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
     printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
-    # print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
-    # model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
+    if args.save_model:
+        print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
+        model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
 
     def calculate_patient_wise(files, x, y, model):
         # Calculate mean of video clips to predict patient-wise classification
