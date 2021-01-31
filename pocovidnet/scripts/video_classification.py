@@ -15,7 +15,7 @@ from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
 from tensorflow.keras.callbacks import (
-    EarlyStopping, ReduceLROnPlateau
+    ReduceLROnPlateau
 )
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import categorical_crossentropy
@@ -44,7 +44,7 @@ def set_random_seed(seed_value):
 
 def str2bool(v):
     if isinstance(v, bool):
-       return v
+        return v
     if v.lower() in ('yes', 'true', 't', 'y', '1'):
         return True
     elif v.lower() in ('no', 'false', 'f', 'n', '0'):
@@ -148,7 +148,8 @@ def main():
         )
 
         # Read in videos and transform to 3D
-        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth, framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
+        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
+                          framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
         if not args.save:
             train_save_path, validation_save_path, test_save_path = None, None, None
         X_train, train_labels_text, train_files = vid3d.video3d(
@@ -193,33 +194,43 @@ def main():
 
     # VISUALIZE
     if args.visualize:
+        num_show = 8
+        print(f"Visualizing {num_show} video clips")
         for i in range(X_train.shape[0]):
-            example = X_train[i]
-            label = Y_train[i]
-            print(f"Label = {label}")
-            for j in range(example.shape[0]):
-                print(f"Frame {j}")
-                frame = example[j][:, :, :3]
-                print(f"frame.shape {frame.shape}")
-                print(f"np.max(frame) = {np.max(frame)}")
-                print(f"np.min(frame) = {np.min(frame)}")
-                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
-                if example[j].shape[2] == 6:
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}-opt.jpg"), 255*example[j][:,:,3:])
-            if i > 8:
+            # End early
+            if i >= num_show:
                 break
 
+            video_clip = X_train[i]
+            label = Y_train[i]
+            for j in range(video_clip.shape[0]):
+                frame = video_clip[j]
+                num_channels = frame.shape[2]
+                if num_channels == 1 or num_channels == 3:
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
+                elif num_channels == 6:
+                    rgb_frame = frame[:, :, :3]
+                    optical_flow_frame = frame[:, :, 3:]
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"),
+                                255*rgb_frame)
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
+                                255*optical_flow_frame)
+
+        print("Visualizing 1 batch of augmented video clips")
         batchX, batchY = generator[0]
-        i = 0
-        for frames, label in zip(batchX, batchY):
-            j = 0
-            for frame in frames:
-                myframe = frame[:, :, :3]
-                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augmented-Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*myframe)
-                if frame.shape[2] == 6:
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augmented-Example-{i}_Frame-{j}_Label-{label}-opt.jpg"), 255*frame[:,:,3:])
-                j += 1
-            i += 1
+        for i, (video_clip, label) in enumerate(zip(batchX, batchY)):
+            for j, frame in enumerate(video_clip):
+                num_channels = frame.shape[2]
+                if num_channels == 1 or num_channels == 3:
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
+                                255*frame)
+                elif num_channels == 6:
+                    rgb_frame = frame[:, :, :3]
+                    optical_flow_frame = frame[:, :, 3:]
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
+                                255*rgb_frame)
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
+                                255*optical_flow_frame)
 
     # Verbose
     print()
@@ -268,7 +279,8 @@ def main():
     wandb.config.update(args)
     wandb.config.final_output_dir = FINAL_OUTPUT_DIR
 
-    wandb_callback = WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_), validation_data=(X_validation, Y_validation), labels=lb.classes_)
+    wandb_callback = WandbClassificationCallback(log_confusion_matrix=True, confusion_classes=len(lb.classes_),
+                                                 validation_data=(X_validation, Y_validation), labels=lb.classes_)
 
     callbacks = [wandb_callback]
     if args.reduce_learning_rate:
@@ -307,7 +319,7 @@ def main():
     print("===========================")
     print("Evaluating network...")
     print("===========================")
-    # Can cause out of memory issue when using larger framerate
+    # Running inference on training set can cause out of memory issue when using larger framerate (OK on DGX)
     trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
     print('train loss:', trainLoss)
     print('train accuracy:', trainAcc)
@@ -318,48 +330,53 @@ def main():
     print('Test loss:', testLoss)
     print('Test accuracy:', testAcc)
 
-    trainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
-    validationPredIdxs = model.predict(X_validation, batch_size=args.batch_size)
-    testPredIdxs = model.predict(X_test, batch_size=args.batch_size)
+    rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
+    rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size)
+    rawTestPredIdxs = model.predict(X_test, batch_size=args.batch_size)
 
-    def savePredictionsToCSV(predIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
-        df = pd.DataFrame(predIdxs)
+    def savePredictionsToCSV(rawPredIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
+        df = pd.DataFrame(rawPredIdxs)
         df.to_csv(os.path.join(directory, csvFilename))
-    savePredictionsToCSV(validationPredIdxs, "validation_preds_last_epoch.csv")
-    savePredictionsToCSV(testPredIdxs, "test_preds_last_epoch.csv")
+    savePredictionsToCSV(rawTrainPredIdxs, "train_preds_last_epoch.csv")
+    savePredictionsToCSV(rawValidationPredIdxs, "validation_preds_last_epoch.csv")
+    savePredictionsToCSV(rawTestPredIdxs, "test_preds_last_epoch.csv")
 
     # for each image in the testing set we need to find the index of the
     # label with corresponding largest predicted probability
-    trainPredIdxs = np.argmax(trainPredIdxs, axis=1)
-    validationPredIdxs = np.argmax(validationPredIdxs, axis=1)
-    testPredIdxs = np.argmax(testPredIdxs, axis=1)
+    trainPredIdxs = np.argmax(rawTrainPredIdxs, axis=1)
+    validationPredIdxs = np.argmax(rawValidationPredIdxs, axis=1)
+    testPredIdxs = np.argmax(rawTestPredIdxs, axis=1)
+
+    trainTrueIdxs = np.argmax(Y_train, axis=1)
+    validationTrueIdxs = np.argmax(Y_validation, axis=1)
+    testTrueIdxs = np.argmax(Y_test, axis=1)
 
     # compute the confusion matrix and and use it to derive the raw
     # accuracy, sensitivity, and specificity
-    def printAndSaveClassificationReport(y, predIdxs, classes, reportFilename, directory=FINAL_OUTPUT_DIR):
+    def printAndSaveClassificationReport(trueIdxs, predIdxs, classes, reportFilename, directory=FINAL_OUTPUT_DIR):
         print(f'classification report sklearn for {reportFilename}')
         print(
             classification_report(
-                y.argmax(axis=1), predIdxs, target_names=classes
+                trueIdxs, predIdxs, target_names=classes
             )
         )
 
         report = classification_report(
-            y.argmax(axis=1), predIdxs, target_names=classes, output_dict=True
+            trueIdxs, predIdxs, target_names=classes, output_dict=True
         )
         reportDf = pd.DataFrame(report).transpose()
         reportDf.to_csv(os.path.join(directory, reportFilename))
 
         wandb_log_classification_table_and_plots(report, reportFilename)
 
-    printAndSaveClassificationReport(Y_train, trainPredIdxs, lb.classes_, "trainReport.csv")
-    printAndSaveClassificationReport(Y_validation, validationPredIdxs, lb.classes_, "validationReport.csv")
-    printAndSaveClassificationReport(Y_test, testPredIdxs, lb.classes_, "testReport.csv")
+    printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainReport.csv")
+    printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationReport.csv")
+    printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, "testReport.csv")
 
-    def printAndSaveConfusionMatrix(y, predIdxs, classes, confusionMatrixFilename, directory=FINAL_OUTPUT_DIR):
+    def printAndSaveConfusionMatrix(trueIdxs, predIdxs, classes, confusionMatrixFilename, directory=FINAL_OUTPUT_DIR):
         print(f'confusion matrix for {confusionMatrixFilename}')
 
-        cm = confusion_matrix(y.argmax(axis=1), predIdxs)
+        cm = confusion_matrix(trueIdxs, predIdxs)
         # show the confusion matrix, accuracy, sensitivity, and specificity
         print(cm)
 
@@ -367,34 +384,22 @@ def main():
         cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
         cmDisplay.plot()
         plt.savefig(os.path.join(directory, confusionMatrixFilename))
-    printAndSaveConfusionMatrix(Y_train, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
-    printAndSaveConfusionMatrix(Y_validation, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
-    printAndSaveConfusionMatrix(Y_test, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
+    printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
+    printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
+    printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
     # print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
     # model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
 
-    # plot the training loss and accuracy
-    plt.style.use('ggplot')
-    plt.figure()
-    plt.plot(np.arange(0, len(H.history['loss'])), H.history['loss'], label='train_loss')
-    plt.plot(np.arange(0, len(H.history['val_loss'])), H.history['val_loss'], label='val_loss')
-    plt.plot(np.arange(0, len(H.history['accuracy'])), H.history['accuracy'], label='train_acc')
-    plt.plot(np.arange(0, len(H.history['val_accuracy'])), H.history['val_accuracy'], label='val_acc')
-    plt.title('Training Loss and Accuracy on COVID-19 Dataset')
-    plt.xlabel('Epoch #')
-    plt.ylabel('Loss/Accuracy')
-    plt.legend(loc='lower left')
-    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, 'loss.png'))
-
     def calculate_patient_wise(files, x, y, model):
+        # Calculate mean of video clips to predict patient-wise classification
         gt = []
         preds = []
         files = np.array(files)
         for video in np.unique(files):
             current_data = x[files == video]
             current_labels = y[files == video]
-            true_label = current_labels[0]
+            true_label = np.argmax(current_labels[0])
             current_predictions = model.predict(current_data)
             prediction = np.argmax(np.mean(current_predictions, axis=0))
             gt.append(true_label)
@@ -415,36 +420,19 @@ def main():
     printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, "validationConfusionMatrixPatients.png")
     printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, "testConfusionMatrixPatients.png")
 
-    # del X_train, X_validation, Y_train, Y_validation
-    def run_on_all_frames():
-        for test_file, test_label in zip(test_files, test_labels):
-            cap = cv2.VideoCapture(os.path.join(args.videos, test_file))
+    # plot the training loss and accuracy
+    plt.style.use('ggplot')
+    plt.figure()
+    plt.plot(np.arange(0, len(H.history['loss'])), H.history['loss'], label='train_loss')
+    plt.plot(np.arange(0, len(H.history['val_loss'])), H.history['val_loss'], label='val_loss')
+    plt.plot(np.arange(0, len(H.history['accuracy'])), H.history['accuracy'], label='train_acc')
+    plt.plot(np.arange(0, len(H.history['val_accuracy'])), H.history['val_accuracy'], label='val_acc')
+    plt.title('Training Loss and Accuracy on COVID-19 Dataset')
+    plt.xlabel('Epoch #')
+    plt.ylabel('Loss/Accuracy')
+    plt.legend(loc='lower left')
+    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, 'loss.png'))
 
-            current_data = []
-            video_num_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-            while cap.isOpened():
-                frame_id = cap.get(cv2.CAP_PROP_POS_FRAMES)
-                ret, frame = cap.read()
-                if (ret != True):
-                    break
-
-                image = frame if not args.grayscale else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                image = cv2.resize(image, (args.width, args.height))
-
-                current_data.append(image)
-
-                # Store video clip
-                reached_last_frame = (frame_id == video_num_frames - 1)
-                if reached_last_frame:
-                    model_input = np.asarray(current_data) / 255
-                    print(model_input.shape)
-                    print(test_label)
-                    sdfd = model.predict(np.array([model_input]))
-                    print(sdfd)
-                    print("----------")
-                    current_data = []
-
-            cap.release()
 
 if __name__ == '__main__':
     main()
