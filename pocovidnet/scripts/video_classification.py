@@ -232,7 +232,6 @@ def main():
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
                                 255*optical_flow_frame)
 
-    # Verbose
     print()
     print("===========================")
     print("Printing details about dataset")
@@ -350,6 +349,8 @@ def main():
     trainTrueIdxs = np.argmax(Y_train, axis=1)
     validationTrueIdxs = np.argmax(Y_validation, axis=1)
     testTrueIdxs = np.argmax(Y_test, axis=1)
+
+    wandb.sklearn.plot_classifier(model, X_train, X_validation, trainTrueIdxs, validationTrueIdxs, validationPredIdxs, rawValidationPredIdxs, lb.classes_, model_name=args.architecture)
 
     # compute the confusion matrix and and use it to derive the raw
     # accuracy, sensitivity, and specificity
