@@ -24,7 +24,7 @@ from pocovidnet.video_augmentation import DataGenerator
 
 from pocovidnet import VIDEO_MODEL_FACTORY, OPTICAL_FLOW_ALGORITHM_FACTORY
 from pocovidnet.videoto3d import Videoto3D
-from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, WandbClassificationCallback, wandb_log_classification_table_and_plots
+from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classification_table_and_plots
 from datetime import datetime
 from datetime import date
 
@@ -357,7 +357,7 @@ def main():
     wandb.sklearn.plot_classifier(model, X_train, X_validation, trainTrueIdxs, validationTrueIdxs, validationPredIdxs,
                                   rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
     classes_with_test = [f"{c} Test" for c in lb.classes_]
-    wandb.log({'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_text, classes_with_text,
+    wandb.log({'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
                                                             matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
                                                             show_text=True)})
 
