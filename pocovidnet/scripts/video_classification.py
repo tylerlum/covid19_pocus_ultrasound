@@ -64,17 +64,17 @@ def main():
         default='../data/pocus_videos_Jan_30_2021/convex',
         help='directory where videos are stored'
     )
-    parser.add_argument('--load', type=str2bool, nargs='?', const=True, default=False)
 
     # Options for viewing
     parser.add_argument('--visualize', type=str2bool, nargs='?', const=True, default=False)
-    parser.add_argument('--save', type=str2bool, nargs='?', const=True, default=False)
 
     # Wandb setup
     parser.add_argument('--wandb_project', type=str, default="covid-video-debugging")
 
     # Random seed
     parser.add_argument('--random_seed', type=int, default=1233)
+
+    # K fold cross validation
     parser.add_argument('--test_fold', type=int, default=0)
     parser.add_argument('--num_folds', type=int, default=5)
 
@@ -139,80 +139,66 @@ def main():
     SAVE_DIR = '../data/video_input_data/'
     if not os.path.isdir(SAVE_DIR):
         os.makedirs(SAVE_DIR)
-    train_save_path, validation_save_path, test_save_path = (os.path.join(SAVE_DIR, "conv3d_train.dat"),
-                                                             os.path.join(SAVE_DIR, "conv3d_validation.dat"),
-                                                             os.path.join(SAVE_DIR, "conv3d_test.dat"))
 
-    # Load saved data or read in videos
-    if args.load:
-        with open(test_save_path, 'rb') as infile:
-            X_test, test_labels_text, test_files = pickle.load(infile)
-        with open(validation_save_path, 'rb') as infile:
-            X_validation, validation_labels_text, validation_files = pickle.load(infile)
-        with open(train_save_path, 'rb') as infile:
-            X_train, train_labels_text, train_files = pickle.load(infile)
-    else:
-        # Get videos and labels
-        class_short = ["cov", "pne", "reg"]
-        vid_files = [
-            v for v in os.listdir(args.videos) if v[:3].lower() in class_short
-        ]
-        labels = [vid[:3].lower() for vid in vid_files]
+    # Get videos and labels
+    class_short = ["cov", "pne", "reg"]
+    vid_files = [
+        v for v in os.listdir(args.videos) if v[:3].lower() in class_short
+    ]
+    labels = [vid[:3].lower() for vid in vid_files]
 
-        # Setup folds
-        args.validation_fold = (args.test_fold + 1) % args.num_folds  # Select validation fold
-        print()
-        print("===========================")
-        print(f"Performing k-fold splitting with validation fold {args.validation_fold} and test fold {args.test_fold}")
-        print("===========================")
-        k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+    # Setup folds
+    args.validation_fold = (args.test_fold + 1) % args.num_folds  # Select validation fold
+    print()
+    print("===========================")
+    print(f"Performing k-fold splitting with validation fold {args.validation_fold} and test fold {args.test_fold}")
+    print("===========================")
+    k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
-        def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
-            for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
-                if i == args.validation_fold:
-                    validation_indices = test_index
-                elif i == args.test_fold:
-                    test_indices = test_index
-            train_indices = [i for i in range(len(vid_files))
-                             if i not in validation_indices and i not in test_indices]  # Need to use only remaining
+    def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
+        for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
+            if i == args.validation_fold:
+                validation_indices = test_index
+            elif i == args.test_fold:
+                test_indices = test_index
+        train_indices = [i for i in range(len(vid_files))
+                         if i not in validation_indices and i not in test_indices]  # Need to use only remaining
 
-            train_files = [vid_files[i] for i in train_indices]
-            train_labels = [labels[i] for i in train_indices]
-            validation_files = [vid_files[i] for i in validation_indices]
-            validation_labels = [labels[i] for i in validation_indices]
-            test_files = [vid_files[i] for i in test_indices]
-            test_labels = [labels[i] for i in test_indices]
-            return train_files, train_labels, validation_files, validation_labels, test_files, test_labels
+        train_files = [vid_files[i] for i in train_indices]
+        train_labels = [labels[i] for i in train_indices]
+        validation_files = [vid_files[i] for i in validation_indices]
+        validation_labels = [labels[i] for i in validation_indices]
+        test_files = [vid_files[i] for i in test_indices]
+        test_labels = [labels[i] for i in test_indices]
+        return train_files, train_labels, validation_files, validation_labels, test_files, test_labels
 
-        train_files, train_labels, validation_files, validation_labels, test_files, test_labels = (
-                get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
-                                                vid_files, labels)
-                )
+    train_files, train_labels, validation_files, validation_labels, test_files, test_labels = (
+            get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
+                                            vid_files, labels)
+            )
 
-        # Read in videos and transform to 3D
-        print()
-        print("===========================")
-        print("Reading in videos")
-        print("===========================")
-        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
-                          framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
-        if not args.save:
-            train_save_path, validation_save_path, test_save_path = None, None, None
-        X_train, train_labels_text, train_files = vid3d.video3d(
-            train_files,
-            train_labels,
-            save=train_save_path
-        )
-        X_validation, validation_labels_text, validation_files = vid3d.video3d(
-            validation_files,
-            validation_labels,
-            save=validation_save_path
-        )
-        X_test, test_labels_text, test_files = vid3d.video3d(
-            test_files,
-            test_labels,
-            save=test_save_path
-        )
+    # Read in videos and transform to 3D
+    print()
+    print("===========================")
+    print("Reading in videos")
+    print("===========================")
+    vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
+                      framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
+    X_train, train_labels_text, train_files = vid3d.video3d(
+        train_files,
+        train_labels,
+        save=None
+    )
+    X_validation, validation_labels_text, validation_files = vid3d.video3d(
+        validation_files,
+        validation_labels,
+        save=None
+    )
+    X_test, test_labels_text, test_files = vid3d.video3d(
+        test_files,
+        test_labels,
+        save=None
+    )
 
     # One-hot encoding
     lb = LabelBinarizer()
