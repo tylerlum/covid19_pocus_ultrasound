@@ -156,6 +156,7 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
+    model = TimeDistributed(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))(model)
 
     time_length = model.shape[1]
     model = Reshape((time_length, -1))(model)
