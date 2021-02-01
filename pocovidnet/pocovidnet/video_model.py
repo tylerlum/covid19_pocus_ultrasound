@@ -1,16 +1,14 @@
 import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import (
-    Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, Conv2D, MaxPooling2D, Input, GlobalAveragePooling2D, Lambda, GlobalAveragePooling3D, Average, AveragePooling2D, ReLU, ZeroPadding3D, Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, LayerNormalization, Layer, GlobalAveragePooling1D, Concatenate
+    Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, MaxPooling2D, Input,
+    Lambda, GlobalAveragePooling3D, Average, ReLU, ZeroPadding3D,
+    Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, GlobalAveragePooling1D, Concatenate
 )
-from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile
 from tensorflow.keras.layers import BatchNormalization
-from tensorflow.keras.losses import categorical_crossentropy
-from tensorflow.keras.optimizers import Adam
 from .utils import fix_layers
 from pocovidnet.model import get_model
 from pocovidnet.transformer import TransformerBlock
-from tensorflow import keras
 from .unet3d_genesis import unet_model_3d
 
 
@@ -114,7 +112,7 @@ def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class,
     # Use pretrained cnn_model
     # Remove all layers until flatten
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, pretrained_cnn=pretrained_cnn)
-    tf.keras.utils.plot_model(cnn_model, f"cnn_model_before_recurrent.png", show_shapes=True)
+    tf.keras.utils.plot_model(cnn_model, "cnn_model_before_recurrent.png", show_shapes=True)
 
     # Run recurrent layer over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -126,7 +124,8 @@ def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class,
     for i in range(num_rnn_layers):
         # Return sequences on all but the last rnn layer
         return_sequences = (i != num_rnn_layers - 1)
-        rnn_layer = rnn_class(number_of_hidden_units, return_sequences=return_sequences, dropout=0.5, recurrent_dropout=0.5)
+        rnn_layer = rnn_class(number_of_hidden_units, return_sequences=return_sequences, dropout=0.5,
+                              recurrent_dropout=0.5)
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
@@ -142,7 +141,7 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
     # Use pretrained cnn_model
     # Remove the layers after convolution
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, pretrained_cnn=pretrained_cnn)
-    tf.keras.utils.plot_model(cnn_model, f"cnn_model_before_LSTM.png", show_shapes=True)
+    tf.keras.utils.plot_model(cnn_model, "cnn_model_before_LSTM.png", show_shapes=True)
 
     # Run LSTM over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -152,7 +151,8 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
     num_cnn_lstm_layers = 1
     model = timeDistributed_layer
     for i in range(num_cnn_lstm_layers):
-        rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
+        rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5,
+                               recurrent_dropout=0.5)
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
@@ -302,7 +302,8 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     num_blocks = 2
     model = timeDistributed_layer
     for _ in range(num_blocks):
-        transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=positional_encoding)
+        transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps,
+                                             positional_encoding=positional_encoding)
         model = transformer_block(model)
     model = GlobalAveragePooling1D()(model)
     model = Dense(64, activation='relu')(model)
@@ -399,7 +400,7 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
 
     merged_cnn_model = Model(inputs=frame_input_tensor, outputs=merged)
     print(merged_cnn_model.summary())
-    tf.keras.utils.plot_model(merged_cnn_model, f"2stream2.png", show_shapes=True)
+    tf.keras.utils.plot_model(merged_cnn_model, "2stream2.png", show_shapes=True)
 
     # Run LSTM over CNN outputs
     multi_frame_input_tensor = Input(shape=(n_frames, n_height, n_width, 6))
@@ -410,7 +411,8 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
     num_cnn_lstm_layers = 1
     model = timeDistributed_layer
     for i in range(num_cnn_lstm_layers):
-        rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
+        rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5,
+                               recurrent_dropout=0.5)
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
@@ -454,7 +456,7 @@ def get_2stream_transformer_model(input_shape, nb_classes, pretrained_cnn):
     merged = Concatenate(axis=1)([color, optical_flow])
     merged_cnn_model = Model(inputs=frame_input_tensor, outputs=merged)
     print(merged_cnn_model.summary())
-    tf.keras.utils.plot_model(merged_cnn_model, f"2stream3.png", show_shapes=True)
+    tf.keras.utils.plot_model(merged_cnn_model, "2stream3.png", show_shapes=True)
 
     # Run LSTM over CNN outputs
     multi_frame_input_tensor = Input(shape=(n_frames, n_height, n_width, 6))
@@ -468,7 +470,8 @@ def get_2stream_transformer_model(input_shape, nb_classes, pretrained_cnn):
     num_blocks = 2
     model = timeDistributed_layer
     for _ in range(num_blocks):
-        transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=True)
+        transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps,
+                                             positional_encoding=True)
         model = transformer_block(model)
     model = GlobalAveragePooling1D()(model)
     model = Dense(64, activation='relu')(model)
@@ -477,7 +480,6 @@ def get_2stream_transformer_model(input_shape, nb_classes, pretrained_cnn):
     model = Model(inputs=multi_frame_input_tensor, outputs=model)
 
     return model
-
 
 
 def get_gate_shift_model(input_shape, nb_classes, pretrained_cnn):
