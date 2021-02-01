@@ -1,4 +1,5 @@
 import wandb
+from wandb.keras import WandbCallback
 import argparse
 import os
 import random
@@ -137,8 +138,6 @@ def main():
         print("args.extra_dense given was -1, so replacing with []")
     else:
         extra_dense = [args.extra_dense]
-
-
 
     # Deterministic behavior
     set_random_seed(args.random_seed)
@@ -307,7 +306,8 @@ def main():
     class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
     print(f"class_weight = {class_weight}")
 
-    model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn, extra_dense, args.use_pooling)
+    model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn, extra_dense,
+                                                   args.use_pooling)
 
     tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
@@ -324,7 +324,7 @@ def main():
     wandb.config.update(args)
     wandb.config.final_output_dir = FINAL_OUTPUT_DIR
 
-    callbacks = []
+    callbacks = [WandbCallback()]
     if args.reduce_learning_rate:
         reduce_learning_rate_loss = ReduceLROnPlateau(
             monitor=args.reduce_learning_rate_monitor,
