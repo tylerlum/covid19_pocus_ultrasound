@@ -147,8 +147,8 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
     input_tensor = Input(shape=(input_shape))
     timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
-    number_of_hidden_units = 32
-    num_cnn_lstm_layers = 1
+    number_of_hidden_units = 16
+    num_cnn_lstm_layers = 2
     model = timeDistributed_layer
     for i in range(num_cnn_lstm_layers):
         rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
@@ -158,7 +158,7 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
 
     time_length = model.shape[1]
     model = Reshape((time_length, -1))(model)
-    num_rnn_layers = 1
+    num_rnn_layers = 2
     for i in range(num_rnn_layers):
         # Return sequences on all but the last rnn layer
         return_sequences = (i != num_rnn_layers - 1)
@@ -167,8 +167,8 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
 
-    model = Dense(2048, activation='relu')(model)
-    model = Dense(128, activation='relu')(model)
+    model = Dense(64, activation='relu')(model)
+    model = Dense(8, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
     model = Model(inputs=input_tensor, outputs=model)
