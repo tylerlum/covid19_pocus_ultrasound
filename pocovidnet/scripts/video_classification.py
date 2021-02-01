@@ -3,7 +3,6 @@ import argparse
 import os
 import random
 import imgaug
-import pickle
 import warnings
 
 import numpy as np
@@ -22,7 +21,7 @@ from tensorflow.keras.losses import categorical_crossentropy
 
 from pocovidnet.video_augmentation import DataGenerator
 
-from pocovidnet import VIDEO_MODEL_FACTORY, OPTICAL_FLOW_ALGORITHM_FACTORY
+from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classification_table_and_plots
 from datetime import datetime
@@ -213,14 +212,19 @@ def main():
         X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
         X_validation = np.transpose(X_validation, [0, 4, 2, 3, 1])
         X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
-        print(X_train.shape)
-        print(X_validation.shape)
-        print(X_test.shape)
 
         # Repeat frames since depth of model is 32
-        X_train = np.repeat(X_train[:,:,:,:,0], [6, 7, 7, 6, 6], axis=-1)
-        X_validation = np.repeat(X_validation[:,:,:,:,0], [6, 7, 7, 6, 6], axis=-1)
-        X_test = np.repeat(X_test[:,:,:,:,0], [6, 7, 7, 6, 6], axis=-1)
+        required_depth = 32
+        num_repeats = required_depth // args.depth
+        extra = required_depth - args.depth * num_repeats
+        repeat_list = [num_repeats for _ in range(args.depth)]
+        for i in range(extra):
+            repeat_list[i] += 1
+        print(f"With depth = {args.depth} and required_depth = {required_depth}, will repeat frames like so " +
+              f"{repeat_list} so the new depth is {sum(repeat_list)}")
+        X_train = np.repeat(X_train, repeat_list, axis=-1)
+        X_validation = np.repeat(X_validation, repeat_list, axis=-1)
+        X_test = np.repeat(X_test, repeat_list, axis=-1)
 
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
