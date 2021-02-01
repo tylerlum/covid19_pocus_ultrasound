@@ -130,10 +130,6 @@ def main():
                                                              os.path.join(SAVE_DIR, "conv3d_test.dat"))
 
     # Load saved data or read in videos
-    print()
-    print("===========================")
-    print("Converting videos to 4D video clips")
-    print("===========================")
     if args.load:
         with open(test_save_path, 'rb') as infile:
             X_test, test_labels_text, test_files = pickle.load(infile)
@@ -155,9 +151,9 @@ def main():
         print("===========================")
         print(f"Performing k-fold splitting with validation fold {args.validation_fold} and test fold {args.test_fold}")
         print("===========================")
-        k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=False)
+        k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
-        def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation):
+        def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
             for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
                 if i == args.validation_fold:
                     validation_indices = test_index
@@ -175,7 +171,8 @@ def main():
             return train_files, train_labels, validation_files, validation_labels, test_files, test_labels
 
         train_files, train_labels, validation_files, validation_labels, test_files, test_labels = (
-                get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation)
+                get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
+                                                vid_files, labels)
                 )
 
         # Read in videos and transform to 3D
@@ -225,7 +222,7 @@ def main():
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
 
-    generator = DataGenerator(X_train, Y_train, args.batch_size, input_shape, lb.classes_, shuffle=False)
+    generator = DataGenerator(X_train, Y_train, args.batch_size, input_shape, lb.classes_, shuffle=True)
 
     # VISUALIZE
     if args.visualize:
@@ -330,7 +327,7 @@ def main():
             epochs=args.epochs,
             batch_size=args.batch_size,
             verbose=1,
-            shuffle=False,
+            shuffle=True,
             class_weight=class_weight,
             callbacks=callbacks,
         )
@@ -341,7 +338,7 @@ def main():
             epochs=args.epochs,
             batch_size=args.batch_size,
             verbose=1,
-            shuffle=False,
+            shuffle=True,
             class_weight=class_weight,
             callbacks=callbacks,
         )
