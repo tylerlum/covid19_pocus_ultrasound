@@ -99,7 +99,7 @@ def main():
     parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False, help='video augmentation')
     parser.add_argument('--optimizer', type=str, default="adam", help='optimizer for training')
     parser.add_argument('--pretrained_cnn', type=str, default="vgg16", help='pretrained cnn architecture')
-    parser.add_argument('--extra_dense', type=int, nargs='+', help='extra dense layers list of units')
+    parser.add_argument('--extra_dense', type=int, nargs='*', help='extra dense layers list of units')
     parser.add_argument('--use_pooling', type=str2bool, nargs='?', const=True, default=False, help='LSTM pooling')
 
     parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False,
@@ -299,7 +299,7 @@ def main():
     class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
     print(f"class_weight = {class_weight}")
 
-    model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
+    model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn, args.extra_dense, args.use_pooling)
 
     tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
