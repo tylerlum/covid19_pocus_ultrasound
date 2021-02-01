@@ -56,7 +56,9 @@ def main():
     parser = argparse.ArgumentParser(
         description='simple 3D convolution for action recognition'
     )
-    # Input and output parameters
+    parser.add_argument('--wandb_project', type=str, default="covid-video-debugging", help='wandb project name')
+
+    # Input files
     parser.add_argument(
         '--videos',
         type=str,
@@ -64,45 +66,50 @@ def main():
         help='directory where videos are stored'
     )
 
-    # Options for viewing
-    parser.add_argument('--visualize', type=str2bool, nargs='?', const=True, default=False)
+    # Output files
+    parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
+    parser.add_argument('--visualize', type=str2bool, nargs='?', const=True, default=False,
+                        help='Save images to visualize in output dir')
 
-    # Wandb setup
-    parser.add_argument('--wandb_project', type=str, default="covid-video-debugging")
-
-    # Random seed
-    parser.add_argument('--random_seed', type=int, default=1233)
+    # Remove randomness
+    parser.add_argument('--random_seed', type=int, default=1233, help='random seed for all randomness of the script')
 
     # K fold cross validation
-    parser.add_argument('--test_fold', type=int, default=0)
-    parser.add_argument('--num_folds', type=int, default=5)
+    parser.add_argument('--num_folds', type=int, default=5, help='number of cross validation folds, splits up by file')
+    parser.add_argument('--test_fold', type=int, default=0, help='fold for test. validation = (test_fold+1)%num_folds')
 
     # Save confusion matrix for each epoch
-    parser.add_argument('--confusion_matrix_each_epoch', type=str2bool, nargs='?', const=True, default=False)
-
-    # Save deep learning model
-    parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument('--confusion_matrix_each_epoch', type=str2bool, nargs='?', const=True, default=False,
+                        help='Save a confusion matrix to wandb at the end of each epoch')
 
     # Hyperparameters
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--epochs', type=int, default=60)
-    parser.add_argument('--frame_rate', type=int, default=5)
-    parser.add_argument('--depth', type=int, default=5)
-    parser.add_argument('--width', type=int, default=224)
-    parser.add_argument('--height', type=int, default=224)
-    parser.add_argument('--grayscale', type=str2bool, nargs='?', const=True, default=False)
-    parser.add_argument('--optical_flow_type', type=str, default="farneback")
-    parser.add_argument('--architecture', type=str, default="2D_CNN_average")
-    parser.add_argument('--learning_rate', type=float, default=1e-4)
-    parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False)
-    parser.add_argument('--optimizer', type=str, default="adam")
-    parser.add_argument('--pretrained_cnn', type=str, default="vgg16")
+    parser.add_argument('--batch_size', type=int, default=8, help='batch size for training')
+    parser.add_argument('--epochs', type=int, default=60, help='number of epochs for training')
+    parser.add_argument('--frame_rate', type=int, default=5, help='framerate to get frames from videos into clips')
+    parser.add_argument('--depth', type=int, default=5, help="number of frames per video clip")
+    parser.add_argument('--width', type=int, default=224, help='video clip width')
+    parser.add_argument('--height', type=int, default=224, help='video clip height')
+    parser.add_argument('--grayscale', type=str2bool, nargs='?', const=True, default=False, help='gray video clips')
+    parser.add_argument('--optical_flow_type', type=str, default="farneback",
+                        help=('algorithm for optical flow (found in OPTICAL_FLOW_ALGORITHM_FACTORY). ' +
+                              'only used for networks starting with 2stream, else is automatically set to None'))
+    parser.add_argument('--architecture', type=str, default="2D_CNN_average",
+                        help='neural network architecture (found in VIDEO_MODEL_FACTORY)')
+    parser.add_argument('--learning_rate', type=float, default=1e-4, help='learning rate for training')
+    parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False, help='video augmentation')
+    parser.add_argument('--optimizer', type=str, default="adam", help='optimizer for training')
+    parser.add_argument('--pretrained_cnn', type=str, default="vgg16", help='pretrained cnn architecture')
 
-    parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False)
-    parser.add_argument('--reduce_learning_rate_monitor', type=str, default="val_loss")
-    parser.add_argument('--reduce_learning_rate_mode', type=str, default="min")
-    parser.add_argument('--reduce_learning_rate_factor', type=float, default=0.1)
-    parser.add_argument('--reduce_learning_rate_patience', type=int, default=7)
+    parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False,
+                        help='use reduce learning rate callback')
+    parser.add_argument('--reduce_learning_rate_monitor', type=str, default="val_loss",
+                        help='reduce learning rate depending on this, only used if reduce_learning_rate is true')
+    parser.add_argument('--reduce_learning_rate_mode', type=str, default="min",
+                        help='reduce learning rate when monitor is min/max, only used if reduce_learning_rate is true')
+    parser.add_argument('--reduce_learning_rate_factor', type=float, default=0.1,
+                        help='reduce learning rate by this factor, only used if reduce_learning_rate is true')
+    parser.add_argument('--reduce_learning_rate_patience', type=int, default=7,
+                        help='reduce learning rate if happens for x epochs, only used if reduce_learning_rate is true')
 
     args = parser.parse_args()
     print(f"raw args = {args}")
