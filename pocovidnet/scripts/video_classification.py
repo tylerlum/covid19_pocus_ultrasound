@@ -92,7 +92,7 @@ def main():
     parser.add_argument('--width', type=int, default=224)
     parser.add_argument('--height', type=int, default=224)
     parser.add_argument('--grayscale', type=str2bool, nargs='?', const=True, default=False)
-    parser.add_argument('--optical_flow_type', type=str, default="")
+    parser.add_argument('--optical_flow_type', type=str, default="farneback")
     parser.add_argument('--architecture', type=str, default="2D_CNN_average")
     parser.add_argument('--learning_rate', type=float, default=1e-4)
     parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False)
@@ -106,9 +106,23 @@ def main():
     parser.add_argument('--reduce_learning_rate_patience', type=int, default=7)
 
     args = parser.parse_args()
-    print(f"args = {args}")
-    if args.optical_flow_type not in OPTICAL_FLOW_ALGORITHM_FACTORY:
+    print(f"raw args = {args}")
+
+    print()
+    print("===========================")
+    print("Cleaning arguments")
+    print("===========================")
+
+    # Turn on optical flow only if needed
+    if not args.architecture.startswith("2stream"):
+        print("Not using optical flow")
         args.optical_flow_type = None
+
+    # This model requires width = height = 64, grayscale
+    if args.architecture == "model_genesis":
+        args.grayscale = True
+        args.width, args.height = 64, 64
+        print("This model requires width, height, grayscale = {args.width}, {args.height}, {args.grayscale}")
 
     # Deterministic behavior
     set_random_seed(args.random_seed)
@@ -207,17 +221,20 @@ def main():
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
 
-    # Model genesis requires different dataset shape than other cnns. Requires width = height = 64, grayscale
+    # Model genesis requires different dataset shape than other cnns.
     if args.architecture == "model_genesis":
         # Rearrange to put channels first and depth last
         X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
         X_validation = np.transpose(X_validation, [0, 4, 2, 3, 1])
         X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
+        print(X_train.shape)
+        print(X_validation.shape)
+        print(X_test.shape)
 
         # Repeat frames since depth of model is 32
-        X_train = np.repeat(X_train, [6, 7, 7, 6, 6], axis=-1)
-        X_validation = np.repeat(X_validation, [6, 7, 7, 6, 6], axis=-1)
-        X_test = np.repeat(X_test, [6, 7, 7, 6, 6], axis=-1)
+        X_train = np.repeat(X_train[:,:,:,:,0], [6, 7, 7, 6, 6], axis=-1)
+        X_validation = np.repeat(X_validation[:,:,:,:,0], [6, 7, 7, 6, 6], axis=-1)
+        X_test = np.repeat(X_test[:,:,:,:,0], [6, 7, 7, 6, 6], axis=-1)
 
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
