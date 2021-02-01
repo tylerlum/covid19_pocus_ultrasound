@@ -112,8 +112,9 @@ def get_CNN_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrai
 
 def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class, bidirectional):
     # Use pretrained cnn_model
-    # Remove the last activation+dropout layer for prediction
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
+    # Remove all layers until flatten
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, pretrained_cnn=pretrained_cnn)
+    tf.keras.utils.plot_model(cnn_model, f"cnn_model_before_recurrent.png", show_shapes=True)
 
     # Run recurrent layer over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -143,15 +144,15 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, pretrained_cnn=pretrained_cnn)
     tf.keras.utils.plot_model(cnn_model, f"cnn_model_before_LSTM.png", show_shapes=True)
 
-    # Run GRU over CNN outputs
+    # Run LSTM over CNN outputs
     input_tensor = Input(shape=(input_shape))
     timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
-    number_of_hidden_units = 32
+    number_of_hidden_units = 64
     num_cnn_lstm_layers = 1
     model = timeDistributed_layer
     for i in range(num_cnn_lstm_layers):
-        rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
+        rnn_layer = ConvLSTM2D(number_of_hidden_units, padding='same', kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
@@ -255,8 +256,8 @@ def get_2plus1D_CNN_model(input_shape, nb_classes, pretrained_cnn):
 
 def get_2D_then_1D_model(input_shape, nb_classes, pretrained_cnn):
     # Use pretrained cnn_model
-    # Remove the last activation+dropout layer for prediction
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
+    # Remove all layers until flatten
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, pretrained_cnn=pretrained_cnn)
 
     # Run Conv1D over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -285,8 +286,8 @@ def get_CNN_transformer_no_pos_model(input_shape, nb_classes, pretrained_cnn):
 
 def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding):
     # Use pretrained cnn_model
-    # Remove the last activation+dropout layer for prediction
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
+    # Remove all layers until flatten
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, pretrained_cnn=pretrained_cnn)
 
     # Run Conv1D over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -408,7 +409,7 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
     num_cnn_lstm_layers = 1
     model = timeDistributed_layer
     for i in range(num_cnn_lstm_layers):
-        rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
+        rnn_layer = ConvLSTM2D(number_of_hidden_units, padding='same', kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
