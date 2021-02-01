@@ -148,11 +148,11 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
     input_tensor = Input(shape=(input_shape))
     timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
-    number_of_hidden_units = 64
-    num_cnn_lstm_layers = 1
+    number_of_hidden_units = 32
+    num_cnn_lstm_layers = 3
     model = timeDistributed_layer
     for i in range(num_cnn_lstm_layers):
-        rnn_layer = ConvLSTM2D(number_of_hidden_units, padding='same', kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
+        rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
@@ -406,10 +406,10 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
 
     number_of_hidden_units = 32
     bidirectional = True
-    num_cnn_lstm_layers = 1
+    num_cnn_lstm_layers = 3
     model = timeDistributed_layer
     for i in range(num_cnn_lstm_layers):
-        rnn_layer = ConvLSTM2D(number_of_hidden_units, padding='same', kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
+        rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
