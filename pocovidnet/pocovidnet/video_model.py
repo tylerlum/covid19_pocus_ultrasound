@@ -407,13 +407,14 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
 
     number_of_hidden_units = 32
     bidirectional = True
-    num_cnn_lstm_layers = 3
+    num_cnn_lstm_layers = 1
     model = timeDistributed_layer
     for i in range(num_cnn_lstm_layers):
         rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
+    model = TimeDistributed(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))(model)
 
     time_length = model.shape[1]
     model = Reshape((time_length, -1))(model)
