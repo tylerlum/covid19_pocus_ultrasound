@@ -129,8 +129,7 @@ def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class,
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
-    model = Dense(2048, activation='relu')(model)
-    model = Dense(128, activation='relu')(model)
+    model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
     model = Model(inputs=input_tensor, outputs=model)
@@ -142,13 +141,14 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
     # Use pretrained cnn_model
     # Remove the layers after convolution
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, pretrained_cnn=pretrained_cnn)
+    tf.keras.utils.plot_model(cnn_model, f"cnn_model_before_LSTM.png", show_shapes=True)
 
     # Run GRU over CNN outputs
     input_tensor = Input(shape=(input_shape))
     timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
-    number_of_hidden_units = 16
-    num_cnn_lstm_layers = 2
+    number_of_hidden_units = 32
+    num_cnn_lstm_layers = 1
     model = timeDistributed_layer
     for i in range(num_cnn_lstm_layers):
         rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
@@ -158,7 +158,7 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
 
     time_length = model.shape[1]
     model = Reshape((time_length, -1))(model)
-    num_rnn_layers = 2
+    num_rnn_layers = 1
     for i in range(num_rnn_layers):
         # Return sequences on all but the last rnn layer
         return_sequences = (i != num_rnn_layers - 1)
@@ -168,7 +168,6 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
         model = rnn_layer(model)
 
     model = Dense(64, activation='relu')(model)
-    model = Dense(8, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
     model = Model(inputs=input_tensor, outputs=model)
@@ -202,7 +201,7 @@ def get_3D_CNN_model(input_shape, nb_classes, pretrained_cnn):
     model.add(Dropout(0.5))
 
     model.add(Flatten())
-    model.add(Dense(256, activation=None))
+    model.add(Dense(64, activation=None))
     model.add(BatchNormalization())
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
@@ -245,7 +244,7 @@ def get_2plus1D_CNN_model(input_shape, nb_classes, pretrained_cnn):
     model.add(Dropout(0.5))
 
     model.add(Flatten())
-    model.add(Dense(256, activation=None))
+    model.add(Dense(64, activation=None))
     model.add(BatchNormalization())
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
@@ -267,7 +266,6 @@ def get_2D_then_1D_model(input_shape, nb_classes, pretrained_cnn):
     model = Conv1D(number_of_hidden_units, kernel_size=8, padding='same')(timeDistributed_layer)
     model = Conv1D(number_of_hidden_units, kernel_size=8, padding='same')(model)
     model = Flatten()(model)
-    model = Dense(256, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
@@ -305,7 +303,6 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
         transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=positional_encoding)
         model = transformer_block(model)
     model = GlobalAveragePooling1D()(model)
-    model = Dense(256, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
@@ -326,7 +323,7 @@ def get_model_genesis_model(input_shape, nb_classes, pretrained_cnn):
     model.load_weights(weights_dir)
     x = model.get_layer('depth_7_relu').output
     x = GlobalAveragePooling3D()(x)
-    x = Dense(1024, activation='relu')(x)
+    x = Dense(64, activation='relu')(x)
     output = Dense(nb_classes, activation='softmax')(x)
     model = Model(inputs=model.input, outputs=output)
     model = fix_layers(model, num_flex_layers=4)
@@ -351,7 +348,6 @@ def get_2stream_average_model(input_shape, nb_classes, pretrained_cnn):
     color = cnn_model_1(color)
     optical_flow = cnn_model_2(optical_flow)
     merged = Concatenate(axis=1)([color, optical_flow])
-    merged = Dense(2048)(merged)
     merged = Dense(64)(merged)
     merged = BatchNormalization()(merged)
     merged = ReLU()(merged)
@@ -428,8 +424,7 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
 
-    model = Dense(2048, activation='relu')(model)
-    model = Dense(128, activation='relu')(model)
+    model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
     model = Model(inputs=multi_frame_input_tensor, outputs=model)
@@ -473,7 +468,6 @@ def get_2stream_transformer_model(input_shape, nb_classes, pretrained_cnn):
         transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=True)
         model = transformer_block(model)
     model = GlobalAveragePooling1D()(model)
-    model = Dense(256, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
