@@ -6,6 +6,7 @@ import math
 from tqdm import tqdm
 from pocovidnet import OPTICAL_FLOW_ALGORITHM_FACTORY
 
+
 class Videoto3D:
 
     def __init__(self, vid_path, width=224, height=224, depth=5, framerate=5, grayscale=False, optical_flow_type=None):
@@ -35,7 +36,8 @@ class Videoto3D:
             show_every = math.ceil(video_framerate / self.framerate)  # ceil to avoid 0
             frames_available = video_num_frames / show_every
             video_clips_available = frames_available // self.depth
-            print(f"{vid}, {video_framerate} FPS, {video_num_frames} frames, show every {show_every} frames, available frames: {frames_available}, available video clips: {video_clips_available}")
+            print(f"{vid}, {video_framerate} FPS, {video_num_frames} frames, show every {show_every} frames, " +
+                  f"available frames: {frames_available}, available video clips: {video_clips_available}")
 
             video_clips_counter = 0
             current_data = []

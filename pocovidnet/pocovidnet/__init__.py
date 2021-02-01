@@ -3,7 +3,14 @@ from .model import (
     get_dense_model
 )
 import cv2
-from .video_model import get_CNN_LSTM_model, get_3D_CNN_model, get_2plus1D_CNN_model, get_CNN_transformer_no_pos_model, get_CNN_transformer_model, get_2D_CNN_average_model, get_2D_then_1D_model, get_gate_shift_model, get_tea_model, get_CNN_GRU_model, get_CNN_LSTM_integrated_model, get_CNN_RNN_model, get_CNN_LSTM_bidirectional_model, get_CNN_GRU_bidirectional_model, get_CNN_RNN_bidirectional_model, get_CNN_LSTM_integrated_bidirectional_model, get_baseline_model, get_model_genesis_model, get_2stream_average_model, get_2stream_LSTM_integrated_bidirectional_model, get_2stream_transformer_model
+from .video_model import (
+    get_CNN_LSTM_model, get_3D_CNN_model, get_2plus1D_CNN_model, get_CNN_transformer_no_pos_model,
+    get_CNN_transformer_model, get_2D_CNN_average_model, get_2D_then_1D_model, get_gate_shift_model, get_tea_model,
+    get_CNN_GRU_model, get_CNN_LSTM_integrated_model, get_CNN_RNN_model, get_CNN_LSTM_bidirectional_model,
+    get_CNN_GRU_bidirectional_model, get_CNN_RNN_bidirectional_model, get_CNN_LSTM_integrated_bidirectional_model,
+    get_baseline_model, get_model_genesis_model, get_2stream_average_model,
+    get_2stream_LSTM_integrated_bidirectional_model, get_2stream_transformer_model
+)
 
 MODEL_FACTORY = {
     'vgg_base': get_model,

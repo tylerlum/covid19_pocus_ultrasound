@@ -45,6 +45,8 @@ def get_model(
     else:
         raise ValueError(f"Invalid pretrained_cnn = {pretrained_cnn}")
 
+    tf.keras.utils.plot_model(baseModel, f"baseModel.png", show_shapes=True)
+
     # construct the head of the model that will be placed on top of the
     # the base model
     headModel = baseModel.output

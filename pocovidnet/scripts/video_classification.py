@@ -3,7 +3,6 @@ import argparse
 import os
 import random
 import imgaug
-import pickle
 import warnings
 
 import numpy as np
@@ -12,7 +11,7 @@ import pandas as pd
 import cv2
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold
 import tensorflow as tf
 from tensorflow.keras.callbacks import (
     ReduceLROnPlateau
@@ -22,7 +21,7 @@ from tensorflow.keras.losses import categorical_crossentropy
 
 from pocovidnet.video_augmentation import DataGenerator
 
-from pocovidnet import VIDEO_MODEL_FACTORY, OPTICAL_FLOW_ALGORITHM_FACTORY
+from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classification_table_and_plots
 from datetime import datetime
@@ -57,56 +56,79 @@ def main():
     parser = argparse.ArgumentParser(
         description='simple 3D convolution for action recognition'
     )
-    # Input and output parameters
+    parser.add_argument('--wandb_project', type=str, default="covid-video-debugging", help='wandb project name')
+
+    # Input files
     parser.add_argument(
         '--videos',
         type=str,
         default='../data/pocus_videos_Jan_30_2021/convex',
         help='directory where videos are stored'
     )
-    parser.add_argument('--load', type=str2bool, nargs='?', const=True, default=False)
 
-    # Options for viewing
-    parser.add_argument('--visualize', type=str2bool, nargs='?', const=True, default=False)
-    parser.add_argument('--save', type=str2bool, nargs='?', const=True, default=False)
+    # Output files
+    parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
+    parser.add_argument('--visualize', type=str2bool, nargs='?', const=True, default=False,
+                        help='Save images to visualize in output dir')
 
-    # Wandb setup
-    parser.add_argument('--wandb_project', type=str, default="covid-video-debugging")
+    # Remove randomness
+    parser.add_argument('--random_seed', type=int, default=1233, help='random seed for all randomness of the script')
 
-    # Random seed
-    parser.add_argument('--random_seed', type=int, default=1233)
+    # K fold cross validation
+    parser.add_argument('--num_folds', type=int, default=5, help='number of cross validation folds, splits up by file')
+    parser.add_argument('--test_fold', type=int, default=0, help='fold for test. validation = (test_fold+1)%num_folds')
 
     # Save confusion matrix for each epoch
-    parser.add_argument('--confusion_matrix_each_epoch', type=str2bool, nargs='?', const=True, default=False)
-
-    # Save deep learning model
-    parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False)
+    parser.add_argument('--confusion_matrix_each_epoch', type=str2bool, nargs='?', const=True, default=False,
+                        help='Save a confusion matrix to wandb at the end of each epoch')
 
     # Hyperparameters
-    parser.add_argument('--batch_size', type=int, default=8)
-    parser.add_argument('--epochs', type=int, default=60)
-    parser.add_argument('--frame_rate', type=int, default=5)
-    parser.add_argument('--depth', type=int, default=5)
-    parser.add_argument('--width', type=int, default=224)
-    parser.add_argument('--height', type=int, default=224)
-    parser.add_argument('--grayscale', type=str2bool, nargs='?', const=True, default=False)
-    parser.add_argument('--optical_flow_type', type=str, default="")
-    parser.add_argument('--architecture', type=str, default="2D_CNN_average")
-    parser.add_argument('--learning_rate', type=float, default=1e-4)
-    parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False)
-    parser.add_argument('--optimizer', type=str, default="adam")
-    parser.add_argument('--pretrained_cnn', type=str, default="vgg16")
+    parser.add_argument('--batch_size', type=int, default=8, help='batch size for training')
+    parser.add_argument('--epochs', type=int, default=60, help='number of epochs for training')
+    parser.add_argument('--frame_rate', type=int, default=5, help='framerate to get frames from videos into clips')
+    parser.add_argument('--depth', type=int, default=5, help="number of frames per video clip")
+    parser.add_argument('--width', type=int, default=224, help='video clip width')
+    parser.add_argument('--height', type=int, default=224, help='video clip height')
+    parser.add_argument('--grayscale', type=str2bool, nargs='?', const=True, default=False, help='gray video clips')
+    parser.add_argument('--optical_flow_type', type=str, default="farneback",
+                        help=('algorithm for optical flow (found in OPTICAL_FLOW_ALGORITHM_FACTORY). ' +
+                              'only used for networks starting with 2stream, else is automatically set to None'))
+    parser.add_argument('--architecture', type=str, default="2D_CNN_average",
+                        help='neural network architecture (found in VIDEO_MODEL_FACTORY)')
+    parser.add_argument('--learning_rate', type=float, default=1e-4, help='learning rate for training')
+    parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False, help='video augmentation')
+    parser.add_argument('--optimizer', type=str, default="adam", help='optimizer for training')
+    parser.add_argument('--pretrained_cnn', type=str, default="vgg16", help='pretrained cnn architecture')
 
-    parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False)
-    parser.add_argument('--reduce_learning_rate_monitor', type=str, default="val_loss")
-    parser.add_argument('--reduce_learning_rate_mode', type=str, default="min")
-    parser.add_argument('--reduce_learning_rate_factor', type=float, default=0.1)
-    parser.add_argument('--reduce_learning_rate_patience', type=int, default=7)
+    parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False,
+                        help='use reduce learning rate callback')
+    parser.add_argument('--reduce_learning_rate_monitor', type=str, default="val_loss",
+                        help='reduce learning rate depending on this, only used if reduce_learning_rate is true')
+    parser.add_argument('--reduce_learning_rate_mode', type=str, default="min",
+                        help='reduce learning rate when monitor is min/max, only used if reduce_learning_rate is true')
+    parser.add_argument('--reduce_learning_rate_factor', type=float, default=0.1,
+                        help='reduce learning rate by this factor, only used if reduce_learning_rate is true')
+    parser.add_argument('--reduce_learning_rate_patience', type=int, default=7,
+                        help='reduce learning rate if happens for x epochs, only used if reduce_learning_rate is true')
 
     args = parser.parse_args()
-    print(f"args = {args}")
-    if args.optical_flow_type not in OPTICAL_FLOW_ALGORITHM_FACTORY:
+    print(f"raw args = {args}")
+
+    print()
+    print("===========================")
+    print("Cleaning arguments")
+    print("===========================")
+
+    # Turn on optical flow only if needed
+    if not args.architecture.startswith("2stream"):
+        print("Not using optical flow")
         args.optical_flow_type = None
+
+    # This model requires width = height = 64, grayscale
+    if args.architecture == "model_genesis":
+        args.grayscale = True
+        args.width, args.height = 64, 64
+        print("This model requires width, height, grayscale = {args.width}, {args.height}, {args.grayscale}")
 
     # Deterministic behavior
     set_random_seed(args.random_seed)
@@ -123,56 +145,66 @@ def main():
     SAVE_DIR = '../data/video_input_data/'
     if not os.path.isdir(SAVE_DIR):
         os.makedirs(SAVE_DIR)
-    train_save_path, validation_save_path, test_save_path = (os.path.join(SAVE_DIR, "conv3d_train.dat"),
-                                                             os.path.join(SAVE_DIR, "conv3d_validation.dat"),
-                                                             os.path.join(SAVE_DIR, "conv3d_test.dat"))
 
-    # Load saved data or read in videos
+    # Get videos and labels
+    class_short = ["cov", "pne", "reg"]
+    vid_files = [
+        v for v in os.listdir(args.videos) if v[:3].lower() in class_short
+    ]
+    labels = [vid[:3].lower() for vid in vid_files]
+
+    # Setup folds
+    args.validation_fold = (args.test_fold + 1) % args.num_folds  # Select validation fold
     print()
     print("===========================")
-    print("Converting videos to 4D video clips")
+    print(f"Performing k-fold splitting with validation fold {args.validation_fold} and test fold {args.test_fold}")
     print("===========================")
-    if args.load:
-        with open(test_save_path, 'rb') as infile:
-            X_test, test_labels_text, test_files = pickle.load(infile)
-        with open(validation_save_path, 'rb') as infile:
-            X_validation, validation_labels_text, validation_files = pickle.load(infile)
-        with open(train_save_path, 'rb') as infile:
-            X_train, train_labels_text, train_files = pickle.load(infile)
-    else:
-        # SPLIT NO CROSSVAL
-        class_short = ["cov", "pne", "reg"]
-        vid_files = [
-            v for v in os.listdir(args.videos) if v[:3].lower() in class_short
-        ]
-        labels = [vid[:3].lower() for vid in vid_files]
-        train_files, test_files, train_labels, test_labels = train_test_split(
-            vid_files, labels, stratify=labels, test_size=0.2, random_state=args.random_seed
-        )
-        train_files, validation_files, train_labels, validation_labels = train_test_split(
-            train_files, train_labels, stratify=train_labels, test_size=0.2, random_state=args.random_seed
-        )
+    k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
-        # Read in videos and transform to 3D
-        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
-                          framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
-        if not args.save:
-            train_save_path, validation_save_path, test_save_path = None, None, None
-        X_train, train_labels_text, train_files = vid3d.video3d(
-            train_files,
-            train_labels,
-            save=train_save_path
-        )
-        X_validation, validation_labels_text, validation_files = vid3d.video3d(
-            validation_files,
-            validation_labels,
-            save=validation_save_path
-        )
-        X_test, test_labels_text, test_files = vid3d.video3d(
-            test_files,
-            test_labels,
-            save=test_save_path
-        )
+    def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
+        for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
+            if i == args.validation_fold:
+                validation_indices = test_index
+            elif i == args.test_fold:
+                test_indices = test_index
+        train_indices = [i for i in range(len(vid_files))
+                         if i not in validation_indices and i not in test_indices]  # Need to use only remaining
+
+        train_files = [vid_files[i] for i in train_indices]
+        train_labels = [labels[i] for i in train_indices]
+        validation_files = [vid_files[i] for i in validation_indices]
+        validation_labels = [labels[i] for i in validation_indices]
+        test_files = [vid_files[i] for i in test_indices]
+        test_labels = [labels[i] for i in test_indices]
+        return train_files, train_labels, validation_files, validation_labels, test_files, test_labels
+
+    train_files, train_labels, validation_files, validation_labels, test_files, test_labels = (
+            get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
+                                            vid_files, labels)
+            )
+
+    # Read in videos and transform to 3D
+    print()
+    print("===========================")
+    print("Reading in videos")
+    print("===========================")
+    vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
+                      framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
+    X_train, train_labels_text, train_files = vid3d.video3d(
+        train_files,
+        train_labels,
+        save=None
+    )
+    X_validation, validation_labels_text, validation_files = vid3d.video3d(
+        validation_files,
+        validation_labels,
+        save=None
+    )
+    X_test, test_labels_text, test_files = vid3d.video3d(
+        test_files,
+        test_labels,
+        save=None
+    )
 
     # One-hot encoding
     lb = LabelBinarizer()
@@ -181,7 +213,7 @@ def main():
     Y_validation = np.array(lb.transform(validation_labels_text))
     Y_test = np.array(lb.transform(test_labels_text))
 
-    # Model genesis requires different dataset shape than other cnns. Requires width = height = 64, grayscale
+    # Model genesis requires different dataset shape than other cnns.
     if args.architecture == "model_genesis":
         # Rearrange to put channels first and depth last
         X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
@@ -189,14 +221,22 @@ def main():
         X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
 
         # Repeat frames since depth of model is 32
-        X_train = np.repeat(X_train, [6, 7, 7, 6, 6], axis=-1)
-        X_validation = np.repeat(X_validation, [6, 7, 7, 6, 6], axis=-1)
-        X_test = np.repeat(X_test, [6, 7, 7, 6, 6], axis=-1)
+        required_depth = 32
+        num_repeats = required_depth // args.depth
+        extra = required_depth - args.depth * num_repeats
+        repeat_list = [num_repeats for _ in range(args.depth)]
+        for i in range(extra):
+            repeat_list[i] += 1
+        print(f"With depth = {args.depth} and required_depth = {required_depth}, will repeat frames like so " +
+              f"{repeat_list} so the new depth is {sum(repeat_list)}")
+        X_train = np.repeat(X_train, repeat_list, axis=-1)
+        X_validation = np.repeat(X_validation, repeat_list, axis=-1)
+        X_test = np.repeat(X_test, repeat_list, axis=-1)
 
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
 
-    generator = DataGenerator(X_train, Y_train, args.batch_size, input_shape, lb.classes_, shuffle=False)
+    generator = DataGenerator(X_train, Y_train, args.batch_size, input_shape, lb.classes_, shuffle=True)
 
     # VISUALIZE
     if args.visualize:
@@ -301,7 +341,7 @@ def main():
             epochs=args.epochs,
             batch_size=args.batch_size,
             verbose=1,
-            shuffle=False,
+            shuffle=True,
             class_weight=class_weight,
             callbacks=callbacks,
         )
@@ -312,7 +352,7 @@ def main():
             epochs=args.epochs,
             batch_size=args.batch_size,
             verbose=1,
-            shuffle=False,
+            shuffle=True,
             class_weight=class_weight,
             callbacks=callbacks,
         )
