@@ -79,55 +79,56 @@ def get_2D_CNN_average_model(input_shape, nb_classes, pretrained_cnn):
 
 def get_CNN_LSTM_model(input_shape, nb_classes, pretrained_cnn):
     ''' Recurrent '''
-    return get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional=False, pretrained_cnn=pretrained_cnn)
+    return get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class=LSTM, bidirectional=False)
 
 
 def get_CNN_GRU_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional=False, pretrained_cnn=pretrained_cnn)
+    return get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class=GRU, bidirectional=False)
 
 
 def get_CNN_RNN_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional=False, pretrained_cnn=pretrained_cnn)
-
-
-def get_CNN_LSTM_integrated_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional=False, pretrained_cnn=pretrained_cnn)
+    return get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class=SimpleRNN, bidirectional=False)
 
 
 def get_CNN_LSTM_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional=True, pretrained_cnn=pretrained_cnn)
+    return get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class=LSTM, bidirectional=True)
 
 
 def get_CNN_GRU_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional=True, pretrained_cnn=pretrained_cnn)
+    return get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class=GRU, bidirectional=True)
 
 
 def get_CNN_RNN_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional=True, pretrained_cnn=pretrained_cnn)
+    return get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class=SimpleRNN, bidirectional=True)
+
+
+def get_CNN_LSTM_integrated_model(input_shape, nb_classes, pretrained_cnn):
+    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional=False)
 
 
 def get_CNN_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional=True, pretrained_cnn=pretrained_cnn)
+    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional=True)
 
 
-def get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional, pretrained_cnn):
+def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class, bidirectional):
     # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
 
-    # Run LSTM over CNN outputs
+    # Run recurrent layer over CNN outputs
     input_tensor = Input(shape=(input_shape))
     timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
     number_of_hidden_units = 64
-    if bidirectional:
-        model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
-    else:
-        model = LSTM(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
-    if bidirectional:
-        model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
-    else:
-        model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
+    num_rnn_layers = 2
+    model = timeDistributed_layer
+    for i in range(num_rnn_layers):
+        # Return sequences on all but the last rnn layer
+        return_sequences = (i != num_rnn_layers - 1)
+        rnn_layer = rnn_class(number_of_hidden_units, return_sequences=return_sequences, dropout=0.5, recurrent_dropout=0.5)
+        if bidirectional:
+            rnn_layer = Bidirectional(rnn_layer)
+        model = rnn_layer(model)
     model = Dense(2048, activation='relu')(model)
     model = Dense(128, activation='relu')(model)
     model = Dropout(0.5)(model)
@@ -137,61 +138,7 @@ def get_CNN_LSTM_model_helper(input_shape, nb_classes, bidirectional, pretrained
     return model
 
 
-def get_CNN_GRU_model_helper(input_shape, nb_classes, bidirectional, pretrained_cnn):
-    # Use pretrained cnn_model
-    # Remove the last activation+dropout layer for prediction
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
-
-    # Run GRU over CNN outputs
-    input_tensor = Input(shape=(input_shape))
-    timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
-
-    number_of_hidden_units = 64
-    if bidirectional:
-        model = Bidirectional(GRU(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
-    else:
-        model = GRU(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
-    if bidirectional:
-        model = Bidirectional(GRU(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
-    else:
-        model = GRU(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
-    model = Dense(2048, activation='relu')(model)
-    model = Dense(128, activation='relu')(model)
-    model = Dropout(0.5)(model)
-    model = Dense(nb_classes, activation='softmax')(model)
-    model = Model(inputs=input_tensor, outputs=model)
-
-    return model
-
-
-def get_CNN_RNN_model_helper(input_shape, nb_classes, bidirectional, pretrained_cnn):
-    # Use pretrained cnn_model
-    # Remove the last activation+dropout layer for prediction
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
-
-    # Run RNN over CNN outputs
-    input_tensor = Input(shape=(input_shape))
-    timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
-
-    number_of_hidden_units = 64
-    if bidirectional:
-        model = Bidirectional(SimpleRNN(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
-    else:
-        model = SimpleRNN(number_of_hidden_units, return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
-    if bidirectional:
-        model = Bidirectional(SimpleRNN(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
-    else:
-        model = SimpleRNN(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
-    model = Dense(2048, activation='relu')(model)
-    model = Dense(128, activation='relu')(model)
-    model = Dropout(0.5)(model)
-    model = Dense(nb_classes, activation='softmax')(model)
-    model = Model(inputs=input_tensor, outputs=model)
-
-    return model
-
-
-def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional, pretrained_cnn):
+def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional):
     # Use pretrained cnn_model
     # Remove the layers after convolution
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, pretrained_cnn=pretrained_cnn)
@@ -201,16 +148,25 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional,
     timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
     number_of_hidden_units = 32
-    if bidirectional:
-        model = Bidirectional(ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
-    else:
-        model = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
+    num_cnn_lstm_layers = 1
+    model = timeDistributed_layer
+    for i in range(num_cnn_lstm_layers):
+        rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
+        if bidirectional:
+            rnn_layer = Bidirectional(rnn_layer)
+        model = rnn_layer(model)
+
     time_length = model.shape[1]
     model = Reshape((time_length, -1))(model)
-    if bidirectional:
-        model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
-    else:
-        model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
+    num_rnn_layers = 1
+    for i in range(num_rnn_layers):
+        # Return sequences on all but the last rnn layer
+        return_sequences = (i != num_rnn_layers - 1)
+        rnn_layer = LSTM(number_of_hidden_units, return_sequences=return_sequences, dropout=0.5, recurrent_dropout=0.5)
+        if bidirectional:
+            rnn_layer = Bidirectional(rnn_layer)
+        model = rnn_layer(model)
+
     model = Dense(2048, activation='relu')(model)
     model = Dense(128, activation='relu')(model)
     model = Dropout(0.5)(model)
@@ -322,14 +278,14 @@ def get_2D_then_1D_model(input_shape, nb_classes, pretrained_cnn):
 
 def get_CNN_transformer_model(input_shape, nb_classes, pretrained_cnn):
     ''' Transformer '''
-    return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=True, pretrained_cnn=pretrained_cnn)
+    return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=True)
 
 
 def get_CNN_transformer_no_pos_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding=False, pretrained_cnn=pretrained_cnn)
+    return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=False)
 
 
-def get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encoding, pretrained_cnn):
+def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding):
     # Use pretrained cnn_model
     # Remove the last activation+dropout layer for prediction
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=2, pretrained_cnn=pretrained_cnn)
@@ -343,10 +299,11 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, positional_encodin
     embed_dim = timeDistributed_layer.shape[2]
     num_heads = 4  # Requres embed_dim % num_heads == 0
     number_of_hidden_units = 64
-    transformer_block1 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=positional_encoding)
-    transformer_block2 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=positional_encoding)
-    model = transformer_block1(timeDistributed_layer)
-    model = transformer_block2(model)
+    num_blocks = 2
+    model = timeDistributed_layer
+    for _ in range(num_blocks):
+        transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=positional_encoding)
+        model = transformer_block(model)
     model = GlobalAveragePooling1D()(model)
     model = Dense(256, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
@@ -452,16 +409,25 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
 
     number_of_hidden_units = 32
     bidirectional = True
-    if bidirectional:
-        model = Bidirectional(ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
-    else:
-        model = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
+    num_cnn_lstm_layers = 1
+    model = timeDistributed_layer
+    for i in range(num_cnn_lstm_layers):
+        rnn_layer = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)
+        if bidirectional:
+            rnn_layer = Bidirectional(rnn_layer)
+        model = rnn_layer(model)
+
     time_length = model.shape[1]
     model = Reshape((time_length, -1))(model)
-    if bidirectional:
-        model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
-    else:
-        model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
+    num_rnn_layers = 1
+    for i in range(num_rnn_layers):
+        # Return sequences on all but the last rnn layer
+        return_sequences = (i != num_rnn_layers - 1)
+        rnn_layer = LSTM(number_of_hidden_units, return_sequences=return_sequences, dropout=0.5, recurrent_dropout=0.5)
+        if bidirectional:
+            rnn_layer = Bidirectional(rnn_layer)
+        model = rnn_layer(model)
+
     model = Dense(2048, activation='relu')(model)
     model = Dense(128, activation='relu')(model)
     model = Dropout(0.5)(model)
@@ -501,10 +467,11 @@ def get_2stream_transformer_model(input_shape, nb_classes, pretrained_cnn):
     embed_dim = timeDistributed_layer.shape[2]
     num_heads = 4  # Requres embed_dim % num_heads == 0
     number_of_hidden_units = 64
-    transformer_block1 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=True)
-    transformer_block2 = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=True)
-    model = transformer_block1(timeDistributed_layer)
-    model = transformer_block2(model)
+    num_blocks = 2
+    model = timeDistributed_layer
+    for _ in range(num_blocks):
+        transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps, positional_encoding=True)
+        model = transformer_block(model)
     model = GlobalAveragePooling1D()(model)
     model = Dense(256, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
