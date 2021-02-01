@@ -99,6 +99,8 @@ def main():
     parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False, help='video augmentation')
     parser.add_argument('--optimizer', type=str, default="adam", help='optimizer for training')
     parser.add_argument('--pretrained_cnn', type=str, default="vgg16", help='pretrained cnn architecture')
+    parser.add_argument('--extra_dense', type=int, nargs='+', help='extra dense layers list of units')
+    parser.add_argument('--use_pooling', type=str2bool, nargs='?', const=True, default=False, help='LSTM pooling')
 
     parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False,
                         help='use reduce learning rate callback')

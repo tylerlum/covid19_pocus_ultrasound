@@ -104,8 +104,8 @@ def get_CNN_LSTM_integrated_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional=False)
 
 
-def get_CNN_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional=True)
+def get_CNN_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrained_cnn, extra_dense, use_pooling):
+    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, extra_dense, use_pooling, bidirectional=True)
 
 
 def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class, bidirectional):
@@ -137,7 +137,7 @@ def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class,
     return model
 
 
-def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional):
+def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, extra_dense, use_pooling, bidirectional):
     # Use pretrained cnn_model
     # Remove the layers after convolution
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, pretrained_cnn=pretrained_cnn)
@@ -156,7 +156,9 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
-    model = TimeDistributed(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))(model)
+
+    if use_pooling:
+        model = TimeDistributed(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))(model)
 
     time_length = model.shape[1]
     model = Reshape((time_length, -1))(model)
@@ -168,6 +170,9 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
+
+    for units in extra_dense:
+        model = Dense(units, activation='relu')(model)
 
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
@@ -380,7 +385,7 @@ def get_2stream_average_model(input_shape, nb_classes, pretrained_cnn):
         return Model(inputs=multi_frame_input_tensor, outputs=average)
 
 
-def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
+def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrained_cnn, extra_dense, use_pooling):
     ''' Two stream optical flow LSTM integrated bidirectional '''
     n_frames, n_height, n_width, n_channels = input_shape
     if n_channels != 6:
@@ -416,7 +421,8 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
         if bidirectional:
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
-    model = TimeDistributed(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))(model)
+    if use_pooling:
+        model = TimeDistributed(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))(model)
 
     time_length = model.shape[1]
     model = Reshape((time_length, -1))(model)
@@ -429,6 +435,8 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
 
+    for units in extra_dense:
+        model = Dense(units, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
