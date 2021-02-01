@@ -132,6 +132,11 @@ def main():
         args.width, args.height = 64, 64
         print("This model requires width, height, grayscale = {args.width}, {args.height}, {args.grayscale}")
 
+    if args.extra_dense[0] == 0:
+        args.extra_dense = []
+        print("args.extra_dense given was 0, so replacing with []")
+
+
     # Deterministic behavior
     set_random_seed(args.random_seed)
 
