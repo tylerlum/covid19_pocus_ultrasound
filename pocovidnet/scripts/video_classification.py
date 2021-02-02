@@ -100,8 +100,6 @@ def main():
     parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False, help='video augmentation')
     parser.add_argument('--optimizer', type=str, default="adam", help='optimizer for training')
     parser.add_argument('--pretrained_cnn', type=str, default="vgg16", help='pretrained cnn architecture')
-    parser.add_argument('--extra_dense', type=int, default=-1, help='extra dense layer # of units')
-    parser.add_argument('--use_pooling', type=str2bool, nargs='?', const=True, default=False, help='LSTM pooling')
 
     parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False,
                         help='use reduce learning rate callback')
@@ -132,12 +130,6 @@ def main():
         args.grayscale = True
         args.width, args.height = 64, 64
         print("This model requires width, height, grayscale = {args.width}, {args.height}, {args.grayscale}")
-
-    if args.extra_dense == -1:
-        extra_dense = []
-        print("args.extra_dense given was -1, so replacing with []")
-    else:
-        extra_dense = [args.extra_dense]
 
     # Deterministic behavior
     set_random_seed(args.random_seed)
@@ -306,8 +298,7 @@ def main():
     class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
     print(f"class_weight = {class_weight}")
 
-    model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn, extra_dense,
-                                                   args.use_pooling)
+    model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
 
     tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
