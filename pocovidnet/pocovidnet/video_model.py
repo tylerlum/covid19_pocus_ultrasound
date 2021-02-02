@@ -169,6 +169,7 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
 
+    model = Dense(2048, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
@@ -429,6 +430,7 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
             rnn_layer = Bidirectional(rnn_layer)
         model = rnn_layer(model)
 
+    model = Dense(2048, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)

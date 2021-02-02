@@ -1,4 +1,5 @@
 import wandb
+from wandb.keras import WandbCallback
 import argparse
 import os
 import random
@@ -240,7 +241,7 @@ def main():
 
     # VISUALIZE
     if args.visualize:
-        num_show = 8
+        num_show = 100
         print(f"Visualizing {num_show} video clips")
         for i in range(X_train.shape[0]):
             # End early
@@ -314,7 +315,7 @@ def main():
     wandb.config.update(args)
     wandb.config.final_output_dir = FINAL_OUTPUT_DIR
 
-    callbacks = []
+    callbacks = [WandbCallback()]
     if args.reduce_learning_rate:
         reduce_learning_rate_loss = ReduceLROnPlateau(
             monitor=args.reduce_learning_rate_monitor,
