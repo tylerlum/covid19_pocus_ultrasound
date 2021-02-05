@@ -1,6 +1,6 @@
 #POCOVID-Net model.
 import tensorflow as tf
-from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile
+from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile, EfficientNetB0, ResNet50
 from tensorflow.keras.layers import (
     AveragePooling2D, Dense, Dropout, Flatten, Input, BatchNormalization, ReLU,
     LeakyReLU
@@ -19,19 +19,38 @@ def get_model(
     log_softmax: bool = True,
     mc_dropout: bool = False,
     evidential = False, 
+    pretrained_cnn: str = 'vgg16',
     **kwargs
 ):
     act_fn = tf.nn.softmax if not log_softmax else tf.nn.log_softmax
     if evidential:
         act_fn = tf.nn.relu
-        
+
 
     # load the VGG16 network, ensuring the head FC layer sets are left off
-    baseModel = VGG16(
-        weights="imagenet",
-        include_top=False,
-        input_tensor=Input(shape=input_size)
-    )
+    if pretrained_cnn == 'vgg16':
+        baseModel = VGG16(
+            weights="imagenet",
+            include_top=False,
+            input_tensor=Input(shape=input_size)
+        )
+    elif pretrained_cnn == 'efficientnet':
+        baseModel = EfficientNetB0(
+            weights="imagenet",
+            include_top=False,
+            input_tensor=Input(shape=input_size)
+        )
+    elif pretrained_cnn == 'resnet50':
+        baseModel = ResNet50(
+            weights="imagenet",
+            include_top=False,
+            input_tensor=Input(shape=input_size)
+        )
+    else:
+        raise ValueError(f"Invalid pretrained_cnn = {pretrained_cnn}")
+
+    tf.keras.utils.plot_model(baseModel, f"baseModel.png", show_shapes=True)
+
     # construct the head of the model that will be placed on top of the
     # the base model
     headModel = baseModel.output
