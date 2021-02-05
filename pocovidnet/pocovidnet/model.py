@@ -18,9 +18,13 @@ def get_model(
     trainable_layers: int = 1,
     log_softmax: bool = True,
     mc_dropout: bool = False,
+    evidential = False, 
     **kwargs
 ):
     act_fn = tf.nn.softmax if not log_softmax else tf.nn.log_softmax
+    if evidential:
+        act_fn = tf.nn.relu
+        
 
     # load the VGG16 network, ensuring the head FC layer sets are left off
     baseModel = VGG16(
@@ -48,6 +52,9 @@ def get_model(
     model = fix_layers(model, num_flex_layers=trainable_layers + 8)
 
     return model
+
+
+
 
 
 def get_cam_model(

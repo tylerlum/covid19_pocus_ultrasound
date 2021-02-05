@@ -14,6 +14,10 @@ from tensorflow import keras
 from .unet3d_genesis import unet_model_3d
 
 
+def get_CNN_LSTM_integrated_bidirectional_evidential_model(input_shape, nb_classes):
+    return get_CNN_LSTM_integrated_evidential_model_helper(input_shape, nb_classes, bidirectional=True)
+
+
 
 ''' No information baseline '''
 def get_baseline_model(input_shape, nb_classes):
@@ -44,6 +48,29 @@ def get_baseline_model(input_shape, nb_classes):
 ''' Simple '''
 def get_2D_CNN_average_model(input_shape, nb_classes):
     vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
+
+    # Run vgg model on each frame
+    input_tensor = Input(shape=(input_shape))
+
+    num_frames = input_shape[0]
+    if num_frames == 1:
+        frame = Lambda(lambda x: x[:, 0, :, :, :])(input_tensor)
+        return Model(inputs=input_tensor, outputs=vgg_model(frame))
+
+    else:
+        frame_predictions = []
+        for frame_i in range(num_frames):
+            frame = Lambda(lambda x: x[:, frame_i, :, :, :])(input_tensor)
+            frame_prediction = vgg_model(frame)
+            frame_predictions.append(frame_prediction)
+
+        # Average activations
+        average = Average()(frame_predictions)
+        return Model(inputs=input_tensor, outputs=average)
+
+''' Simple evidential '''
+def get_2D_CNN_average_evidential_model(input_shape, nb_classes):
+    vgg_model = get_model(input_size=input_shape[1:], evidential=True)
 
     # Run vgg model on each frame
     input_tensor = Input(shape=(input_shape))
@@ -225,6 +252,45 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, bidirectional)
     model = Dense(128, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
+    model = Model(inputs=input_tensor, outputs=model)
+
+    return model
+
+
+def get_CNN_LSTM_integrated_evidential_model_helper(input_shape, nb_classes, bidirectional):
+    # Use pretrained vgg-model
+    vgg_model = get_model(input_size=input_shape[1:], log_softmax=False,)
+
+    # Remove the layers after convolution
+    vgg_model._layers.pop()
+    vgg_model._layers.pop()
+    vgg_model._layers.pop()
+    vgg_model._layers.pop()
+    vgg_model._layers.pop()
+    vgg_model._layers.pop()
+    vgg_model._layers.pop()
+    vgg_model._layers.pop()
+    vgg_model = Model(vgg_model.input, vgg_model._layers[-1].output)
+
+    # Run GRU over CNN outputs
+    input_tensor = Input(shape=(input_shape))
+    timeDistributed_layer = TimeDistributed(vgg_model)(input_tensor)
+
+    number_of_hidden_units = 32
+    if bidirectional:
+        model = Bidirectional(ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5))(timeDistributed_layer)
+    else:
+        model = ConvLSTM2D(number_of_hidden_units, kernel_size=(3, 3), return_sequences=True, dropout=0.5, recurrent_dropout=0.5)(timeDistributed_layer)
+    time_length = model.shape[1]
+    model = Reshape((time_length, -1))(model)
+    if bidirectional:
+        model = Bidirectional(LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5))(model)
+    else:
+        model = LSTM(number_of_hidden_units, return_sequences=False, dropout=0.5, recurrent_dropout=0.5)(model)
+    model = Dense(2048, activation='relu')(model)
+    model = Dense(128, activation='relu')(model)
+    model = Dropout(0.5)(model)
+    model = Dense(nb_classes, activation='relu')(model)
     model = Model(inputs=input_tensor, outputs=model)
 
     return model
