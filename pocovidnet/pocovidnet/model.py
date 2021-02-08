@@ -15,7 +15,7 @@ def get_model(
     hidden_size: int = 64,
     dropout: float = 0.5,
     num_classes: int = 3,
-    trainable_layers: int = 1,
+    trainable_layers: int = 2,
     log_softmax: bool = True,
     mc_dropout: bool = False,
     evidential = False,
@@ -54,11 +54,15 @@ def get_model(
 
     tf.keras.utils.plot_model(baseModel, f"baseModel.png", show_shapes=True)
 
+    # Fix layers, then set trainable ones
+    for layer in baseModel.layers:
+        layer.trainable = False
+    for i in range(1, 1+trainable_layers):
+        baseModel.layers[-i].trainable = True
+
     # construct the head of the model that will be placed on top of the
     # the base model
-    headModel = x
-    for layer in baseModel.layers:
-        headModel = layer(headModel)
+    headModel = baseModel(x)
     headModel = AveragePooling2D(pool_size=(4, 4))(headModel)
     headModel = Flatten(name="flatten")(headModel)
     headModel = Dense(hidden_size)(headModel)
@@ -72,8 +76,6 @@ def get_model(
 
     # place the head FC model on top of the base model
     model = Model(inputs=input_tensor, outputs=headModel)
-
-    model = fix_layers(model, num_flex_layers=trainable_layers + 8)
 
     return model
 
