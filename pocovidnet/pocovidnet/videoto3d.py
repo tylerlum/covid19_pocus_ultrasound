@@ -50,8 +50,6 @@ class Videoto3D:
 
                 image = frame if not self.grayscale else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 image = cv2.resize(image, (self.width, self.height))
-                from tensorflow.keras.applications.efficientnet import preprocess_input
-                # image = preprocess_input(image)
 
                 # Grab image every X frames
                 if frame_id % show_every == 0:
@@ -125,7 +123,7 @@ class Videoto3D:
         if self.optical_flow_type is not None:
             data = np.concatenate([data, optical_flow_data], axis=4)
 
-        data = data / 255.0
+        # data = data / 255.0 # No normalization with preprocessing in the input layer
 
         # Save
         if save is not None:

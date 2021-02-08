@@ -26,25 +26,28 @@ def get_model(
     if evidential:
         act_fn = tf.nn.relu
 
-
+    input_tensor = Input(shape=(input_size))
     # load the VGG16 network, ensuring the head FC layer sets are left off
     if pretrained_cnn == 'vgg16':
+        from tensorflow.keras.applications.vgg16 import preprocess_input
+        x = preprocess_input(input_tensor)
         baseModel = VGG16(
             weights="imagenet",
             include_top=False,
-            input_tensor=Input(shape=input_size)
         )
     elif pretrained_cnn == 'efficientnet':
+        from tensorflow.keras.applications.efficientnet import preprocess_input
+        x = preprocess_input(input_tensor)
         baseModel = EfficientNetB0(
             weights="imagenet",
             include_top=False,
-            input_tensor=Input(shape=input_size)
         )
     elif pretrained_cnn == 'resnet50':
+        from tensorflow.keras.applications.resnet import preprocess_input
+        x = preprocess_input(input_tensor)
         baseModel = ResNet50(
             weights="imagenet",
             include_top=False,
-            input_tensor=Input(shape=input_size)
         )
     else:
         raise ValueError(f"Invalid pretrained_cnn = {pretrained_cnn}")
@@ -53,7 +56,7 @@ def get_model(
 
     # construct the head of the model that will be placed on top of the
     # the base model
-    headModel = baseModel.output
+    headModel = baseModel(x)
     headModel = AveragePooling2D(pool_size=(4, 4))(headModel)
     headModel = Flatten(name="flatten")(headModel)
     headModel = Dense(hidden_size)(headModel)
@@ -66,7 +69,7 @@ def get_model(
     headModel = Dense(num_classes, activation=act_fn)(headModel)
 
     # place the head FC model on top of the base model
-    model = Model(inputs=baseModel.input, outputs=headModel)
+    model = Model(inputs=input_tensor, outputs=headModel)
 
     model = fix_layers(model, num_flex_layers=trainable_layers + 8)
 
