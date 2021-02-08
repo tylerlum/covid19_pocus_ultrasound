@@ -56,7 +56,9 @@ def get_model(
 
     # construct the head of the model that will be placed on top of the
     # the base model
-    headModel = baseModel(x)
+    headModel = x
+    for layer in baseModel.layers:
+        headModel = layer(headModel)
     headModel = AveragePooling2D(pool_size=(4, 4))(headModel)
     headModel = Flatten(name="flatten")(headModel)
     headModel = Dense(hidden_size)(headModel)
