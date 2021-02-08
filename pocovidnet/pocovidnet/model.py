@@ -1,6 +1,6 @@
 #POCOVID-Net model.
 import tensorflow as tf
-from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile, EfficientNetB0, ResNet50
+from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile, EfficientNetB0, ResNet50, ResNet50V2
 from tensorflow.keras.layers import (
     AveragePooling2D, Dense, Dropout, Flatten, Input, BatchNormalization, ReLU,
     LeakyReLU
@@ -46,6 +46,13 @@ def get_model(
         from tensorflow.keras.applications.resnet import preprocess_input
         x = preprocess_input(input_tensor)
         baseModel = ResNet50(
+            weights="imagenet",
+            include_top=False,
+        )
+    elif pretrained_cnn == 'resnet50_v2':
+        from tensorflow.keras.applications.resnet_v2 import preprocess_input
+        x = preprocess_input(input_tensor)
+        baseModel = ResNet50V2(
             weights="imagenet",
             include_top=False,
         )
