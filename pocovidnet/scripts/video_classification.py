@@ -132,7 +132,7 @@ def main():
         default='../data/pocus_videos_Jan_30_2021/convex',
         help='directory where videos are stored'
     )
-    parser.add_argument('--mat', type=str2bool, nargs='?', const=True, default=False, help='reading mat files')
+    parser.add_argument('--mat', type=str2bool, nargs='?', const=True, default=False, help='for pocovidnet dataset, do not use. Only used for reading mat files, pass in the lung/labelled folder to --videos')
 
     # Output files
     parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
@@ -230,7 +230,7 @@ def main():
     print("===========================")
     print(f"Performing k-fold splitting with validation fold {args.validation_fold} and test fold {args.test_fold}")
     print("===========================")
-    # k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+    # k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True) Doesn't work when not enough datapoints of each class
     k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
     def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
@@ -250,6 +250,7 @@ def main():
         test_labels = [labels[i] for i in test_indices]
         return train_files, train_labels, validation_files, validation_labels, test_files, test_labels
 
+    # Use pocovid dataset
     if not args.mat:
         # Get videos and labels
         class_short = ["cov", "pne", "reg"]
@@ -313,7 +314,10 @@ def main():
         X_train = np.repeat(X_train, repeat_list, axis=-1)
         X_validation = np.repeat(X_validation, repeat_list, axis=-1)
         X_test = np.repeat(X_test, repeat_list, axis=-1)
+
+    # Use private lung dataset
     else:
+        # Split up patients to train/validation/test
         all_patient_dirs = [os.path.join(args.videos, name) for name in os.listdir(args.videos) if os.path.isdir(os.path.join(args.videos, name))]
         train_patient_dirs, _, validation_patient_dirs, _, test_patient_dirs, _ = (
                 get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
@@ -364,10 +368,13 @@ def main():
             X = np.array(video_clips)
             Y = np.array(labels)
             return X, Y
+
+        # Get video clips and labels
         X_train, Y_train = get_video_clips_and_labels(train_patient_dirs)
         X_validation, Y_validation = get_video_clips_and_labels(validation_patient_dirs)
         X_test, Y_test = get_video_clips_and_labels(test_patient_dirs)
 
+        # Onehot encode labels
         train_labels_text = Y_train
         validation_labels_text = Y_validation
         test_labels_text = Y_test
