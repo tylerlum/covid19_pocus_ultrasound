@@ -12,6 +12,7 @@ from .video_model import (
     get_baseline_model, get_model_genesis_model, get_2stream_average_model,
     get_2stream_LSTM_integrated_bidirectional_model, get_2stream_transformer_model,
     get_2D_CNN_average_evidential_model, get_CNN_LSTM_integrated_bidirectional_evidential_model,
+    get_CNN_transformer_evidential_model, get_2stream_LSTM_integrated_bidirectional_evidential_model,
 )
 
 MODEL_FACTORY = {
@@ -43,6 +44,8 @@ VIDEO_MODEL_FACTORY = {
     # Evidential
     "2D_CNN_average_evidential": get_2D_CNN_average_evidential_model,
     "CNN_LSTM_integrated_bidirectional_evidential": get_CNN_LSTM_integrated_bidirectional_evidential_model,
+    "CNN_transformer_evidential": get_CNN_transformer_evidential_model,
+    "2stream_LSTM_integrated_bidirectional_evidential": get_2stream_LSTM_integrated_bidirectional_evidential_model,
 
     # Convolutional
     "3D_CNN": get_3D_CNN_model,

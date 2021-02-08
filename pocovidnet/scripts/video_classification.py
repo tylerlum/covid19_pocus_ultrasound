@@ -137,6 +137,9 @@ def main():
     parser.add_argument('--visualize', type=str2bool, nargs='?', const=True, default=False,
                         help='Save images to visualize in output dir')
 
+    # Uncertainty plotting and calculation
+    parser.add_argument('--uncertainty', type=str2bool, nargs='?', const=True, default=False, help='calculate and plot uncertainty')
+
     # Remove randomness
     parser.add_argument('--random_seed', type=int, default=1233, help='random seed for all randomness of the script')
 
@@ -613,8 +616,9 @@ def main():
     print("-----------------------------TESTING-----------------------------")
     test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
 
-    print('-------------------------------uncertainty-----------------------------------')
-    patient_wise_uncertainty(test_files, X_test, Y_test, model)
+    if args.uncertainty:
+        print('-------------------------------uncertainty-----------------------------------')
+        patient_wise_uncertainty(test_files, X_test, Y_test, model)
 
     printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, "trainReportPatients.csv")
     printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, "validationReportPatients.csv")

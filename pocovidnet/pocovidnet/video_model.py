@@ -12,10 +12,6 @@ from pocovidnet.transformer import TransformerBlock
 from .unet3d_genesis import unet_model_3d
 
 
-def get_CNN_LSTM_integrated_bidirectional_evidential_model(input_shape, nb_classes, pretrained_cnn):
-    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional=True, evidential=True)
-
-
 def get_model_remove_last_n_layers(input_shape, n_remove, pretrained_cnn):
     '''Helper function for getting base cnn_model'''
     # Use pretrained cnn_model
@@ -119,6 +115,10 @@ def get_CNN_LSTM_integrated_model(input_shape, nb_classes, pretrained_cnn):
 
 def get_CNN_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional=True)
+
+
+def get_CNN_LSTM_integrated_bidirectional_evidential_model(input_shape, nb_classes, pretrained_cnn):
+    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional=True, evidential=True)
 
 
 def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class, bidirectional):
@@ -300,7 +300,11 @@ def get_CNN_transformer_no_pos_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=False)
 
 
-def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding):
+def get_CNN_transformer_evidential_model(input_shape, nb_classes, pretrained_cnn):
+    return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=True, evidential=True)
+
+
+def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding, evidential=False):
     # Use pretrained cnn_model
     # Remove all layers until flatten
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, pretrained_cnn=pretrained_cnn)
@@ -324,7 +328,8 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     model = Dense(256, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
-    model = Dense(nb_classes, activation='softmax')(model)
+    act_fn = 'softmax' if not evidential else 'relu'
+    model = Dense(nb_classes, activation=act_fn)(model)
     model = Model(inputs=input_tensor, outputs=model)
 
     return model
@@ -397,6 +402,14 @@ def get_2stream_average_model(input_shape, nb_classes, pretrained_cnn):
 
 
 def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
+    return get_2stream_LSTM_integrated_bidirectional_model_helper(input_shape, nb_classes, pretrained_cnn)
+
+
+def get_2stream_LSTM_integrated_bidirectional_evidential_model(input_shape, nb_classes, pretrained_cnn):
+    return get_2stream_LSTM_integrated_bidirectional_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=True)
+
+
+def get_2stream_LSTM_integrated_bidirectional_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=False):
     ''' Two stream optical flow LSTM integrated bidirectional '''
     n_frames, n_height, n_width, n_channels = input_shape
     if n_channels != 6:
@@ -448,7 +461,8 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
     model = Dense(2048, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
-    model = Dense(nb_classes, activation='softmax')(model)
+    act_fn = 'softmax' if not evidential else 'relu'
+    model = Dense(nb_classes, activation=act_fn)(model)
     model = Model(inputs=multi_frame_input_tensor, outputs=model)
 
     return model
