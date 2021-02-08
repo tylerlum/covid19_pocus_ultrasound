@@ -1,6 +1,6 @@
 #POCOVID-Net model.
 import tensorflow as tf
-from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile, EfficientNetB0, ResNet50
+from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile, EfficientNetB0, ResNet50, ResNet50V2
 from tensorflow.keras.layers import (
     AveragePooling2D, Dense, Dropout, Flatten, Input, BatchNormalization, ReLU,
     LeakyReLU
@@ -15,37 +15,52 @@ def get_model(
     hidden_size: int = 64,
     dropout: float = 0.5,
     num_classes: int = 3,
-    trainable_layers: int = 1,
+    trainable_layers: int = 2,
     log_softmax: bool = True,
     mc_dropout: bool = False,
+    evidential = False,
     pretrained_cnn: str = 'vgg16',
     **kwargs
 ):
     act_fn = tf.nn.softmax if not log_softmax else tf.nn.log_softmax
+    if evidential:
+        act_fn = tf.nn.relu
 
     # load the VGG16 network, ensuring the head FC layer sets are left off
     if pretrained_cnn == 'vgg16':
         baseModel = VGG16(
             weights="imagenet",
             include_top=False,
-            input_tensor=Input(shape=input_size)
+            input_tensor = Input(shape=(input_size))
         )
     elif pretrained_cnn == 'efficientnet':
         baseModel = EfficientNetB0(
             weights="imagenet",
             include_top=False,
-            input_tensor=Input(shape=input_size)
+            input_tensor = Input(shape=(input_size))
         )
     elif pretrained_cnn == 'resnet50':
         baseModel = ResNet50(
             weights="imagenet",
             include_top=False,
-            input_tensor=Input(shape=input_size)
+            input_tensor = Input(shape=(input_size))
+        )
+    elif pretrained_cnn == 'resnet50_v2':
+        baseModel = ResNet50V2(
+            weights="imagenet",
+            include_top=False,
+            input_tensor = Input(shape=(input_size))
         )
     else:
         raise ValueError(f"Invalid pretrained_cnn = {pretrained_cnn}")
 
     tf.keras.utils.plot_model(baseModel, f"baseModel.png", show_shapes=True)
+
+    # Fix layers, then set trainable ones
+    for layer in baseModel.layers:
+        layer.trainable = False
+    for i in range(1, 1+trainable_layers):
+        baseModel.layers[-i].trainable = True
 
     # construct the head of the model that will be placed on top of the
     # the base model
@@ -64,9 +79,10 @@ def get_model(
     # place the head FC model on top of the base model
     model = Model(inputs=baseModel.input, outputs=headModel)
 
-    model = fix_layers(model, num_flex_layers=trainable_layers + 8)
-
     return model
+
+
+
 
 
 def get_cam_model(

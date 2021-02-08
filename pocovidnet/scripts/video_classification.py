@@ -27,6 +27,8 @@ from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classification_table_and_plots
 from datetime import datetime
 from datetime import date
+from keras.layers import Dropout
+from keras.models import Model, Input
 
 
 warnings.filterwarnings("ignore")
@@ -41,6 +43,69 @@ def set_random_seed(seed_value):
     np.random.seed(seed_value)
     tf.random.set_seed(seed_value)
 
+
+def plot_loss_vs_uncertainty(labels, loss, uncertainty, color_by_class=True, start_of_filename=None):
+    output_filename = "loss_vs_uncertainty.png"
+    if start_of_filename is not None:
+        output_filename = start_of_filename + "_" + output_filename
+    # Calculate values by class
+    covid_loss = [loss[i] for i in range(len(loss)) if labels[i][0] == 1]
+    pneu_loss = [loss[i] for i in range(len(loss)) if labels[i][1] == 1]
+    reg_loss = [loss[i] for i in range(len(loss)) if labels[i][2] == 1]
+    covid_uncertainty = [uncertainty[i] for i in range(len(uncertainty)) if labels[i][0] == 1]
+    pneu_uncertainty = [uncertainty[i] for i in range(len(uncertainty)) if labels[i][1] == 1]
+    reg_uncertainty = [uncertainty[i] for i in range(len(uncertainty)) if labels[i][2] == 1]
+
+    colors = ['red', 'yellow', 'blue']
+    mylabels = ['covid', 'pneu', 'reg']
+    losses = [covid_loss, pneu_loss, reg_loss]
+    uncertainties = [covid_uncertainty, pneu_uncertainty, reg_uncertainty]
+    if color_by_class:
+        plt.style.use('ggplot')
+        plt.figure()
+        for i in range(len(colors)):
+            # print(uncertainties[i])
+            # print(losses[i])
+            plt.scatter(uncertainties[i], losses[i], c=colors[i], label=mylabels[i])
+        plt.title('L1 Loss vs. Uncertainty')
+        plt.xlabel('Uncertainty')
+        plt.ylabel('L1 Loss')
+        plt.legend()
+        plt.savefig(output_filename)
+    else:
+        plt.style.use('ggplot')
+        plt.figure()
+        plt.scatter(uncertainty, loss)
+        plt.title('L1 Loss vs. Uncertainty')
+        plt.xlabel('Uncertainty')
+        plt.ylabel('L1 Loss')
+        plt.savefig(output_filename)
+
+
+def plot_rar_vs_rer(accuracies, uncertainty_in_prediction, tag, color, m):
+    def get_rar_and_rer(certainties, accuracies):
+        num_samples = accuracies.shape[0]
+
+        num_certain_and_incorrect = sum(certainties * ~accuracies)
+        num_certain_and_correct = sum(certainties * accuracies)
+
+        return num_certain_and_correct/num_samples, num_certain_and_incorrect/num_samples
+
+    rars, rers = [], []
+    for uncertainty_threshold in np.arange(0, 1, 0.001):
+        certainties = uncertainty_in_prediction < uncertainty_threshold
+        rar, rer = get_rar_and_rer(certainties, accuracies)
+        rars.append(rar)
+        rers.append(rer)
+
+    output_filename = "rar_vs_rer_{}.png".format(tag)
+    plt.style.use('ggplot')
+    # plt.figure()
+    plt.scatter(rers, rars, color=color, marker=m, alpha=0.3)
+    plt.title('RAR vs. RER')
+    plt.xlabel('Remaining Error Rate (RER)')
+    plt.ylabel('Remaining Accuracy Rate (RAR)')
+    plt.savefig(output_filename)
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -71,6 +136,9 @@ def main():
     parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
     parser.add_argument('--visualize', type=str2bool, nargs='?', const=True, default=False,
                         help='Save images to visualize in output dir')
+
+    # Uncertainty plotting and calculation
+    parser.add_argument('--uncertainty', type=str2bool, nargs='?', const=True, default=False, help='calculate and plot uncertainty')
 
     # Remove randomness
     parser.add_argument('--random_seed', type=int, default=1233, help='random seed for all randomness of the script')
@@ -131,6 +199,13 @@ def main():
         args.width, args.height = 64, 64
         print("This model requires width, height, grayscale = {args.width}, {args.height}, {args.grayscale}")
 
+    if args.architecture.endswith('evidential'):
+        evidential = True
+        print("This model uses evidential")
+    else:
+        evidential = False
+        print("This model does not use evidential")
+
     # Deterministic behavior
     set_random_seed(args.random_seed)
 
@@ -190,7 +265,8 @@ def main():
     print("Reading in videos")
     print("===========================")
     vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
-                      framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
+                      framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type,
+                      pretrained_cnn=args.pretrained_cnn)
     X_train, train_labels_text, train_files = vid3d.video3d(
         train_files,
         train_labels,
@@ -299,8 +375,38 @@ def main():
     print(f"class_weight = {class_weight}")
 
     model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
+    print('---------------------------model---------------------\n', args.architecture)
 
     tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
+
+    # evidential loss function
+    def KL(alpha, K):
+        beta=tf.constant(np.ones((1,K)),dtype=tf.float32)
+        S_alpha = tf.reduce_sum(alpha,axis=1,keepdims=True)
+    
+        KL = tf.reduce_sum((alpha - beta)*(tf.math.digamma(alpha)-tf.math.digamma(S_alpha)),axis=1,keepdims=True) + \
+        tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha),axis=1,keepdims=True) + \
+        tf.reduce_sum(tf.math.lgamma(beta),axis=1,keepdims=True) - tf.math.lgamma(tf.reduce_sum(beta,axis=1,keepdims=True))
+        return KL
+
+
+
+    def loss_eq5(actual, pred, K, global_step, annealing_step):
+        p = actual
+        p = tf.dtypes.cast(p, tf.float32)
+        alpha = pred + 1.
+        S = tf.reduce_sum(alpha, axis=1, keepdims=True)
+        loglikelihood = tf.reduce_sum((p-(alpha/S))**2, axis=1, keepdims=True) + tf.reduce_sum(alpha*(S-alpha)/(S*S*(S+1)), axis=1, keepdims=True)
+        KL_reg =  tf.minimum(1.0, tf.cast(global_step/annealing_step, tf.float32)) * KL((alpha - 1)*(1-p) + 1 , K)
+        return loglikelihood + KL_reg
+
+    ev_loss = (
+        lambda actual, pred: tf.reduce_mean(loss_eq5(actual, pred, 3,1, 100))
+    )
+
+    loss = categorical_crossentropy
+    if evidential:
+        loss = ev_loss
 
     if args.optimizer == "adam":
         opt = Adam(lr=args.learning_rate)
@@ -308,7 +414,7 @@ def main():
         print(f"WARNING: invalid optimizer {args.optimizer}")
 
     model.compile(
-        optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
+        optimizer=opt, loss=loss, metrics=['accuracy']
     )
 
     wandb.init(entity='tylerlum', project=args.wandb_project)
@@ -458,12 +564,66 @@ def main():
             preds.append(prediction)
             print(f"video = {video}, true_label = {true_label}, prediction = {prediction}")
         return np.array(gt), np.array(preds)
+
+    def create_mc_model(model, dropProb=0.5):
+        layers = [l for l in model.layers]
+        x = layers[0].output
+        for i in range(1, len(layers)):
+        # Replace dropout layers with MC dropout layers
+            if isinstance(layers[i], Dropout):
+                x = Dropout(dropProb)(x, training=True)
+            else:
+                x = layers[i](x)
+        mc_model = Model(inputs=layers[0].input, outputs=x)
+        mc_model.set_weights(model.get_weights())
+        return mc_model
+
+    def patient_wise_uncertainty(files, x, y, model):
+        gt = []
+        logits = []
+        videos = []
+        files = np.array(files)
+        mc_model = create_mc_model(model)
+        mc_uncertainty = []
+        for video in np.unique(files):
+            current_data = x[files == video]
+            current_labels = y[files == video]
+            true_label = current_labels[0]
+            current_logits = model.predict(current_data)
+            mc_logits = []
+            for i in range(50):
+                mc_logits.append(mc_model.predict(current_data))
+            mc_uncertainty.append(np.max(np.std(mc_logits, axis=0)))
+            patient_logits = np.mean(current_logits, axis=0)
+            gt.append(true_label)
+            logits.append(patient_logits)
+            videos.append(video)
+        logits = np.array(logits)
+        print(logits)
+        gt = np.array(gt)
+        S = 3 + np.sum(logits, axis=1)
+        u = 3/S
+        probs = (logits+1)/S[:, None]
+        plot_loss_vs_uncertainty(labels=gt, loss=np.sum(np.abs(gt - probs),axis=1), uncertainty=u, start_of_filename="evidential")
+        prediction_accuracies = np.argmax(gt, axis=1) == np.argmax(probs, axis=1)
+        plt.figure()
+        plot_rar_vs_rer(prediction_accuracies, u, tag='evidential', color='blue', m='*')
+        plot_rar_vs_rer(prediction_accuracies, mc_uncertainty, tag='mc', color='red', m='o')
+        print('these are the ones I wanna cutoff')
+        for i in range(len(u)):
+            if u[i] > 0.2:
+                print(videos[i])
+    
     print("-----------------------------TRAINING-----------------------------")
     train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
     print("-----------------------------VALIDATION-----------------------------")
     validation_gt, validation_preds = calculate_patient_wise(validation_files, X_validation, Y_validation, model)
     print("-----------------------------TESTING-----------------------------")
     test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
+
+    if args.uncertainty:
+        print('-------------------------------uncertainty-----------------------------------')
+        patient_wise_uncertainty(test_files, X_test, Y_test, model)
 
     printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, "trainReportPatients.csv")
     printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, "validationReportPatients.csv")

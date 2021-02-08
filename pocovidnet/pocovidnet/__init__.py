@@ -2,6 +2,7 @@ from .model import (
     get_cam_model, get_model, get_mobilenet_v2_model, get_nasnet_model,
     get_dense_model
 )
+
 import cv2
 from .video_model import (
     get_CNN_LSTM_model, get_3D_CNN_model, get_2plus1D_CNN_model, get_CNN_transformer_no_pos_model,
@@ -9,7 +10,10 @@ from .video_model import (
     get_CNN_GRU_model, get_CNN_LSTM_integrated_model, get_CNN_RNN_model, get_CNN_LSTM_bidirectional_model,
     get_CNN_GRU_bidirectional_model, get_CNN_RNN_bidirectional_model, get_CNN_LSTM_integrated_bidirectional_model,
     get_baseline_model, get_model_genesis_model, get_2stream_average_model,
-    get_2stream_LSTM_integrated_bidirectional_model, get_2stream_transformer_model
+    get_2stream_LSTM_integrated_bidirectional_model, get_2stream_transformer_model,
+    get_2D_CNN_average_evidential_model, get_CNN_LSTM_integrated_bidirectional_evidential_model,
+    get_CNN_transformer_evidential_model, get_2stream_LSTM_integrated_bidirectional_evidential_model,
+    get_2D_3D_model,
 )
 
 MODEL_FACTORY = {
@@ -38,6 +42,12 @@ VIDEO_MODEL_FACTORY = {
     "CNN_RNN_bidirectional": get_CNN_RNN_bidirectional_model,
     "CNN_LSTM_integrated_bidirectional": get_CNN_LSTM_integrated_bidirectional_model,
 
+    # Evidential
+    "2D_CNN_average_evidential": get_2D_CNN_average_evidential_model,
+    "CNN_LSTM_integrated_bidirectional_evidential": get_CNN_LSTM_integrated_bidirectional_evidential_model,
+    "CNN_transformer_evidential": get_CNN_transformer_evidential_model,
+    "2stream_LSTM_integrated_bidirectional_evidential": get_2stream_LSTM_integrated_bidirectional_evidential_model,
+
     # Convolutional
     "3D_CNN": get_3D_CNN_model,
     "2plus1D_CNN": get_2plus1D_CNN_model,
@@ -58,6 +68,9 @@ VIDEO_MODEL_FACTORY = {
     # CVPR
     "gate_shift": get_gate_shift_model,
     "tea": get_tea_model,
+
+    # 2D to 3D CNN
+    "2D_3D": get_2D_3D_model,
 }
 
 OPTICAL_FLOW_ALGORITHM_FACTORY = {

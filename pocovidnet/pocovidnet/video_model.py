@@ -53,7 +53,16 @@ def get_baseline_model(input_shape, nb_classes, pretrained_cnn):
 
 def get_2D_CNN_average_model(input_shape, nb_classes, pretrained_cnn):
     ''' Simple '''
-    cnn_model = get_model(input_size=input_shape[1:], log_softmax=False, pretrained_cnn=pretrained_cnn)
+    return get_2D_CNN_average_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=False)
+
+
+def get_2D_CNN_average_evidential_model(input_shape, nb_classes, pretrained_cnn):
+    ''' Simple evidential '''
+    return get_2D_CNN_average_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=True)
+
+
+def get_2D_CNN_average_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=False):
+    cnn_model = get_model(input_size=input_shape[1:], evidential=evidential, log_softmax=False, pretrained_cnn=pretrained_cnn)
 
     # Run cnn model on each frame
     input_tensor = Input(shape=(input_shape))
@@ -108,6 +117,10 @@ def get_CNN_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrai
     return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional=True)
 
 
+def get_CNN_LSTM_integrated_bidirectional_evidential_model(input_shape, nb_classes, pretrained_cnn):
+    return get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional=True, evidential=True)
+
+
 def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class, bidirectional):
     # Use pretrained cnn_model
     # Remove all layers until flatten
@@ -137,7 +150,7 @@ def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class,
     return model
 
 
-def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional):
+def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional, evidential=False):
     # Use pretrained cnn_model
     # Remove the layers after convolution
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, pretrained_cnn=pretrained_cnn)
@@ -172,7 +185,8 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
     model = Dense(2048, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
-    model = Dense(nb_classes, activation='softmax')(model)
+    act_fn = 'softmax' if not evidential else 'relu'
+    model = Dense(nb_classes, activation=act_fn)(model)
     model = Model(inputs=input_tensor, outputs=model)
 
     return model
@@ -286,7 +300,11 @@ def get_CNN_transformer_no_pos_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=False)
 
 
-def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding):
+def get_CNN_transformer_evidential_model(input_shape, nb_classes, pretrained_cnn):
+    return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=True, evidential=True)
+
+
+def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding, evidential=False):
     # Use pretrained cnn_model
     # Remove all layers until flatten
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, pretrained_cnn=pretrained_cnn)
@@ -310,7 +328,8 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     model = Dense(256, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
-    model = Dense(nb_classes, activation='softmax')(model)
+    act_fn = 'softmax' if not evidential else 'relu'
+    model = Dense(nb_classes, activation=act_fn)(model)
     model = Model(inputs=input_tensor, outputs=model)
 
     return model
@@ -383,6 +402,14 @@ def get_2stream_average_model(input_shape, nb_classes, pretrained_cnn):
 
 
 def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pretrained_cnn):
+    return get_2stream_LSTM_integrated_bidirectional_model_helper(input_shape, nb_classes, pretrained_cnn)
+
+
+def get_2stream_LSTM_integrated_bidirectional_evidential_model(input_shape, nb_classes, pretrained_cnn):
+    return get_2stream_LSTM_integrated_bidirectional_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=True)
+
+
+def get_2stream_LSTM_integrated_bidirectional_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=False):
     ''' Two stream optical flow LSTM integrated bidirectional '''
     n_frames, n_height, n_width, n_channels = input_shape
     if n_channels != 6:
@@ -434,7 +461,8 @@ def get_2stream_LSTM_integrated_bidirectional_model(input_shape, nb_classes, pre
     model = Dense(2048, activation='relu')(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
-    model = Dense(nb_classes, activation='softmax')(model)
+    act_fn = 'softmax' if not evidential else 'relu'
+    model = Dense(nb_classes, activation=act_fn)(model)
     model = Model(inputs=multi_frame_input_tensor, outputs=model)
 
     return model
@@ -493,3 +521,48 @@ def get_gate_shift_model(input_shape, nb_classes, pretrained_cnn):
 
 def get_tea_model(input_shape, nb_classes, pretrained_cnn):
     return None
+
+
+def get_2D_3D_model(input_shape, nb_classes, pretrained_cnn, evidential=False):
+    ''' 2D CNN to 3D CNN '''
+    # Ignores pretrained_cnn because we want to use ResNet50V2 for this one every time
+    # Setup base model
+    base_model = tf.keras.applications.resnet_v2.ResNet50V2(include_top=False,
+                                                            weights='imagenet',
+                                                            pooling='max')
+    layer = 'conv4_block3_out'
+    base_model = tf.keras.Model(
+        inputs=base_model.input,
+        outputs=base_model.get_layer(layer).output)
+    for layer in base_model.layers:
+        layer.trainable = False
+    print(base_model.summary())
+
+    # Setup layers
+    conv_layers = [tf.keras.layers.Conv3D(64, 3, padding='same')
+                        for _ in range(2)]
+    pool_layers = [tf.keras.layers.MaxPooling3D(pool_size=(2,2,2), strides=(2,2,2))
+                        for _ in range(2)]
+    bn_layers = [tf.keras.layers.BatchNormalization()
+                      for _ in range(2)]
+    fc_layers = [tf.keras.layers.Dense(64,
+                                            activation=tf.nn.relu) for _ in range(2)]
+    dropout = tf.keras.layers.Dropout(0.1)
+
+    # Build model
+    input_tensor = Input(shape=(input_shape))
+    x = TimeDistributed(base_model)(input_tensor)
+    for conv, pool, bn in zip(conv_layers, pool_layers, bn_layers):
+        x = conv(x)
+        x = bn(x)
+        x = pool(x)
+    x = Flatten()(x)
+    for fc in fc_layers:
+        x = fc(x)
+
+    act_fn = 'softmax' if not evidential else 'relu'
+    x = dropout(x)
+    x = tf.keras.layers.Dense(nb_classes, activation='softmax')(x)
+    model = Model(inputs=input_tensor, outputs=x)
+    return model
+
