@@ -315,15 +315,10 @@ def main():
         X_test = np.repeat(X_test, repeat_list, axis=-1)
     else:
         all_patient_dirs = [os.path.join(args.videos, name) for name in os.listdir(args.videos) if os.path.isdir(os.path.join(args.videos, name))]
-        all_patient_dirs = all_patient_dirs[:10]
-        print(all_patient_dirs)
         train_patient_dirs, _, validation_patient_dirs, _, test_patient_dirs, _ = (
                 get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
                                                 all_patient_dirs, all_patient_dirs)
                 )
-        print(train_patient_dirs)
-        print(validation_patient_dirs)
-        print(test_patient_dirs)
         def get_video_clips_and_labels(patient_dirs):
             video_clips = []
             labels = []
@@ -348,6 +343,8 @@ def main():
                             frame = cv2.resize(clip_data[:, :, frame_i], (args.width, args.height))
                             # frame = preprocess_input(frame) # norm or preprocess_input function
                             frame /= 255.0
+                            frame = frame[:, :, np.newaxis]
+                            frame = cv2.merge([frame,frame,frame])
                             video_clip.append(frame)
 
                         video_clips.append(video_clip)
@@ -363,21 +360,22 @@ def main():
                         pleural_effusions = mat['labels']['Pleural effussions'][0][0][0][0]
                         no_lung_sliding = mat['labels']['No lung sliding'][0][0][0][0]
 
-                        labels.append(a_lines)
+                        labels.append(b_lines)
             X = np.array(video_clips)
             Y = np.array(labels)
-            print(X.shape)
-            print(Y.shape)
             return X, Y
         X_train, Y_train = get_video_clips_and_labels(train_patient_dirs)
         X_validation, Y_validation = get_video_clips_and_labels(validation_patient_dirs)
         X_test, Y_test = get_video_clips_and_labels(test_patient_dirs)
+
         train_labels_text = Y_train
         validation_labels_text = Y_validation
         test_labels_text = Y_test
         lb = LabelBinarizer()
-        lb.fit(Y_train)
-
+        lb.fit(train_labels_text)
+        Y_train = np.array(lb.transform(train_labels_text))
+        Y_validation = np.array(lb.transform(Y_validation))
+        Y_test = np.array(lb.transform(Y_test))
 
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
