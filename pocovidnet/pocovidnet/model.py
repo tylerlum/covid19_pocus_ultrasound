@@ -18,7 +18,7 @@ def get_model(
     trainable_layers: int = 1,
     log_softmax: bool = True,
     mc_dropout: bool = False,
-    evidential = False, 
+    evidential = False,
     pretrained_cnn: str = 'vgg16',
     **kwargs
 ):

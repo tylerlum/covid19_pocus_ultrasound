@@ -40,8 +40,6 @@ VIDEO_MODEL_FACTORY = {
     "CNN_RNN_bidirectional": get_CNN_RNN_bidirectional_model,
     "CNN_LSTM_integrated_bidirectional": get_CNN_LSTM_integrated_bidirectional_model,
 
-
-
     # Evidential
     "2D_CNN_average_evidential": get_2D_CNN_average_evidential_model,
     "CNN_LSTM_integrated_bidirectional_evidential": get_CNN_LSTM_integrated_bidirectional_evidential_model,
