@@ -12,10 +12,10 @@ from pocovidnet.transformer import TransformerBlock
 from .unet3d_genesis import unet_model_3d
 
 
-def get_model_remove_last_n_layers(input_shape, n_remove, pretrained_cnn):
+def get_model_remove_last_n_layers(input_shape, n_remove, nb_classes, pretrained_cnn):
     '''Helper function for getting base cnn_model'''
     # Use pretrained cnn_model
-    cnn_model = get_model(input_size=input_shape, log_softmax=False, pretrained_cnn=pretrained_cnn)
+    cnn_model = get_model(input_size=input_shape, log_softmax=False, num_classes=nb_classes, pretrained_cnn=pretrained_cnn)
 
     # Remove the last n layers
     for _ in range(n_remove):
@@ -28,7 +28,7 @@ def get_model_remove_last_n_layers(input_shape, n_remove, pretrained_cnn):
 def get_baseline_model(input_shape, nb_classes, pretrained_cnn):
     ''' No information baseline '''
     # Scales input by 0 right off the bat, so has no opportunity to improve
-    cnn_model = get_model(input_size=input_shape[1:], log_softmax=False, pretrained_cnn=pretrained_cnn)
+    cnn_model = get_model(input_size=input_shape[1:], log_softmax=False, num_classes=nb_classes, pretrained_cnn=pretrained_cnn)
 
     # Run cnn model on each frame
     input_tensor = Input(shape=(input_shape))
@@ -62,7 +62,7 @@ def get_2D_CNN_average_evidential_model(input_shape, nb_classes, pretrained_cnn)
 
 
 def get_2D_CNN_average_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=False):
-    cnn_model = get_model(input_size=input_shape[1:], evidential=evidential, log_softmax=False, pretrained_cnn=pretrained_cnn)
+    cnn_model = get_model(input_size=input_shape[1:], evidential=evidential, num_classes=nb_classes, log_softmax=False, pretrained_cnn=pretrained_cnn)
 
     # Run cnn model on each frame
     input_tensor = Input(shape=(input_shape))
@@ -124,7 +124,7 @@ def get_CNN_LSTM_integrated_bidirectional_evidential_model(input_shape, nb_class
 def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class, bidirectional):
     # Use pretrained cnn_model
     # Remove all layers until flatten
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, pretrained_cnn=pretrained_cnn)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
     tf.keras.utils.plot_model(cnn_model, "cnn_model_before_recurrent.png", show_shapes=True)
 
     # Run recurrent layer over CNN outputs
@@ -153,7 +153,7 @@ def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class,
 def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional, evidential=False):
     # Use pretrained cnn_model
     # Remove the layers after convolution
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, pretrained_cnn=pretrained_cnn)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
     tf.keras.utils.plot_model(cnn_model, "cnn_model_before_LSTM.png", show_shapes=True)
 
     # Run LSTM over CNN outputs
@@ -273,7 +273,7 @@ def get_2plus1D_CNN_model(input_shape, nb_classes, pretrained_cnn):
 def get_2D_then_1D_model(input_shape, nb_classes, pretrained_cnn):
     # Use pretrained cnn_model
     # Remove all layers until flatten
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, pretrained_cnn=pretrained_cnn)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
 
     # Run Conv1D over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -307,7 +307,7 @@ def get_CNN_transformer_evidential_model(input_shape, nb_classes, pretrained_cnn
 def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding, evidential=False):
     # Use pretrained cnn_model
     # Remove all layers until flatten
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, pretrained_cnn=pretrained_cnn)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
 
     # Run Conv1D over CNN outputs
     input_tensor = Input(shape=(input_shape))
@@ -363,8 +363,8 @@ def get_2stream_average_model(input_shape, nb_classes, pretrained_cnn):
 
     # Use pretrained cnn_model
     # Remove everything after flattening
-    cnn_model_1 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, pretrained_cnn=pretrained_cnn)
-    cnn_model_2 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, pretrained_cnn=pretrained_cnn)
+    cnn_model_1 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
+    cnn_model_2 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
 
     frame_input_tensor = Input(shape=(n_height, n_width, 6))
     color = Lambda(lambda x: x[:, :, :, :3])(frame_input_tensor)
@@ -417,8 +417,8 @@ def get_2stream_LSTM_integrated_bidirectional_model_helper(input_shape, nb_class
 
     # Use pretrained cnn_model
     # Remove the layers after convolution
-    cnn_model_1 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=8, pretrained_cnn=pretrained_cnn)
-    cnn_model_2 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=8, pretrained_cnn=pretrained_cnn)
+    cnn_model_1 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=8, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
+    cnn_model_2 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=8, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
 
     frame_input_tensor = Input(shape=(n_height, n_width, 6))
     color = Lambda(lambda x: x[:, :, :, :3])(frame_input_tensor)
@@ -476,8 +476,8 @@ def get_2stream_transformer_model(input_shape, nb_classes, pretrained_cnn):
 
     # Use pretrained cnn_model
     # Remove everything after flattening
-    cnn_model_1 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, pretrained_cnn=pretrained_cnn)
-    cnn_model_2 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, pretrained_cnn=pretrained_cnn)
+    cnn_model_1 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
+    cnn_model_2 = get_model_remove_last_n_layers((n_height, n_width, 3), n_remove=5, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
 
     frame_input_tensor = Input(shape=(n_height, n_width, 6))
     color = Lambda(lambda x: x[:, :, :, :3])(frame_input_tensor)
