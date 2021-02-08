@@ -12,7 +12,7 @@ import pandas as pd
 import cv2
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, KFold
 import tensorflow as tf
 from tensorflow.keras.callbacks import (
     ReduceLROnPlateau
@@ -229,7 +229,8 @@ def main():
     print("===========================")
     print(f"Performing k-fold splitting with validation fold {args.validation_fold} and test fold {args.test_fold}")
     print("===========================")
-    k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+    # k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+    k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
     def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
         for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
@@ -312,11 +313,15 @@ def main():
         X_validation = np.repeat(X_validation, repeat_list, axis=-1)
         X_test = np.repeat(X_test, repeat_list, axis=-1)
     else:
-        all_patient_dirs = [name for name in os.listdir(args.videos) if os.path.isdir(os.path.join(args.videos, name))]
+        all_patient_dirs = [os.path.join(args.videos, name) for name in os.listdir(args.videos) if os.path.isdir(os.path.join(args.videos, name))]
+        print(all_patient_dirs)
         train_patient_dirs, _, validation_patient_dirs, _, test_patient_dirs, _ = (
                 get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
                                                 all_patient_dirs, all_patient_dirs)
                 )
+        print(train_patient_dirs)
+        print(validation_patient_dirs)
+        print(test_patient_dirs)
         def get_video_clips_and_labels(patient_dirs):
             video_clips = []
             labels = []
@@ -324,22 +329,34 @@ def main():
             for patient_dir in patient_dirs:
 
                 # Mat files
-                for mat in patient_dir:
-                    num_video_frames = mat.length
+                for mat_file in os.listdir(patient_dir):
+                    import scipy.io
+                    mat = scipy.io.loadmat(os.path.join(patient_dir, mat_file))
+                    cine = mat['raw_cine']
+                    num_video_frames = cine.shape[-1]
                     num_clips = num_video_frames // args.depth
 
                     # Video clips
                     for i in range(num_clips):
-                        clip_data = mat[i*args.depth:(i+1)*args.depth]
+                        clip_data = cine[:, :, i*args.depth:(i+1)*args.depth]
+                        print(clip_data.shape)
                         video_clip = []
 
                         # Frames
-                        for frame_data in clip_data:
-                            frame = resize(frame_data)
-                            frame = preprocess_input(frame) # norm or preprocess_input function
+                        for frame_i in range(clip_data.shape[-1]):
+                            frame = cv2.resize(clip_data[:, :, frame_i], (args.width, args.height))
+                            # frame = preprocess_input(frame) # norm or preprocess_input function
+                            frame /= 255.0
                             video_clip.append(frame)
 
                         video_clips.append(video_clip)
+                        # print(mat.keys())
+                        # print(mat)
+                        print(mat['labels'])
+                        print("---------")
+                        print(mat['labels'].dtype)
+                        print(mat['labels'].dtype[0])
+                        # print(mat['labels'][0][0].shape)
                         labels.append(mat.label)  # may be muliptle
             X = np.array(video_clips)
             Y = np.array(labels)
