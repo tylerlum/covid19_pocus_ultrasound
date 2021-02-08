@@ -304,16 +304,16 @@ def main():
 
             # Repeat frames since depth of model is 32
             required_depth = 32
-        num_repeats = required_depth // args.depth
-        extra = required_depth - args.depth * num_repeats
-        repeat_list = [num_repeats for _ in range(args.depth)]
-        for i in range(extra):
-            repeat_list[i] += 1
-        print(f"With depth = {args.depth} and required_depth = {required_depth}, will repeat frames like so " +
-              f"{repeat_list} so the new depth is {sum(repeat_list)}")
-        X_train = np.repeat(X_train, repeat_list, axis=-1)
-        X_validation = np.repeat(X_validation, repeat_list, axis=-1)
-        X_test = np.repeat(X_test, repeat_list, axis=-1)
+            num_repeats = required_depth // args.depth
+            extra = required_depth - args.depth * num_repeats
+            repeat_list = [num_repeats for _ in range(args.depth)]
+            for i in range(extra):
+                repeat_list[i] += 1
+            print(f"With depth = {args.depth} and required_depth = {required_depth}, will repeat frames like so " +
+                  f"{repeat_list} so the new depth is {sum(repeat_list)}")
+            X_train = np.repeat(X_train, repeat_list, axis=-1)
+            X_validation = np.repeat(X_validation, repeat_list, axis=-1)
+            X_test = np.repeat(X_test, repeat_list, axis=-1)
 
     # Use private lung dataset
     else:
