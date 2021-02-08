@@ -9,7 +9,7 @@ from pocovidnet import OPTICAL_FLOW_ALGORITHM_FACTORY
 
 class Videoto3D:
 
-    def __init__(self, vid_path, width=224, height=224, depth=5, framerate=5, grayscale=False, optical_flow_type=None):
+    def __init__(self, vid_path, width=224, height=224, depth=5, framerate=5, grayscale=False, optical_flow_type=None, pretrained_cnn='vgg16'):
         self.vid_path = vid_path
         self.width = width
         self.height = height
@@ -19,6 +19,7 @@ class Videoto3D:
         self.max_vid = {"cov": 100, "pne": 100, "reg": 100}
         self.grayscale = grayscale
         self.optical_flow_type = optical_flow_type
+        self.pretrained_cnn = pretrained_cnn
 
     def save_data(self, data_3d, labels_3d, files_3d, save_path):
         print("SAVE DATA", data_3d.shape, np.max(data_3d))
@@ -50,6 +51,20 @@ class Videoto3D:
 
                 image = frame if not self.grayscale else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 image = cv2.resize(image, (self.width, self.height))
+
+                # Pretrained specific preprocessing
+                pretrained_cnn = self.pretrained_cnn
+                if pretrained_cnn == 'vgg16':
+                    from tensorflow.keras.applications.vgg16 import preprocess_input
+                elif pretrained_cnn == 'efficientnet':
+                    from tensorflow.keras.applications.efficientnet import preprocess_input
+                elif pretrained_cnn == 'resnet50':
+                    from tensorflow.keras.applications.resnet import preprocess_input
+                elif pretrained_cnn == 'resnet50_v2':
+                    from tensorflow.keras.applications.resnet_v2 import preprocess_input
+                else:
+                    raise ValueError(f"Invalid pretrained_cnn = {pretrained_cnn}")
+                image = preprocess_input(image)
 
                 # Grab image every X frames
                 if frame_id % show_every == 0:

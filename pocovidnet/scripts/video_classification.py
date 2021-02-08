@@ -265,7 +265,8 @@ def main():
     print("Reading in videos")
     print("===========================")
     vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
-                      framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
+                      framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type,
+                      pretrained_cnn=args.pretrained_cnn)
     X_train, train_labels_text, train_files = vid3d.video3d(
         train_files,
         train_labels,

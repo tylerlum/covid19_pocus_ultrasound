@@ -541,6 +541,8 @@ def get_2D_3D_model(input_shape, nb_classes, pretrained_cnn, evidential=False):
     # Setup layers
     conv_layers = [tf.keras.layers.Conv3D(64, 3, padding='same')
                         for _ in range(2)]
+    pool_layers = [tf.keras.layers.MaxPooling3D(pool_size=(2,2,2), strides=(2,2,2))
+                        for _ in range(2)]
     bn_layers = [tf.keras.layers.BatchNormalization()
                       for _ in range(2)]
     fc_layers = [tf.keras.layers.Dense(64,
@@ -550,9 +552,10 @@ def get_2D_3D_model(input_shape, nb_classes, pretrained_cnn, evidential=False):
     # Build model
     input_tensor = Input(shape=(input_shape))
     x = TimeDistributed(base_model)(input_tensor)
-    for conv, bn in zip(conv_layers, bn_layers):
+    for conv, pool, bn in zip(conv_layers, pool_layers, bn_layers):
         x = conv(x)
         x = bn(x)
+        x = pool(x)
     x = Flatten()(x)
     for fc in fc_layers:
         x = fc(x)
