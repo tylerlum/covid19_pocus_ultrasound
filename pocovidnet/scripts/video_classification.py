@@ -131,6 +131,7 @@ def main():
         default='../data/pocus_videos_Jan_30_2021/convex',
         help='directory where videos are stored'
     )
+    parser.add_argument('--mat', type=str2bool, nargs='?', const=True, default=False, help='reading mat files')
 
     # Output files
     parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
@@ -222,13 +223,6 @@ def main():
     if not os.path.isdir(SAVE_DIR):
         os.makedirs(SAVE_DIR)
 
-    # Get videos and labels
-    class_short = ["cov", "pne", "reg"]
-    vid_files = [
-        v for v in os.listdir(args.videos) if v[:3].lower() in class_short
-    ]
-    labels = [vid[:3].lower() for vid in vid_files]
-
     # Setup folds
     args.validation_fold = (args.test_fold + 1) % args.num_folds  # Select validation fold
     print()
@@ -254,51 +248,59 @@ def main():
         test_labels = [labels[i] for i in test_indices]
         return train_files, train_labels, validation_files, validation_labels, test_files, test_labels
 
-    train_files, train_labels, validation_files, validation_labels, test_files, test_labels = (
-            get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
-                                            vid_files, labels)
-            )
+    if not args.mat:
+        # Get videos and labels
+        class_short = ["cov", "pne", "reg"]
+        vid_files = [
+            v for v in os.listdir(args.videos) if v[:3].lower() in class_short
+        ]
+        labels = [vid[:3].lower() for vid in vid_files]
 
-    # Read in videos and transform to 3D
-    print()
-    print("===========================")
-    print("Reading in videos")
-    print("===========================")
-    vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
-                      framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type,
-                      pretrained_cnn=args.pretrained_cnn)
-    X_train, train_labels_text, train_files = vid3d.video3d(
-        train_files,
-        train_labels,
-        save=None
-    )
-    X_validation, validation_labels_text, validation_files = vid3d.video3d(
-        validation_files,
-        validation_labels,
-        save=None
-    )
-    X_test, test_labels_text, test_files = vid3d.video3d(
-        test_files,
-        test_labels,
-        save=None
-    )
+        # Read in videos and transform to 3D
+        print()
+        print("===========================")
+        print("Reading in videos")
+        print("===========================")
 
-    # One-hot encoding
-    lb = LabelBinarizer()
-    lb.fit(train_labels_text)
-    Y_train = lb.transform(train_labels_text)
-    Y_validation = np.array(lb.transform(validation_labels_text))
-    Y_test = np.array(lb.transform(test_labels_text))
+        train_files, train_labels, validation_files, validation_labels, test_files, test_labels = (
+                get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
+                                                vid_files, labels)
+                )
+        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
+                          framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type,
+                          pretrained_cnn=args.pretrained_cnn)
+        X_train, train_labels_text, train_files = vid3d.video3d(
+            train_files,
+            train_labels,
+            save=None
+        )
+        X_validation, validation_labels_text, validation_files = vid3d.video3d(
+            validation_files,
+            validation_labels,
+            save=None
+        )
+        X_test, test_labels_text, test_files = vid3d.video3d(
+            test_files,
+            test_labels,
+            save=None
+        )
 
-    # Model genesis requires different dataset shape than other cnns.
-    if args.architecture == "model_genesis":
-        # Rearrange to put channels first and depth last
-        X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
-        X_validation = np.transpose(X_validation, [0, 4, 2, 3, 1])
-        X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
+        # One-hot encoding
+        lb = LabelBinarizer()
+        lb.fit(train_labels_text)
+        Y_train = lb.transform(train_labels_text)
+        Y_validation = np.array(lb.transform(validation_labels_text))
+        Y_test = np.array(lb.transform(test_labels_text))
 
-        # Repeat frames since depth of model is 32
-        required_depth = 32
+        # Model genesis requires different dataset shape than other cnns.
+        if args.architecture == "model_genesis":
+            # Rearrange to put channels first and depth last
+            X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
+            X_validation = np.transpose(X_validation, [0, 4, 2, 3, 1])
+            X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
+
+            # Repeat frames since depth of model is 32
+            required_depth = 32
         num_repeats = required_depth // args.depth
         extra = required_depth - args.depth * num_repeats
         repeat_list = [num_repeats for _ in range(args.depth)]
@@ -309,6 +311,43 @@ def main():
         X_train = np.repeat(X_train, repeat_list, axis=-1)
         X_validation = np.repeat(X_validation, repeat_list, axis=-1)
         X_test = np.repeat(X_test, repeat_list, axis=-1)
+    else:
+        all_patient_dirs = [name for name in os.listdir(args.videos) if os.path.isdir(os.path.join(args.videos, name))]
+        train_patient_dirs, _, validation_patient_dirs, _, test_patient_dirs, _ = (
+                get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
+                                                all_patient_dirs, all_patient_dirs)
+                )
+        def get_video_clips_and_labels(patient_dirs):
+            video_clips = []
+            labels = []
+            # Patient directories
+            for patient_dir in patient_dirs:
+
+                # Mat files
+                for mat in patient_dir:
+                    num_video_frames = mat.length
+                    num_clips = num_video_frames // args.depth
+
+                    # Video clips
+                    for i in range(num_clips):
+                        clip_data = mat[i*args.depth:(i+1)*args.depth]
+                        video_clip = []
+
+                        # Frames
+                        for frame_data in clip_data:
+                            frame = resize(frame_data)
+                            frame = preprocess_input(frame) # norm or preprocess_input function
+                            video_clip.append(frame)
+
+                        video_clips.append(video_clip)
+                        labels.append(mat.label)  # may be muliptle
+            X = np.array(video_clips)
+            Y = np.array(labels)
+            return X, Y
+        X_train, Y_train = get_video_clips_and_labels(train_patient_dirs)
+        X_validation, Y_validation = get_video_clips_and_labels(validation_patient_dirs)
+        X_test, Y_test = get_video_clips_and_labels(test_patient_dirs)
+
 
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
