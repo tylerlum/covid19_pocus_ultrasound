@@ -13,6 +13,7 @@ from .video_model import (
     get_2stream_LSTM_integrated_bidirectional_model, get_2stream_transformer_model,
     get_2D_CNN_average_evidential_model, get_CNN_LSTM_integrated_bidirectional_evidential_model,
     get_CNN_transformer_evidential_model, get_2stream_LSTM_integrated_bidirectional_evidential_model,
+    get_2D_3D_model,
 )
 
 MODEL_FACTORY = {
@@ -67,6 +68,9 @@ VIDEO_MODEL_FACTORY = {
     # CVPR
     "gate_shift": get_gate_shift_model,
     "tea": get_tea_model,
+
+    # 2D to 3D CNN
+    "2D_3D": get_2D_3D_model,
 }
 
 OPTICAL_FLOW_ALGORITHM_FACTORY = {
