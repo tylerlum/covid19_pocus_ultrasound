@@ -2,6 +2,7 @@ import wandb
 from wandb.keras import WandbCallback
 import argparse
 import os
+from tqdm import tqdm
 import random
 import imgaug
 import warnings
@@ -314,6 +315,7 @@ def main():
         X_test = np.repeat(X_test, repeat_list, axis=-1)
     else:
         all_patient_dirs = [os.path.join(args.videos, name) for name in os.listdir(args.videos) if os.path.isdir(os.path.join(args.videos, name))]
+        all_patient_dirs = all_patient_dirs[:10]
         print(all_patient_dirs)
         train_patient_dirs, _, validation_patient_dirs, _, test_patient_dirs, _ = (
                 get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
@@ -326,7 +328,7 @@ def main():
             video_clips = []
             labels = []
             # Patient directories
-            for patient_dir in patient_dirs:
+            for patient_dir in tqdm(patient_dirs):
 
                 # Mat files
                 for mat_file in os.listdir(patient_dir):
@@ -339,7 +341,6 @@ def main():
                     # Video clips
                     for i in range(num_clips):
                         clip_data = cine[:, :, i*args.depth:(i+1)*args.depth]
-                        print(clip_data.shape)
                         video_clip = []
 
                         # Frames
@@ -350,20 +351,32 @@ def main():
                             video_clip.append(frame)
 
                         video_clips.append(video_clip)
-                        # print(mat.keys())
-                        # print(mat)
-                        print(mat['labels'])
-                        print("---------")
-                        print(mat['labels'].dtype)
-                        print(mat['labels'].dtype[0])
-                        # print(mat['labels'][0][0].shape)
-                        labels.append(mat.label)  # may be muliptle
+
+                        # Get labels
+                        b_lines = mat['labels']['B-lines'][0][0][0][0]
+                        stop_frame = mat['labels']['stop_frame'][0][0][0][0]
+                        start_frame = mat['labels']['start_frame'][0][0][0][0]
+                        subpleural_consolidations = mat['labels']['Sub-pleural consolidations'][0][0][0][0]
+                        pleural_irregularities = mat['labels']['Pleural irregularities'][0][0][0][0]
+                        a_lines = mat['labels']['A-lines'][0][0][0][0]
+                        lobar_consolidations = mat['labels']['Lobar consolidations'][0][0][0][0]
+                        pleural_effusions = mat['labels']['Pleural effussions'][0][0][0][0]
+                        no_lung_sliding = mat['labels']['No lung sliding'][0][0][0][0]
+
+                        labels.append(a_lines)
             X = np.array(video_clips)
             Y = np.array(labels)
+            print(X.shape)
+            print(Y.shape)
             return X, Y
         X_train, Y_train = get_video_clips_and_labels(train_patient_dirs)
         X_validation, Y_validation = get_video_clips_and_labels(validation_patient_dirs)
         X_test, Y_test = get_video_clips_and_labels(test_patient_dirs)
+        train_labels_text = Y_train
+        validation_labels_text = Y_validation
+        test_labels_text = Y_test
+        lb = LabelBinarizer()
+        lb.fit(Y_train)
 
 
     input_shape = X_train.shape[1:]
