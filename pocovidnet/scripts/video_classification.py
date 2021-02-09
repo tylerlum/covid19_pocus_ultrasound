@@ -29,7 +29,7 @@ from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classif
 from datetime import datetime
 from datetime import date
 from keras.layers import Dropout
-from keras.models import Model, Input
+from keras.models import Model
 
 
 warnings.filterwarnings("ignore")
@@ -323,6 +323,7 @@ def main():
                 get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
                                                 all_patient_dirs, all_patient_dirs)
                 )
+
         def get_video_clips_and_labels(patient_dirs):
             video_clips = []
             labels = []
@@ -465,10 +466,8 @@ def main():
     
         KL = tf.reduce_sum((alpha - beta)*(tf.math.digamma(alpha)-tf.math.digamma(S_alpha)),axis=1,keepdims=True) + \
         tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha),axis=1,keepdims=True) + \
-        tf.reduce_sum(tf.math.lgamma(beta),axis=1,keepdims=True) - tf.math.lgamma(tf.reduce_sum(beta,axis=1,keepdims=True))
+        tf.reduce_sum(tf.math.lgamma(beta), axis=1, keepdims=True) - tf.math.lgamma(tf.reduce_sum(beta, axis=1, keepdims=True))
         return KL
-
-
 
     def loss_eq5(actual, pred, K, global_step, annealing_step):
         p = actual
@@ -476,7 +475,7 @@ def main():
         alpha = pred + 1.
         S = tf.reduce_sum(alpha, axis=1, keepdims=True)
         loglikelihood = tf.reduce_sum((p-(alpha/S))**2, axis=1, keepdims=True) + tf.reduce_sum(alpha*(S-alpha)/(S*S*(S+1)), axis=1, keepdims=True)
-        KL_reg =  tf.minimum(1.0, tf.cast(global_step/annealing_step, tf.float32)) * KL((alpha - 1)*(1-p) + 1 , K)
+        KL_reg = tf.minimum(1.0, tf.cast(global_step/annealing_step, tf.float32)) * KL((alpha - 1)*(1-p) + 1, K)
         return loglikelihood + KL_reg
 
     ev_loss = (
@@ -645,10 +644,10 @@ def main():
         return np.array(gt), np.array(preds)
 
     def create_mc_model(model, dropProb=0.5):
-        layers = [l for l in model.layers]
+        layers = [layer for layer in model.layers]
         x = layers[0].output
         for i in range(1, len(layers)):
-        # Replace dropout layers with MC dropout layers
+            # Replace dropout layers with MC dropout layers
             if isinstance(layers[i], Dropout):
                 x = Dropout(dropProb)(x, training=True)
             else:
@@ -683,7 +682,8 @@ def main():
         S = 3 + np.sum(logits, axis=1)
         u = 3/S
         probs = (logits+1)/S[:, None]
-        plot_loss_vs_uncertainty(labels=gt, loss=np.sum(np.abs(gt - probs),axis=1), uncertainty=u, start_of_filename="evidential")
+        plot_loss_vs_uncertainty(labels=gt, loss=np.sum(np.abs(gt - probs), axis=1), uncertainty=u,
+                                 start_of_filename="evidential")
         prediction_accuracies = np.argmax(gt, axis=1) == np.argmax(probs, axis=1)
         plt.figure()
         plot_rar_vs_rer(prediction_accuracies, u, tag='evidential', color='blue', m='*')
@@ -692,7 +692,7 @@ def main():
         for i in range(len(u)):
             if u[i] > 0.2:
                 print(videos[i])
-    
+
     print("-----------------------------TRAINING-----------------------------")
     train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
     print("-----------------------------VALIDATION-----------------------------")
