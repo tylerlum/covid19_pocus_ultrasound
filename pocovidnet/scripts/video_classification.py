@@ -333,36 +333,38 @@ def main():
                 for mat_file in os.listdir(patient_dir):
                     import scipy.io
                     mat = scipy.io.loadmat(os.path.join(patient_dir, mat_file))
+
+                    # Get labels
+                    b_lines = mat['labels']['B-lines'][0][0][0][0]
+                    stop_frame = mat['labels']['stop_frame'][0][0][0][0]
+                    start_frame = mat['labels']['start_frame'][0][0][0][0]
+                    subpleural_consolidations = mat['labels']['Sub-pleural consolidations'][0][0][0][0]
+                    pleural_irregularities = mat['labels']['Pleural irregularities'][0][0][0][0]
+                    a_lines = mat['labels']['A-lines'][0][0][0][0]
+                    lobar_consolidations = mat['labels']['Lobar consolidations'][0][0][0][0]
+                    pleural_effusions = mat['labels']['Pleural effussions'][0][0][0][0]
+                    no_lung_sliding = mat['labels']['No lung sliding'][0][0][0][0]
+
+                    # Get cine
                     cine = mat['raw_cine']
-                    num_video_frames = cine.shape[-1]
+                    num_video_frames = stop_frame - start_frame + 1
                     num_clips = num_video_frames // args.depth
 
                     # Video clips
                     for i in range(num_clips):
-                        clip_data = cine[:, :, i*args.depth:(i+1)*args.depth]
+                        start, stop = start_frame + i*args.depth, start_frame + (i+1)*args.depth
+                        clip_data = cine[:, :, start:stop]
                         video_clip = []
 
                         # Frames
                         for frame_i in range(clip_data.shape[-1]):
                             frame = cv2.resize(clip_data[:, :, frame_i], (args.width, args.height))
-                            # frame = preprocess_input(frame) # norm or preprocess_input function
-                            frame /= 255.0
+                            frame /= 255.0  # norm or preprocess_input function
                             frame = frame[:, :, np.newaxis]
                             frame = cv2.merge([frame,frame,frame])
                             video_clip.append(frame)
 
                         video_clips.append(video_clip)
-
-                        # Get labels
-                        b_lines = mat['labels']['B-lines'][0][0][0][0]
-                        stop_frame = mat['labels']['stop_frame'][0][0][0][0]
-                        start_frame = mat['labels']['start_frame'][0][0][0][0]
-                        subpleural_consolidations = mat['labels']['Sub-pleural consolidations'][0][0][0][0]
-                        pleural_irregularities = mat['labels']['Pleural irregularities'][0][0][0][0]
-                        a_lines = mat['labels']['A-lines'][0][0][0][0]
-                        lobar_consolidations = mat['labels']['Lobar consolidations'][0][0][0][0]
-                        pleural_effusions = mat['labels']['Pleural effussions'][0][0][0][0]
-                        no_lung_sliding = mat['labels']['No lung sliding'][0][0][0][0]
 
                         labels.append(b_lines)
             X = np.array(video_clips)
