@@ -384,10 +384,13 @@ def main():
         Y_validation = np.array(lb.transform(Y_validation))
         Y_test = np.array(lb.transform(Y_test))
 
+        # Workaround to get text class names
+        lb.classes_ = ['No B-lines', '1-2 B-lines', '3+ B-lines', 'Confluent B-lines']
+
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
 
-    generator = DataGenerator(X_train, Y_train, args.batch_size, input_shape, lb.classes_, shuffle=True)
+    generator = DataGenerator(X_train, Y_train, args.batch_size, input_shape, shuffle=True)
 
     # VISUALIZE
     if args.visualize:

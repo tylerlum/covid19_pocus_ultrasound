@@ -5,13 +5,12 @@ import cv2
 
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
-    def __init__(self, X, Y, batch_size, dim, n_classes, shuffle):
+    def __init__(self, X, Y, batch_size, dim, shuffle):
         'Initialization'
         self.dim = dim
         self.batch_size = batch_size
         self.Y = Y
         self.X = X
-        self.n_classes = n_classes
         self.shuffle = shuffle
         self.on_epoch_end()
         self.augmentation = iaa.Sequential([
