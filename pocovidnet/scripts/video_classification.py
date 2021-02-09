@@ -478,7 +478,7 @@ def main():
         return loglikelihood + KL_reg
 
     ev_loss = (
-        lambda actual, pred: tf.reduce_mean(loss_eq5(actual, pred, 3,1, 100))
+        lambda actual, pred: tf.reduce_mean(loss_eq5(actual, pred, nb_classes, 1, 100))
     )
 
     loss = categorical_crossentropy
