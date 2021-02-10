@@ -23,7 +23,7 @@ from tensorflow.keras.losses import categorical_crossentropy
 
 from pocovidnet.video_augmentation import DataGenerator
 
-from pocovidnet import VIDEO_MODEL_FACTORY
+from pocovidnet import VIDEO_MODEL_FACTORY, PRETRAINED_CNN_PREPROCESS_FACTORY
 from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classification_table_and_plots
 from datetime import datetime
@@ -360,7 +360,7 @@ def main():
                         # Frames
                         for frame_i in range(clip_data.shape[-1]):
                             frame = cv2.resize(clip_data[:, :, frame_i], (args.width, args.height))
-                            frame /= 255.0  # norm or preprocess_input function
+                            frame = PRETRAINED_CNN_PREPROCESS_FACTORY[args.pretrained_cnn](frame)
                             frame = frame[:, :, np.newaxis]
                             frame = cv2.merge([frame,frame,frame])
                             video_clip.append(frame)

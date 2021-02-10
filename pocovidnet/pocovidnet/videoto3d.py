@@ -4,7 +4,7 @@ import pickle
 import os
 import math
 from tqdm import tqdm
-from pocovidnet import OPTICAL_FLOW_ALGORITHM_FACTORY
+from pocovidnet import OPTICAL_FLOW_ALGORITHM_FACTORY, PRETRAINED_CNN_PREPROCESS_FACTORY
 
 
 class Videoto3D:
@@ -53,18 +53,7 @@ class Videoto3D:
                 image = cv2.resize(image, (self.width, self.height))
 
                 # Pretrained specific preprocessing
-                pretrained_cnn = self.pretrained_cnn
-                if pretrained_cnn == 'vgg16':
-                    from tensorflow.keras.applications.vgg16 import preprocess_input
-                elif pretrained_cnn == 'efficientnet':
-                    from tensorflow.keras.applications.efficientnet import preprocess_input
-                elif pretrained_cnn == 'resnet50':
-                    from tensorflow.keras.applications.resnet import preprocess_input
-                elif pretrained_cnn == 'resnet50_v2':
-                    from tensorflow.keras.applications.resnet_v2 import preprocess_input
-                else:
-                    raise ValueError(f"Invalid pretrained_cnn = {pretrained_cnn}")
-                image = preprocess_input(image)
+                image = PRETRAINED_CNN_PREPROCESS_FACTORY[self.pretrained_cnn](image)
 
                 # Grab image every X frames
                 if frame_id % show_every == 0:

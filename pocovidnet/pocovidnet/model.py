@@ -27,32 +27,12 @@ def get_model(
         act_fn = tf.nn.relu
 
     # load the VGG16 network, ensuring the head FC layer sets are left off
-    if pretrained_cnn == 'vgg16':
-        baseModel = VGG16(
-            weights="imagenet",
-            include_top=False,
-            input_tensor = Input(shape=(input_size))
-        )
-    elif pretrained_cnn == 'efficientnet':
-        baseModel = EfficientNetB0(
-            weights="imagenet",
-            include_top=False,
-            input_tensor = Input(shape=(input_size))
-        )
-    elif pretrained_cnn == 'resnet50':
-        baseModel = ResNet50(
-            weights="imagenet",
-            include_top=False,
-            input_tensor = Input(shape=(input_size))
-        )
-    elif pretrained_cnn == 'resnet50_v2':
-        baseModel = ResNet50V2(
-            weights="imagenet",
-            include_top=False,
-            input_tensor = Input(shape=(input_size))
-        )
-    else:
-        raise ValueError(f"Invalid pretrained_cnn = {pretrained_cnn}")
+    from pocovidnet import PRETRAINED_CNN_FACTORY
+    baseModel = PRETRAINED_CNN_FACTORY[pretrained_cnn](
+                    weights="imagenet",
+                    include_top=False,
+                    input_tensor = Input(shape=(input_size))
+                )
 
     tf.keras.utils.plot_model(baseModel, f"baseModel.png", show_shapes=True)
 
@@ -80,9 +60,6 @@ def get_model(
     model = Model(inputs=baseModel.input, outputs=headModel)
 
     return model
-
-
-
 
 
 def get_cam_model(

@@ -15,6 +15,9 @@ from .video_model import (
     get_CNN_transformer_evidential_model, get_2stream_LSTM_integrated_bidirectional_evidential_model,
     get_2D_3D_model,
 )
+import tensorflow
+from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile, EfficientNetB0, ResNet50, ResNet50V2
+
 
 MODEL_FACTORY = {
     'vgg_base': get_model,
@@ -82,4 +85,18 @@ OPTICAL_FLOW_ALGORITHM_FACTORY = {
     "simpleflow": cv2.optflow.createOptFlow_SimpleFlow,
     "sparserlof": cv2.optflow.createOptFlow_SparseRLOF,
     "sparsetodense": cv2.optflow.createOptFlow_SparseToDense,
+}
+
+PRETRAINED_CNN_FACTORY = {
+    "vgg16": VGG16,
+    "efficientnet": EfficientNetB0,
+    "resnet50": ResNet50,
+    "resnet50_v2": ResNet50V2,
+}
+
+PRETRAINED_CNN_PREPROCESS_FACTORY = {
+    "vgg16": tensorflow.keras.applications.vgg16.preprocess_input,
+    "efficientnet": tensorflow.keras.applications.efficientnet.preprocess_input,
+    "resnet50": tensorflow.keras.applications.resnet.preprocess_input,
+    "resnet50_v2": tensorflow.keras.applications.resnet_v2.preprocess_input,
 }
