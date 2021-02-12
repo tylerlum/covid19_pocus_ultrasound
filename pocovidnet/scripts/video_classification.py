@@ -23,10 +23,11 @@ from tensorflow.keras.losses import categorical_crossentropy
 
 from pocovidnet.video_augmentation import DataGenerator
 
-from pocovidnet import VIDEO_MODEL_FACTORY, PRETRAINED_CNN_PREPROCESS_FACTORY
+from pocovidnet import VIDEO_MODEL_FACTORY
 from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classification_table_and_plots
 from pocovidnet.read_mat import loadmat
+from pocovidnet.video_dataset_preprocess import preprocess_video_dataset
 from datetime import datetime
 from datetime import date
 from keras.layers import Dropout
@@ -109,6 +110,7 @@ def plot_rar_vs_rer(accuracies, uncertainty_in_prediction, tag, color, m):
     plt.ylabel('Remaining Accuracy Rate (RAR)')
     plt.savefig(output_filename)
 
+
 def str2bool(v):
     if isinstance(v, bool):
         return v
@@ -133,7 +135,9 @@ def main():
         default='../data/pocus_videos_Jan_30_2021/convex',
         help='directory where videos are stored'
     )
-    parser.add_argument('--mat', type=str2bool, nargs='?', const=True, default=False, help='for pocovidnet dataset, do not use. Only used for reading mat files, pass in the lung/labelled folder to --videos')
+    parser.add_argument('--mat', type=str2bool, nargs='?', const=True, default=False,
+                        help=('for pocovidnet dataset, do not use. Only used for reading mat files,' +
+                              'pass in the lung/labelled folder to --videos'))
 
     # Output files
     parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
@@ -141,7 +145,8 @@ def main():
                         help='Save images to visualize in output dir')
 
     # Uncertainty plotting and calculation
-    parser.add_argument('--uncertainty', type=str2bool, nargs='?', const=True, default=False, help='calculate and plot uncertainty')
+    parser.add_argument('--uncertainty', type=str2bool, nargs='?', const=True, default=False,
+                        help='calculate and plot uncertainty')
 
     # Remove randomness
     parser.add_argument('--random_seed', type=int, default=1233, help='random seed for all randomness of the script')
@@ -231,7 +236,8 @@ def main():
     print("===========================")
     print(f"Performing k-fold splitting with validation fold {args.validation_fold} and test fold {args.test_fold}")
     print("===========================")
-    # k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True) Doesn't work when not enough datapoints of each class
+    # StratifiedKFold Doesn't work when not enough datapoints of each class
+    # k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
     k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
     def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
@@ -271,55 +277,40 @@ def main():
                                                 vid_files, labels)
                 )
         vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
-                          framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type,
-                          pretrained_cnn=args.pretrained_cnn)
-        X_train, train_labels_text, train_files = vid3d.video3d(
+                          framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
+        raw_train_data, raw_train_labels, train_files = vid3d.video3d(
             train_files,
             train_labels,
             save=None
         )
-        X_validation, validation_labels_text, validation_files = vid3d.video3d(
+        raw_validation_data, raw_validation_labels, validation_files = vid3d.video3d(
             validation_files,
             validation_labels,
             save=None
         )
-        X_test, test_labels_text, test_files = vid3d.video3d(
+        raw_test_data, raw_test_labels, test_files = vid3d.video3d(
             test_files,
             test_labels,
             save=None
         )
 
+        # Preprocess dataset
+        X_train = preprocess_video_dataset(raw_train_data, args.pretrained_cnn)
+        X_validation = preprocess_video_dataset(raw_validation_data, args.pretrained_cnn)
+        X_test = preprocess_video_dataset(raw_test_data, args.pretrained_cnn)
+
         # One-hot encoding
         lb = LabelBinarizer()
-        lb.fit(train_labels_text)
-        Y_train = lb.transform(train_labels_text)
-        Y_validation = np.array(lb.transform(validation_labels_text))
-        Y_test = np.array(lb.transform(test_labels_text))
-
-        # Model genesis requires different dataset shape than other cnns.
-        if args.architecture == "model_genesis":
-            # Rearrange to put channels first and depth last
-            X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
-            X_validation = np.transpose(X_validation, [0, 4, 2, 3, 1])
-            X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
-
-            # Repeat frames since depth of model is 32
-            required_depth = 32
-            num_repeats = required_depth // args.depth
-            extra = required_depth - args.depth * num_repeats
-            repeat_list = [num_repeats for _ in range(args.depth)]
-            for i in range(extra):
-                repeat_list[i] += 1
-            print(f"With depth = {args.depth} and required_depth = {required_depth}, will repeat frames like so " +
-                  f"{repeat_list} so the new depth is {sum(repeat_list)}")
-            X_train = np.repeat(X_train, repeat_list, axis=-1)
-            X_validation = np.repeat(X_validation, repeat_list, axis=-1)
-            X_test = np.repeat(X_test, repeat_list, axis=-1)
+        lb.fit(raw_train_labels)
+        Y_train = lb.transform(raw_train_labels)
+        Y_validation = np.array(lb.transform(raw_validation_labels))
+        Y_test = np.array(lb.transform(raw_test_labels))
 
     # Use private lung dataset
     else:
         # Split up patients to train/validation/test
-        all_patient_dirs = [os.path.join(args.videos, name) for name in os.listdir(args.videos) if os.path.isdir(os.path.join(args.videos, name))]
+        all_patient_dirs = [os.path.join(args.videos, name) for name in os.listdir(args.videos)
+                            if os.path.isdir(os.path.join(args.videos, name))]
         train_patient_dirs, _, validation_patient_dirs, _, test_patient_dirs, _ = (
                 get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
                                                 all_patient_dirs, all_patient_dirs)
@@ -360,9 +351,8 @@ def main():
                         # Frames
                         for frame_i in range(clip_data.shape[-1]):
                             frame = cv2.resize(clip_data[:, :, frame_i], (args.width, args.height))
-                            frame = PRETRAINED_CNN_PREPROCESS_FACTORY[args.pretrained_cnn](frame)
                             frame = frame[:, :, np.newaxis]
-                            frame = cv2.merge([frame,frame,frame])
+                            frame = cv2.merge([frame, frame, frame])
                             video_clip.append(frame)
 
                         video_clips.append(video_clip)
@@ -373,67 +363,74 @@ def main():
             return X, Y
 
         # Get video clips and labels
-        X_train, Y_train = get_video_clips_and_labels(train_patient_dirs)
-        X_validation, Y_validation = get_video_clips_and_labels(validation_patient_dirs)
-        X_test, Y_test = get_video_clips_and_labels(test_patient_dirs)
+        raw_train_data, raw_train_labels = get_video_clips_and_labels(train_patient_dirs)
+        raw_validation_data, raw_validation_labels = get_video_clips_and_labels(validation_patient_dirs)
+        raw_test_data, raw_test_labels = get_video_clips_and_labels(test_patient_dirs)
+
+        # Preprocess dataset
+        X_train = preprocess_video_dataset(raw_train_data, args.pretrained_cnn)
+        X_validation = preprocess_video_dataset(raw_validation_data, args.pretrained_cnn)
+        X_test = preprocess_video_dataset(raw_test_data, args.pretrained_cnn)
 
         # Onehot encode labels
-        train_labels_text = Y_train
-        validation_labels_text = Y_validation
-        test_labels_text = Y_test
         lb = LabelBinarizer()
-        lb.fit(train_labels_text)
-        Y_train = np.array(lb.transform(train_labels_text))
-        Y_validation = np.array(lb.transform(Y_validation))
-        Y_test = np.array(lb.transform(Y_test))
+        lb.fit(raw_train_labels)
+        Y_train = np.array(lb.transform(raw_train_labels))
+        Y_validation = np.array(lb.transform(raw_validation_labels))
+        Y_test = np.array(lb.transform(raw_test_labels))
 
-        # Workaround to get text class names
+        # Workaround to get text class names instead of numbers
         lb.classes_ = ['No B-lines', '1-2 B-lines', '3+ B-lines', 'Confluent B-lines']
 
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
 
-    generator = DataGenerator(X_train, Y_train, args.batch_size, input_shape, shuffle=True)
+    # Need to pass in raw training data to generator so that it can perform augmentation on NOT preprocessed images,
+    # then apply preprocessing after
+    generator = DataGenerator(raw_train_data, Y_train, args.batch_size, input_shape, shuffle=True,
+                              pretrained_cnn=args.pretrained_cnn)
 
     # VISUALIZE
     if args.visualize:
-        num_show = 100
+        num_show = 3
         print(f"Visualizing {num_show} video clips")
-        for i in range(X_train.shape[0]):
+        for i in range(raw_train_data.shape[0]):
             # End early
             if i >= num_show:
                 break
 
-            video_clip = X_train[i]
+            video_clip = raw_train_data[i]
             label = Y_train[i]
             for j in range(video_clip.shape[0]):
                 frame = video_clip[j]
+                print(np.sum(frame) / frame.size)
                 num_channels = frame.shape[2]
                 if num_channels == 1 or num_channels == 3:
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255*frame)
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), frame)
                 elif num_channels == 6:
                     rgb_frame = frame[:, :, :3]
                     optical_flow_frame = frame[:, :, 3:]
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"),
-                                255*rgb_frame)
+                                rgb_frame)
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
-                                255*optical_flow_frame)
+                                optical_flow_frame)
 
         print("Visualizing 1 batch of augmented video clips")
         batchX, batchY = generator[0]
         for i, (video_clip, label) in enumerate(zip(batchX, batchY)):
             for j, frame in enumerate(video_clip):
+                print(np.sum(frame) / frame.size)
                 num_channels = frame.shape[2]
                 if num_channels == 1 or num_channels == 3:
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
-                                255*frame)
+                                frame)
                 elif num_channels == 6:
                     rgb_frame = frame[:, :, :3]
                     optical_flow_frame = frame[:, :, 3:]
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
-                                255*rgb_frame)
+                                rgb_frame)
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
-                                255*optical_flow_frame)
+                                optical_flow_frame)
 
     print()
     print("===========================")
@@ -442,11 +439,11 @@ def main():
     print(f"X_train.shape, Y_train.shape = {X_train.shape}, {Y_train.shape}")
     print(f"X_validation.shape, Y_validation.shape = {X_validation.shape}, {Y_validation.shape}")
     print(f"X_test.shape, Y_test.shape = {X_test.shape}, {Y_test.shape}")
-    nb_classes = len(np.unique(train_labels_text))
+    nb_classes = len(np.unique(raw_train_labels))
     print(f"nb_classes, np.max(X_train) = {nb_classes}, {np.max(X_train)}")
-    train_uniques, train_counts = np.unique(train_labels_text, return_counts=True)
-    validation_uniques, validation_counts = np.unique(validation_labels_text, return_counts=True)
-    test_uniques, test_counts = np.unique(test_labels_text, return_counts=True)
+    train_uniques, train_counts = np.unique(raw_train_labels, return_counts=True)
+    validation_uniques, validation_counts = np.unique(raw_validation_labels, return_counts=True)
+    test_uniques, test_counts = np.unique(raw_test_labels, return_counts=True)
     print("unique labels in train", (train_uniques, train_counts))
     print("unique labels in validation", (validation_uniques, validation_counts))
     print("unique labels in test", (test_uniques, test_counts))

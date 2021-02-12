@@ -2,16 +2,18 @@ import numpy as np
 import keras
 import imgaug.augmenters as iaa
 import cv2
+from .video_dataset_preprocess import preprocess_video_dataset
 
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
-    def __init__(self, X, Y, batch_size, dim, shuffle):
+    def __init__(self, X, Y, batch_size, dim, shuffle, pretrained_cnn):
         'Initialization'
         self.dim = dim
         self.batch_size = batch_size
         self.Y = Y
         self.X = X
         self.shuffle = shuffle
+        self.pretrained_cnn = pretrained_cnn
         self.on_epoch_end()
         self.augmentation = iaa.Sequential([
             iaa.Multiply((0.5, 1.5)),
@@ -54,11 +56,12 @@ class DataGenerator(keras.utils.Sequence):
 
         # For each video, use same augmentation for all frames
         for x in X_temp:
-            augseq_det = self.augmentation.to_deterministic()
-            augmented_x = [augseq_det.augment_image(cv2.normalize(frame, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)) for frame in x]
+            deterministic = self.augmentation.to_deterministic()
+            augmented_x = [deterministic.augment_image(frame) for frame in x]
             x_list.append(augmented_x)
 
         X = np.array(x_list)
+        X = preprocess_video_dataset(X, self.pretrained_cnn)
         Y = np.array(y_list)
 
-        return X/255.0, Y
+        return X, Y
