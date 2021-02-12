@@ -183,6 +183,7 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
         model = rnn_layer(model)
 
     model = Dense(2048, activation='relu')(model)
+    model = Dropout(0.5)(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     act_fn = 'softmax' if not evidential else 'relu'
@@ -326,6 +327,7 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
         model = transformer_block(model)
     model = GlobalAveragePooling1D()(model)
     model = Dense(256, activation='relu')(model)
+    model = Dropout(0.5)(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     act_fn = 'softmax' if not evidential else 'relu'
@@ -348,6 +350,7 @@ def get_model_genesis_model(input_shape, nb_classes, pretrained_cnn):
     x = model.get_layer('depth_7_relu').output
     x = GlobalAveragePooling3D()(x)
     x = Dense(64, activation='relu')(x)
+    x = Dropout(0.5)(x)
     output = Dense(nb_classes, activation='softmax')(x)
     model = Model(inputs=model.input, outputs=output)
     model = fix_layers(model, num_flex_layers=4)
@@ -376,7 +379,7 @@ def get_2stream_average_model(input_shape, nb_classes, pretrained_cnn):
     merged = BatchNormalization()(merged)
     merged = ReLU()(merged)
     merged = Dropout(0.5)(merged)
-    merged = Dense(3, activation=tf.nn.softmax)(merged)
+    merged = Dense(nb_classes, activation=tf.nn.softmax)(merged)
 
     merged_cnn_model = Model(inputs=frame_input_tensor, outputs=merged)
     print(merged_cnn_model.summary())
@@ -459,6 +462,7 @@ def get_2stream_LSTM_integrated_bidirectional_model_helper(input_shape, nb_class
         model = rnn_layer(model)
 
     model = Dense(2048, activation='relu')(model)
+    model = Dropout(0.5)(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     act_fn = 'softmax' if not evidential else 'relu'
@@ -506,6 +510,7 @@ def get_2stream_transformer_model(input_shape, nb_classes, pretrained_cnn):
         model = transformer_block(model)
     model = GlobalAveragePooling1D()(model)
     model = Dense(256, activation='relu')(model)
+    model = Dropout(0.5)(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(nb_classes, activation='softmax')(model)
