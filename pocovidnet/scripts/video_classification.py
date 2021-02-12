@@ -26,6 +26,7 @@ from pocovidnet.video_augmentation import DataGenerator
 from pocovidnet import VIDEO_MODEL_FACTORY, PRETRAINED_CNN_PREPROCESS_FACTORY
 from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classification_table_and_plots
+from pocovidnet.read_mat import loadmat
 from datetime import datetime
 from datetime import date
 from keras.layers import Dropout
@@ -332,22 +333,21 @@ def main():
 
                 # Mat files
                 for mat_file in os.listdir(patient_dir):
-                    import scipy.io
-                    mat = scipy.io.loadmat(os.path.join(patient_dir, mat_file))
+                    mat = loadmat(os.path.join(patient_dir, mat_file))
 
                     # Get labels
-                    b_lines = mat['labels']['B-lines'][0][0][0][0]
-                    stop_frame = mat['labels']['stop_frame'][0][0][0][0]
-                    start_frame = mat['labels']['start_frame'][0][0][0][0]
-                    subpleural_consolidations = mat['labels']['Sub-pleural consolidations'][0][0][0][0]
-                    pleural_irregularities = mat['labels']['Pleural irregularities'][0][0][0][0]
-                    a_lines = mat['labels']['A-lines'][0][0][0][0]
-                    lobar_consolidations = mat['labels']['Lobar consolidations'][0][0][0][0]
-                    pleural_effusions = mat['labels']['Pleural effussions'][0][0][0][0]
-                    no_lung_sliding = mat['labels']['No lung sliding'][0][0][0][0]
+                    b_lines = mat['labels']['B-lines']
+                    stop_frame = mat['labels']['stop_frame']
+                    start_frame = mat['labels']['start_frame']
+                    subpleural_consolidations = mat['labels']['Sub-pleural consolidations']
+                    pleural_irregularities = mat['labels']['Pleural irregularities']
+                    a_lines = mat['labels']['A-lines']
+                    lobar_consolidations = mat['labels']['Lobar consolidations']
+                    pleural_effusions = mat['labels']['Pleural effussions']
+                    no_lung_sliding = mat['labels']['No lung sliding']
 
                     # Get cine
-                    cine = mat['raw_cine']
+                    cine = mat['cleaned']
                     num_video_frames = stop_frame - start_frame + 1
                     num_clips = num_video_frames // args.depth
 
