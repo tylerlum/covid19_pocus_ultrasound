@@ -430,6 +430,8 @@ def main():
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
                                 optical_flow_frame)
 
+    del raw_train_data
+
     print()
     print("===========================")
     print("Printing details about dataset")
