@@ -392,8 +392,8 @@ def main():
 
     # VISUALIZE
     if args.visualize:
-        num_show = 3
-        print(f"Visualizing {num_show} video clips")
+        num_show = 100
+        print(f"Visualizing {num_show} video clips, storing them in {FINAL_OUTPUT_DIR}")
         for i in range(raw_train_data.shape[0]):
             # End early
             if i >= num_show:
@@ -403,7 +403,6 @@ def main():
             label = Y_train[i]
             for j in range(video_clip.shape[0]):
                 frame = video_clip[j]
-                print(np.sum(frame) / frame.size)
                 num_channels = frame.shape[2]
                 if num_channels == 1 or num_channels == 3:
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), frame)
@@ -419,7 +418,6 @@ def main():
         batchX, batchY = generator[0]
         for i, (video_clip, label) in enumerate(zip(batchX, batchY)):
             for j, frame in enumerate(video_clip):
-                print(np.sum(frame) / frame.size)
                 num_channels = frame.shape[2]
                 if num_channels == 1 or num_channels == 3:
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
