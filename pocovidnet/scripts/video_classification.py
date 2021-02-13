@@ -153,7 +153,9 @@ def main():
 
     # K fold cross validation
     parser.add_argument('--num_folds', type=int, default=5, help='number of cross validation folds, splits up by file')
-    parser.add_argument('--test_fold', type=int, default=0, help='fold for test. validation = (test_fold+1)%num_folds')
+    parser.add_argument('--test_fold', type=int, default=0,
+                        help=('fold for test. set to -1 to run on all folds and average results.' +
+                              'validation = (test_fold+1)%num_folds'))
 
     # Save confusion matrix for each epoch
     parser.add_argument('--confusion_matrix_each_epoch', type=str2bool, nargs='?', const=True, default=False,
@@ -231,500 +233,581 @@ def main():
         os.makedirs(SAVE_DIR)
 
     # Setup folds
-    args.validation_fold = (args.test_fold + 1) % args.num_folds  # Select validation fold
-    print()
-    print("===========================")
-    print(f"Performing k-fold splitting with validation fold {args.validation_fold} and test fold {args.test_fold}")
-    print("===========================")
-    # StratifiedKFold Doesn't work when not enough datapoints of each class
-    # k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
-    k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
-
-    def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
-        for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
-            if i == args.validation_fold:
-                validation_indices = test_index
-            elif i == args.test_fold:
-                test_indices = test_index
-        train_indices = [i for i in range(len(vid_files))
-                         if i not in validation_indices and i not in test_indices]  # Need to use only remaining
-
-        train_files = [vid_files[i] for i in train_indices]
-        train_labels = [labels[i] for i in train_indices]
-        validation_files = [vid_files[i] for i in validation_indices]
-        validation_labels = [labels[i] for i in validation_indices]
-        test_files = [vid_files[i] for i in test_indices]
-        test_labels = [labels[i] for i in test_indices]
-        return train_files, train_labels, validation_files, validation_labels, test_files, test_labels
-
-    # Use pocovid dataset
-    if not args.mat:
-        # Get videos and labels
-        class_short = ["cov", "pne", "reg"]
-        vid_files = [
-            v for v in os.listdir(args.videos) if v[:3].lower() in class_short
-        ]
-        labels = [vid[:3].lower() for vid in vid_files]
-
-        # Read in videos and transform to 3D
+    test_folds = [args.test_fold] if args.test_fold != -1 else [t for t in range(args.num_folds)]
+    print(f"Going to run on these test folds {test_folds}")
+    trainPredIdxsList, validationPredIdxsList, testPredIdxsList = [], [], []
+    trainTrueIdxsList, validationTrueIdxsList, testTrueIdxsList = [], [], []
+    trainPatientPredIdxsList, validationPatientPredIdxsList, testPatientPredIdxsList = [], [], []
+    trainPatientTrueIdxsList, validationPatientTrueIdxsList, testPatientTrueIdxsList = [], [], []
+    for test_fold in test_folds:
+        validation_fold = (test_fold + 1) % args.num_folds  # Select validation fold
         print()
         print("===========================")
-        print("Reading in videos")
+        print(f"Performing k-fold splitting with validation fold {validation_fold} and test fold {test_fold}")
         print("===========================")
+        # StratifiedKFold Doesn't work when not enough datapoints of each class
+        # k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+        k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
-        train_files, train_labels, validation_files, validation_labels, test_files, test_labels = (
-                get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
-                                                vid_files, labels)
-                )
-        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
-                          framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
-        raw_train_data, raw_train_labels, train_files = vid3d.video3d(
-            train_files,
-            train_labels,
-            save=None
-        )
-        raw_validation_data, raw_validation_labels, validation_files = vid3d.video3d(
-            validation_files,
-            validation_labels,
-            save=None
-        )
-        raw_test_data, raw_test_labels, test_files = vid3d.video3d(
-            test_files,
-            test_labels,
-            save=None
-        )
+        def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
+            for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
+                if i == validation_fold:
+                    validation_indices = test_index
+                elif i == test_fold:
+                    test_indices = test_index
+            train_indices = [i for i in range(len(vid_files))
+                             if i not in validation_indices and i not in test_indices]  # Need to use only remaining
 
-        # Preprocess dataset
-        X_train = preprocess_video_dataset(raw_train_data, args.pretrained_cnn)
-        X_validation = preprocess_video_dataset(raw_validation_data, args.pretrained_cnn)
-        X_test = preprocess_video_dataset(raw_test_data, args.pretrained_cnn)
+            train_files = [vid_files[i] for i in train_indices]
+            train_labels = [labels[i] for i in train_indices]
+            validation_files = [vid_files[i] for i in validation_indices]
+            validation_labels = [labels[i] for i in validation_indices]
+            test_files = [vid_files[i] for i in test_indices]
+            test_labels = [labels[i] for i in test_indices]
+            return train_files, train_labels, validation_files, validation_labels, test_files, test_labels
 
-        # One-hot encoding
-        lb = LabelBinarizer()
-        lb.fit(raw_train_labels)
-        Y_train = np.array(lb.transform(raw_train_labels))
-        Y_validation = np.array(lb.transform(raw_validation_labels))
-        Y_test = np.array(lb.transform(raw_test_labels))
+        # Use pocovid dataset
+        if not args.mat:
+            # Get videos and labels
+            class_short = ["cov", "pne", "reg"]
+            vid_files = [
+                v for v in os.listdir(args.videos) if v[:3].lower() in class_short
+            ]
+            labels = [vid[:3].lower() for vid in vid_files]
 
-    # Use private lung dataset
-    else:
-        # Split up patients to train/validation/test
-        all_patient_dirs = [os.path.join(args.videos, name) for name in os.listdir(args.videos)
-                            if os.path.isdir(os.path.join(args.videos, name))]
-        train_patient_dirs, _, validation_patient_dirs, _, test_patient_dirs, _ = (
-                get_train_validation_test_split(args.validation_fold, args.test_fold, k_fold_cross_validation,
-                                                all_patient_dirs, all_patient_dirs)
-                )
+            # Read in videos and transform to 3D
+            print()
+            print("===========================")
+            print("Reading in videos")
+            print("===========================")
 
-        def get_video_clips_and_labels(patient_dirs):
-            video_clips = []
-            labels = []
-            # Patient directories
-            for patient_dir in tqdm(patient_dirs):
+            train_files, train_labels, validation_files, validation_labels, test_files, test_labels = (
+                    get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation,
+                                                    vid_files, labels)
+                    )
+            vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
+                              framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type)
+            raw_train_data, raw_train_labels, train_files = vid3d.video3d(
+                train_files,
+                train_labels,
+                save=None
+            )
+            raw_validation_data, raw_validation_labels, validation_files = vid3d.video3d(
+                validation_files,
+                validation_labels,
+                save=None
+            )
+            raw_test_data, raw_test_labels, test_files = vid3d.video3d(
+                test_files,
+                test_labels,
+                save=None
+            )
 
-                # Mat files
-                for mat_file in os.listdir(patient_dir):
-                    mat = loadmat(os.path.join(patient_dir, mat_file))
+            # Preprocess dataset
+            X_train = preprocess_video_dataset(raw_train_data, args.pretrained_cnn)
+            X_validation = preprocess_video_dataset(raw_validation_data, args.pretrained_cnn)
+            X_test = preprocess_video_dataset(raw_test_data, args.pretrained_cnn)
 
-                    # Get labels
-                    b_lines = mat['labels']['B-lines']
-                    stop_frame = mat['labels']['stop_frame']
-                    start_frame = mat['labels']['start_frame']
-                    subpleural_consolidations = mat['labels']['Sub-pleural consolidations']
-                    pleural_irregularities = mat['labels']['Pleural irregularities']
-                    a_lines = mat['labels']['A-lines']
-                    lobar_consolidations = mat['labels']['Lobar consolidations']
-                    pleural_effusions = mat['labels']['Pleural effussions']
-                    no_lung_sliding = mat['labels']['No lung sliding']
+            # One-hot encoding
+            lb = LabelBinarizer()
+            lb.fit(raw_train_labels)
+            Y_train = np.array(lb.transform(raw_train_labels))
+            Y_validation = np.array(lb.transform(raw_validation_labels))
+            Y_test = np.array(lb.transform(raw_test_labels))
 
-                    # Get cine
-                    cine = mat['cleaned']
-                    num_video_frames = stop_frame - start_frame + 1
-                    num_clips = num_video_frames // args.depth
+        # Use private lung dataset
+        else:
+            # Split up patients to train/validation/test
+            all_patient_dirs = [os.path.join(args.videos, name) for name in os.listdir(args.videos)
+                                if os.path.isdir(os.path.join(args.videos, name))]
+            train_patient_dirs, _, validation_patient_dirs, _, test_patient_dirs, _ = (
+                    get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation,
+                                                    all_patient_dirs, all_patient_dirs)
+                    )
 
-                    # Video clips
-                    for i in range(num_clips):
-                        start, stop = start_frame + i*args.depth, start_frame + (i+1)*args.depth
-                        clip_data = cine[:, :, start:stop]
-                        video_clip = []
+            def get_video_clips_and_labels(patient_dirs):
+                video_clips = []
+                labels = []
+                # Patient directories
+                for patient_dir in tqdm(patient_dirs):
 
-                        # Frames
-                        for frame_i in range(clip_data.shape[-1]):
-                            frame = cv2.resize(clip_data[:, :, frame_i], (args.width, args.height))
-                            frame = frame[:, :, np.newaxis]
-                            frame = cv2.merge([frame, frame, frame])
-                            video_clip.append(frame)
+                    # Mat files
+                    for mat_file in os.listdir(patient_dir):
+                        mat = loadmat(os.path.join(patient_dir, mat_file))
 
-                        video_clips.append(video_clip)
+                        # Get labels
+                        b_lines = mat['labels']['B-lines']
+                        stop_frame = mat['labels']['stop_frame']
+                        start_frame = mat['labels']['start_frame']
+                        subpleural_consolidations = mat['labels']['Sub-pleural consolidations']
+                        pleural_irregularities = mat['labels']['Pleural irregularities']
+                        a_lines = mat['labels']['A-lines']
+                        lobar_consolidations = mat['labels']['Lobar consolidations']
+                        pleural_effusions = mat['labels']['Pleural effussions']
+                        no_lung_sliding = mat['labels']['No lung sliding']
 
-                        labels.append(b_lines)
-            X = np.array(video_clips)
-            Y = np.array(labels)
-            return X, Y
+                        # Get cine
+                        cine = mat['cleaned']
+                        num_video_frames = stop_frame - start_frame + 1
+                        num_clips = num_video_frames // args.depth
 
-        # Get video clips and labels
-        raw_train_data, raw_train_labels = get_video_clips_and_labels(train_patient_dirs)
-        raw_validation_data, raw_validation_labels = get_video_clips_and_labels(validation_patient_dirs)
-        raw_test_data, raw_test_labels = get_video_clips_and_labels(test_patient_dirs)
+                        # Video clips
+                        for i in range(num_clips):
+                            start, stop = start_frame + i*args.depth, start_frame + (i+1)*args.depth
+                            clip_data = cine[:, :, start:stop]
+                            video_clip = []
 
-        # Preprocess dataset
-        X_train = preprocess_video_dataset(raw_train_data, args.pretrained_cnn)
-        X_validation = preprocess_video_dataset(raw_validation_data, args.pretrained_cnn)
-        X_test = preprocess_video_dataset(raw_test_data, args.pretrained_cnn)
+                            # Frames
+                            for frame_i in range(clip_data.shape[-1]):
+                                frame = cv2.resize(clip_data[:, :, frame_i], (args.width, args.height))
+                                frame = frame[:, :, np.newaxis]
+                                frame = cv2.merge([frame, frame, frame])
+                                video_clip.append(frame)
 
-        # Onehot encode labels
-        lb = LabelBinarizer()
-        lb.fit(raw_train_labels)
-        Y_train = np.array(lb.transform(raw_train_labels))
-        Y_validation = np.array(lb.transform(raw_validation_labels))
-        Y_test = np.array(lb.transform(raw_test_labels))
+                            video_clips.append(video_clip)
 
-        # Workaround to get text class names instead of numbers
-        lb.classes_ = ['No B-lines', '1-2 B-lines', '3+ B-lines', 'Confluent B-lines']
+                            labels.append(b_lines)
+                X = np.array(video_clips)
+                Y = np.array(labels)
+                return X, Y
 
-    input_shape = X_train.shape[1:]
-    print(f"input_shape = {input_shape}")
+            # Get video clips and labels
+            raw_train_data, raw_train_labels = get_video_clips_and_labels(train_patient_dirs)
+            raw_validation_data, raw_validation_labels = get_video_clips_and_labels(validation_patient_dirs)
+            raw_test_data, raw_test_labels = get_video_clips_and_labels(test_patient_dirs)
 
-    # VISUALIZE
-    if args.visualize:
-        num_show = 100
-        print(f"Visualizing {num_show} video clips, storing them in {FINAL_OUTPUT_DIR}")
-        for i in range(raw_train_data.shape[0]):
-            # End early
-            if i >= num_show:
-                break
+            # Preprocess dataset
+            X_train = preprocess_video_dataset(raw_train_data, args.pretrained_cnn)
+            X_validation = preprocess_video_dataset(raw_validation_data, args.pretrained_cnn)
+            X_test = preprocess_video_dataset(raw_test_data, args.pretrained_cnn)
 
-            video_clip = raw_train_data[i]
-            label = Y_train[i]
-            for j in range(video_clip.shape[0]):
-                frame = video_clip[j]
-                num_channels = frame.shape[2]
-                if num_channels == 1 or num_channels == 3:
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), frame)
-                elif num_channels == 6:
-                    rgb_frame = frame[:, :, :3]
-                    optical_flow_frame = frame[:, :, 3:]
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"),
-                                rgb_frame)
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
-                                optical_flow_frame)
+            # Onehot encode labels
+            lb = LabelBinarizer()
+            lb.fit(raw_train_labels)
+            Y_train = np.array(lb.transform(raw_train_labels))
+            Y_validation = np.array(lb.transform(raw_validation_labels))
+            Y_test = np.array(lb.transform(raw_test_labels))
 
-    # Need to pass in raw training data to generator so that it can perform augmentation on NOT preprocessed images,
-    # then apply preprocessing after
-    if args.augment:
-        generator = DataGenerator(raw_train_data, Y_train, args.batch_size, input_shape, shuffle=True,
-                                  pretrained_cnn=args.pretrained_cnn)
+            # Workaround to get text class names instead of numbers
+            lb.classes_ = ['No B-lines', '1-2 B-lines', '3+ B-lines', 'Confluent B-lines']
 
+        input_shape = X_train.shape[1:]
+        print(f"input_shape = {input_shape}")
+
+        # VISUALIZE
         if args.visualize:
-            print("Visualizing 1 batch of augmented video clips")
-            batchX, batchY = generator[0]
-            for i, (video_clip, label) in enumerate(zip(batchX, batchY)):
-                for j, frame in enumerate(video_clip):
+            num_show = 100
+            print(f"Visualizing {num_show} video clips, storing them in {FINAL_OUTPUT_DIR}")
+            for i in range(raw_train_data.shape[0]):
+                # End early
+                if i >= num_show:
+                    break
+
+                video_clip = raw_train_data[i]
+                label = Y_train[i]
+                for j in range(video_clip.shape[0]):
+                    frame = video_clip[j]
                     num_channels = frame.shape[2]
                     if num_channels == 1 or num_channels == 3:
-                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
-                                    frame)
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), frame)
                     elif num_channels == 6:
                         rgb_frame = frame[:, :, :3]
                         optical_flow_frame = frame[:, :, 3:]
-                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"),
                                     rgb_frame)
-                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
                                     optical_flow_frame)
 
-    print()
-    print("===========================")
-    print("Printing details about dataset")
-    print("===========================")
-    print(f"X_train.shape, Y_train.shape = {X_train.shape}, {Y_train.shape}")
-    print(f"X_validation.shape, Y_validation.shape = {X_validation.shape}, {Y_validation.shape}")
-    print(f"X_test.shape, Y_test.shape = {X_test.shape}, {Y_test.shape}")
-    nb_classes = len(np.unique(raw_train_labels))
-    print(f"nb_classes, np.max(X_train) = {nb_classes}, {np.max(X_train)}")
-    train_uniques, train_counts = np.unique(raw_train_labels, return_counts=True)
-    validation_uniques, validation_counts = np.unique(raw_validation_labels, return_counts=True)
-    test_uniques, test_counts = np.unique(raw_test_labels, return_counts=True)
-    print("unique labels in train", (train_uniques, train_counts))
-    print("unique labels in validation", (validation_uniques, validation_counts))
-    print("unique labels in test", (test_uniques, test_counts))
+        # Need to pass in raw training data to generator so that it can perform augmentation on NOT preprocessed images,
+        # then apply preprocessing after
+        if args.augment:
+            generator = DataGenerator(raw_train_data, Y_train, args.batch_size, input_shape, shuffle=True,
+                                      pretrained_cnn=args.pretrained_cnn)
 
-    class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
-    print(f"class_weight = {class_weight}")
+            if args.visualize:
+                print("Visualizing 1 batch of augmented video clips")
+                batchX, batchY = generator[0]
+                for i, (video_clip, label) in enumerate(zip(batchX, batchY)):
+                    for j, frame in enumerate(video_clip):
+                        num_channels = frame.shape[2]
+                        if num_channels == 1 or num_channels == 3:
+                            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
+                                        frame)
+                        elif num_channels == 6:
+                            rgb_frame = frame[:, :, :3]
+                            optical_flow_frame = frame[:, :, 3:]
+                            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
+                                        rgb_frame)
+                            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
+                                        optical_flow_frame)
 
-    # Delete raw data we will not use (save RAM)
-    del raw_train_data, raw_train_labels
-    del raw_validation_data, raw_validation_labels
-    del raw_test_data, raw_test_labels
+        print()
+        print("===========================")
+        print("Printing details about dataset")
+        print("===========================")
+        print(f"X_train.shape, Y_train.shape = {X_train.shape}, {Y_train.shape}")
+        print(f"X_validation.shape, Y_validation.shape = {X_validation.shape}, {Y_validation.shape}")
+        print(f"X_test.shape, Y_test.shape = {X_test.shape}, {Y_test.shape}")
+        nb_classes = len(np.unique(raw_train_labels))
+        print(f"nb_classes, np.max(X_train) = {nb_classes}, {np.max(X_train)}")
+        train_uniques, train_counts = np.unique(raw_train_labels, return_counts=True)
+        validation_uniques, validation_counts = np.unique(raw_validation_labels, return_counts=True)
+        test_uniques, test_counts = np.unique(raw_test_labels, return_counts=True)
+        print("unique labels in train", (train_uniques, train_counts))
+        print("unique labels in validation", (validation_uniques, validation_counts))
+        print("unique labels in test", (test_uniques, test_counts))
 
-    model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
-    print('---------------------------model---------------------\n', args.architecture)
+        class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
+        print(f"class_weight = {class_weight}")
 
-    tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
+        # Delete raw data we will not use (save RAM)
+        del raw_train_data, raw_train_labels
+        del raw_validation_data, raw_validation_labels
+        del raw_test_data, raw_test_labels
 
-    # evidential loss function
-    def KL(alpha, K):
-        beta=tf.constant(np.ones((1,K)),dtype=tf.float32)
-        S_alpha = tf.reduce_sum(alpha,axis=1,keepdims=True)
-    
-        KL = tf.reduce_sum((alpha - beta)*(tf.math.digamma(alpha)-tf.math.digamma(S_alpha)),axis=1,keepdims=True) + \
-        tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha),axis=1,keepdims=True) + \
-        tf.reduce_sum(tf.math.lgamma(beta), axis=1, keepdims=True) - tf.math.lgamma(tf.reduce_sum(beta, axis=1, keepdims=True))
-        return KL
+        model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
+        print('---------------------------model---------------------\n', args.architecture)
 
-    def loss_eq5(actual, pred, K, global_step, annealing_step):
-        p = actual
-        p = tf.dtypes.cast(p, tf.float32)
-        alpha = pred + 1.
-        S = tf.reduce_sum(alpha, axis=1, keepdims=True)
-        loglikelihood = tf.reduce_sum((p-(alpha/S))**2, axis=1, keepdims=True) + tf.reduce_sum(alpha*(S-alpha)/(S*S*(S+1)), axis=1, keepdims=True)
-        KL_reg = tf.minimum(1.0, tf.cast(global_step/annealing_step, tf.float32)) * KL((alpha - 1)*(1-p) + 1, K)
-        return loglikelihood + KL_reg
+        tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
-    ev_loss = (
-        lambda actual, pred: tf.reduce_mean(loss_eq5(actual, pred, nb_classes, 1, 100))
-    )
+        # evidential loss function
+        def KL(alpha, K):
+            beta=tf.constant(np.ones((1,K)),dtype=tf.float32)
+            S_alpha = tf.reduce_sum(alpha,axis=1,keepdims=True)
+        
+            KL = tf.reduce_sum((alpha - beta)*(tf.math.digamma(alpha)-tf.math.digamma(S_alpha)),axis=1,keepdims=True) + \
+            tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha),axis=1,keepdims=True) + \
+            tf.reduce_sum(tf.math.lgamma(beta), axis=1, keepdims=True) - tf.math.lgamma(tf.reduce_sum(beta, axis=1, keepdims=True))
+            return KL
 
-    loss = categorical_crossentropy
-    if evidential:
-        loss = ev_loss
+        def loss_eq5(actual, pred, K, global_step, annealing_step):
+            p = actual
+            p = tf.dtypes.cast(p, tf.float32)
+            alpha = pred + 1.
+            S = tf.reduce_sum(alpha, axis=1, keepdims=True)
+            loglikelihood = tf.reduce_sum((p-(alpha/S))**2, axis=1, keepdims=True) + tf.reduce_sum(alpha*(S-alpha)/(S*S*(S+1)), axis=1, keepdims=True)
+            KL_reg = tf.minimum(1.0, tf.cast(global_step/annealing_step, tf.float32)) * KL((alpha - 1)*(1-p) + 1, K)
+            return loglikelihood + KL_reg
 
-    if args.optimizer == "adam":
-        opt = Adam(lr=args.learning_rate)
-    else:
-        print(f"WARNING: invalid optimizer {args.optimizer}")
-
-    model.compile(
-        optimizer=opt, loss=loss, metrics=['accuracy']
-    )
-
-    wandb.init(entity='tylerlum', project=args.wandb_project)
-    wandb.config.update(args)
-    wandb.config.final_output_dir = FINAL_OUTPUT_DIR
-
-    callbacks = [WandbCallback()]
-    if args.reduce_learning_rate:
-        reduce_learning_rate_loss = ReduceLROnPlateau(
-            monitor=args.reduce_learning_rate_monitor,
-            factor=args.reduce_learning_rate_factor,
-            patience=args.reduce_learning_rate_patience,
-            mode=args.reduce_learning_rate_mode,
-            verbose=1,
-            epsilon=1e-4,
-        )
-        callbacks.append(reduce_learning_rate_loss)
-    if args.confusion_matrix_each_epoch:
-        callbacks.append(ConfusionMatrixEachEpochCallback(X_validation, Y_validation, lb.classes_))
-
-    print()
-    print("===========================")
-    print("About to train model")
-    print("===========================")
-    print(model.summary())
-
-    if args.augment:
-        H = model.fit(
-            generator,
-            validation_data=(X_validation, Y_validation),
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            verbose=1,
-            shuffle=True,
-            class_weight=class_weight,
-            callbacks=callbacks,
-        )
-    else:
-        H = model.fit(
-            X_train, Y_train,
-            validation_data=(X_validation, Y_validation),
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            verbose=1,
-            shuffle=True,
-            class_weight=class_weight,
-            callbacks=callbacks,
+        ev_loss = (
+            lambda actual, pred: tf.reduce_mean(loss_eq5(actual, pred, nb_classes, 1, 100))
         )
 
-    print()
-    print("===========================")
-    print("Evaluating network...")
-    print("===========================")
-    # Running inference on training set can cause out of memory issue when using larger framerate (OK on DGX)
-    trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
-    print('train loss:', trainLoss)
-    print('train accuracy:', trainAcc)
-    validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=1)
-    print('Validation loss:', validationLoss)
-    print('Validation accuracy:', validationAcc)
-    testLoss, testAcc = model.evaluate(X_test, Y_test, verbose=1)
-    print('Test loss:', testLoss)
-    print('Test accuracy:', testAcc)
+        loss = categorical_crossentropy
+        if evidential:
+            loss = ev_loss
 
-    rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size, verbose=1)
-    rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size, verbose=1)
-    rawTestPredIdxs = model.predict(X_test, batch_size=args.batch_size, verbose=1)
+        if args.optimizer == "adam":
+            opt = Adam(lr=args.learning_rate)
+        else:
+            print(f"WARNING: invalid optimizer {args.optimizer}")
 
-    def savePredictionsToCSV(rawPredIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
-        df = pd.DataFrame(rawPredIdxs)
-        df.to_csv(os.path.join(directory, csvFilename))
-    savePredictionsToCSV(rawTrainPredIdxs, "train_preds_last_epoch.csv")
-    savePredictionsToCSV(rawValidationPredIdxs, "validation_preds_last_epoch.csv")
-    savePredictionsToCSV(rawTestPredIdxs, "test_preds_last_epoch.csv")
+        model.compile(
+            optimizer=opt, loss=loss, metrics=['accuracy']
+        )
 
-    # for each image in the testing set we need to find the index of the
-    # label with corresponding largest predicted probability
-    trainPredIdxs = np.argmax(rawTrainPredIdxs, axis=1)
-    validationPredIdxs = np.argmax(rawValidationPredIdxs, axis=1)
-    testPredIdxs = np.argmax(rawTestPredIdxs, axis=1)
+        wandb.init(entity='tylerlum', project=args.wandb_project)
+        wandb.config.update(args)
+        wandb.config.final_output_dir = FINAL_OUTPUT_DIR
 
-    trainTrueIdxs = np.argmax(Y_train, axis=1)
-    validationTrueIdxs = np.argmax(Y_validation, axis=1)
-    testTrueIdxs = np.argmax(Y_test, axis=1)
-
-    classes_with_validation = [f"{c} Validation" for c in lb.classes_]
-    wandb.sklearn.plot_classifier(model, X_train, X_validation, trainTrueIdxs, validationTrueIdxs, validationPredIdxs,
-                                  rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
-    classes_with_test = [f"{c} Test" for c in lb.classes_]
-    wandb.log({'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
-                                                            matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
-                                                            show_text=True)})
-
-    # compute the confusion matrix and and use it to derive the raw
-    # accuracy, sensitivity, and specificity
-    def printAndSaveClassificationReport(trueIdxs, predIdxs, classes, reportFilename, directory=FINAL_OUTPUT_DIR):
-        print(f'classification report sklearn for {reportFilename}')
-        print(
-            classification_report(
-                trueIdxs, predIdxs, target_names=classes
+        callbacks = [WandbCallback()]
+        if args.reduce_learning_rate:
+            reduce_learning_rate_loss = ReduceLROnPlateau(
+                monitor=args.reduce_learning_rate_monitor,
+                factor=args.reduce_learning_rate_factor,
+                patience=args.reduce_learning_rate_patience,
+                mode=args.reduce_learning_rate_mode,
+                verbose=1,
+                epsilon=1e-4,
             )
-        )
+            callbacks.append(reduce_learning_rate_loss)
+        if args.confusion_matrix_each_epoch:
+            callbacks.append(ConfusionMatrixEachEpochCallback(X_validation, Y_validation, lb.classes_))
 
-        report = classification_report(
-            trueIdxs, predIdxs, target_names=classes, output_dict=True
-        )
-        reportDf = pd.DataFrame(report).transpose()
-        reportDf.to_csv(os.path.join(directory, reportFilename))
+        print()
+        print("===========================")
+        print("About to train model")
+        print("===========================")
+        print(model.summary())
 
-        wandb_log_classification_table_and_plots(report, reportFilename)
+        if args.augment:
+            H = model.fit(
+                generator,
+                validation_data=(X_validation, Y_validation),
+                epochs=args.epochs,
+                batch_size=args.batch_size,
+                verbose=1,
+                shuffle=True,
+                class_weight=class_weight,
+                callbacks=callbacks,
+            )
+        else:
+            H = model.fit(
+                X_train, Y_train,
+                validation_data=(X_validation, Y_validation),
+                epochs=args.epochs,
+                batch_size=args.batch_size,
+                verbose=1,
+                shuffle=True,
+                class_weight=class_weight,
+                callbacks=callbacks,
+            )
 
-    printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainReport.csv")
-    printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationReport.csv")
-    printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, "testReport.csv")
+        print()
+        print("===========================")
+        print("Evaluating network...")
+        print("===========================")
+        # Running inference on training set can cause out of memory issue when using larger framerate (OK on DGX)
+        trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
+        print('train loss:', trainLoss)
+        print('train accuracy:', trainAcc)
+        validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=1)
+        print('Validation loss:', validationLoss)
+        print('Validation accuracy:', validationAcc)
+        testLoss, testAcc = model.evaluate(X_test, Y_test, verbose=1)
+        print('Test loss:', testLoss)
+        print('Test accuracy:', testAcc)
 
-    def printAndSaveConfusionMatrix(trueIdxs, predIdxs, classes, confusionMatrixFilename, directory=FINAL_OUTPUT_DIR):
-        print(f'confusion matrix for {confusionMatrixFilename}')
+        rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size, verbose=1)
+        rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size, verbose=1)
+        rawTestPredIdxs = model.predict(X_test, batch_size=args.batch_size, verbose=1)
 
-        cm = confusion_matrix(trueIdxs, predIdxs)
-        # show the confusion matrix, accuracy, sensitivity, and specificity
-        print(cm)
+        def savePredictionsToCSV(rawPredIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
+            df = pd.DataFrame(rawPredIdxs)
+            df.to_csv(os.path.join(directory, csvFilename))
+        savePredictionsToCSV(rawTrainPredIdxs, "train_preds_last_epoch.csv")
+        savePredictionsToCSV(rawValidationPredIdxs, "validation_preds_last_epoch.csv")
+        savePredictionsToCSV(rawTestPredIdxs, "test_preds_last_epoch.csv")
 
+        # for each image in the testing set we need to find the index of the
+        # label with corresponding largest predicted probability
+        trainPredIdxs = np.argmax(rawTrainPredIdxs, axis=1)
+        validationPredIdxs = np.argmax(rawValidationPredIdxs, axis=1)
+        testPredIdxs = np.argmax(rawTestPredIdxs, axis=1)
+
+        trainTrueIdxs = np.argmax(Y_train, axis=1)
+        validationTrueIdxs = np.argmax(Y_validation, axis=1)
+        testTrueIdxs = np.argmax(Y_test, axis=1)
+
+        classes_with_validation = [f"{c} Validation" for c in lb.classes_]
+        wandb.sklearn.plot_classifier(model, X_train, X_validation, trainTrueIdxs, validationTrueIdxs, validationPredIdxs,
+                                      rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
+        classes_with_test = [f"{c} Test" for c in lb.classes_]
+        wandb.log({f'Test Confusion Matrix {test_fold}': wandb.plots.HeatMap(classes_with_test, classes_with_test,
+                                                                matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
+                                                                show_text=True)})
+
+        # compute the confusion matrix and and use it to derive the raw
+        # accuracy, sensitivity, and specificity
+        def printAndSaveClassificationReport(trueIdxs, predIdxs, classes, reportFilename, directory=FINAL_OUTPUT_DIR):
+            print(f'classification report sklearn for {reportFilename}')
+            print(
+                classification_report(
+                    trueIdxs, predIdxs, target_names=classes
+                )
+            )
+
+            report = classification_report(
+                trueIdxs, predIdxs, target_names=classes, output_dict=True
+            )
+            reportDf = pd.DataFrame(report).transpose()
+            reportDf.to_csv(os.path.join(directory, reportFilename))
+
+            wandb_log_classification_table_and_plots(report, reportFilename)
+
+        printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainReport.csv")
+        printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationReport.csv")
+        printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, "testReport.csv")
+
+        def printAndSaveConfusionMatrix(trueIdxs, predIdxs, classes, confusionMatrixFilename, directory=FINAL_OUTPUT_DIR):
+            print(f'confusion matrix for {confusionMatrixFilename}')
+
+            cm = confusion_matrix(trueIdxs, predIdxs)
+            # show the confusion matrix, accuracy, sensitivity, and specificity
+            print(cm)
+
+            plt.figure()
+            cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
+            cmDisplay.plot()
+            plt.savefig(os.path.join(directory, confusionMatrixFilename))
+        printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
+        printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
+        printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
+
+        if args.save_model:
+            print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
+            model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
+
+        def calculate_patient_wise(files, x, y, model, verbose=True):
+            # Calculate mean of video clips to predict patient-wise classification
+            gt = []
+            preds = []
+            files = np.array(files)
+            for video in np.unique(files):
+                current_data = x[files == video]
+                current_labels = y[files == video]
+                true_label = np.argmax(current_labels[0])
+                current_predictions = model.predict(current_data)
+                prediction = np.argmax(np.mean(current_predictions, axis=0))
+                gt.append(true_label)
+                preds.append(prediction)
+                if verbose:
+                    print(f"video = {video}, true_label = {true_label}, prediction = {prediction}")
+            return np.array(gt), np.array(preds)
+
+        def create_mc_model(model, dropProb=0.5):
+            layers = [layer for layer in model.layers]
+            x = layers[0].output
+            for i in range(1, len(layers)):
+                # Replace dropout layers with MC dropout layers
+                if isinstance(layers[i], Dropout):
+                    x = Dropout(dropProb)(x, training=True)
+                else:
+                    x = layers[i](x)
+            mc_model = Model(inputs=layers[0].input, outputs=x)
+            mc_model.set_weights(model.get_weights())
+            return mc_model
+
+        def patient_wise_uncertainty(files, x, y, model):
+            gt = []
+            logits = []
+            videos = []
+            files = np.array(files)
+            mc_model = create_mc_model(model)
+            mc_uncertainty = []
+            for video in np.unique(files):
+                current_data = x[files == video]
+                current_labels = y[files == video]
+                true_label = current_labels[0]
+                current_logits = model.predict(current_data)
+                mc_logits = []
+                for i in range(50):
+                    mc_logits.append(mc_model.predict(current_data))
+                mc_uncertainty.append(np.max(np.std(mc_logits, axis=0)))
+                patient_logits = np.mean(current_logits, axis=0)
+                gt.append(true_label)
+                logits.append(patient_logits)
+                videos.append(video)
+            logits = np.array(logits)
+            print(logits)
+            gt = np.array(gt)
+            S = 3 + np.sum(logits, axis=1)
+            u = 3/S
+            probs = (logits+1)/S[:, None]
+            plot_loss_vs_uncertainty(labels=gt, loss=np.sum(np.abs(gt - probs), axis=1), uncertainty=u,
+                                     start_of_filename="evidential")
+            prediction_accuracies = np.argmax(gt, axis=1) == np.argmax(probs, axis=1)
+            plt.figure()
+            plot_rar_vs_rer(prediction_accuracies, u, tag='evidential', color='blue', m='*')
+            plot_rar_vs_rer(prediction_accuracies, mc_uncertainty, tag='mc', color='red', m='o')
+            print('these are the ones I wanna cutoff')
+            for i in range(len(u)):
+                if u[i] > 0.2:
+                    print(videos[i])
+
+        print("-----------------------------TRAINING-----------------------------")
+        train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
+        print("-----------------------------VALIDATION-----------------------------")
+        validation_gt, validation_preds = calculate_patient_wise(validation_files, X_validation, Y_validation, model)
+        print("-----------------------------TESTING-----------------------------")
+        test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
+
+        if args.uncertainty:
+            print('-------------------------------uncertainty-----------------------------------')
+            patient_wise_uncertainty(test_files, X_test, Y_test, model)
+
+        printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, "trainReportPatients.csv")
+        printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, "validationReportPatients.csv")
+        printAndSaveClassificationReport(test_gt, test_preds, lb.classes_, "testReportPatients.csv")
+        printAndSaveConfusionMatrix(train_gt, train_preds, lb.classes_, "trainConfusionMatrixPatients.png")
+        printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, "validationConfusionMatrixPatients.png")
+        printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, "testConfusionMatrixPatients.png")
+
+        # plot the training loss and accuracy
+        plt.style.use('ggplot')
         plt.figure()
-        cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
-        cmDisplay.plot()
-        plt.savefig(os.path.join(directory, confusionMatrixFilename))
-    printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
-    printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
-    printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
+        plt.plot(np.arange(0, len(H.history['loss'])), H.history['loss'], label='train_loss')
+        plt.plot(np.arange(0, len(H.history['val_loss'])), H.history['val_loss'], label='val_loss')
+        plt.plot(np.arange(0, len(H.history['accuracy'])), H.history['accuracy'], label='train_acc')
+        plt.plot(np.arange(0, len(H.history['val_accuracy'])), H.history['val_accuracy'], label='val_acc')
+        plt.title('Training Loss and Accuracy on COVID-19 Dataset')
+        plt.xlabel('Epoch #')
+        plt.ylabel('Loss/Accuracy')
+        plt.legend(loc='lower left')
+        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, 'loss.png'))
 
-    if args.save_model:
-        print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
-        model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
+        # Store results to aggregate
+        print(f"trainPredIdxs = {trainPredIdxs}")
+        print(f"trainPredIdxs.shape = {trainPredIdxs.shape}")
+        trainPredIdxsList.append(trainPredIdxs)
+        validationPredIdxsList.append(validationPredIdxs)
+        testPredIdxsList.append(testPredIdxs)
+        trainTrueIdxsList.append(trainTrueIdxs)
+        validationTrueIdxsList.append(validationTrueIdxs)
+        testTrueIdxsList.append(testTrueIdxs)
+        trainPatientPredIdxsList.append(train_preds)
+        validationPatientPredIdxsList.append(validation_preds)
+        testPatientPredIdxsList.append(test_preds)
+        trainPatientTrueIdxsList.append(train_gt)
+        validationPatientTrueIdxsList.append(validation_gt)
+        testPatientTrueIdxsList.append(test_gt)
 
-    def calculate_patient_wise(files, x, y, model):
-        # Calculate mean of video clips to predict patient-wise classification
-        gt = []
-        preds = []
-        files = np.array(files)
-        for video in np.unique(files):
-            current_data = x[files == video]
-            current_labels = y[files == video]
-            true_label = np.argmax(current_labels[0])
-            current_predictions = model.predict(current_data)
-            prediction = np.argmax(np.mean(current_predictions, axis=0))
-            gt.append(true_label)
-            preds.append(prediction)
-            print(f"video = {video}, true_label = {true_label}, prediction = {prediction}")
-        return np.array(gt), np.array(preds)
+    # Aggregate results
+    if len(test_folds) > 1:
+        print(len(trainTrueIdxsList))
+        print(np.array(trainTrueIdxsList))
+        print(np.array(trainTrueIdxsList).size)
+        print(np.array(trainTrueIdxsList).shape)
+        print(np.array(trainTrueIdxsList).reshape(-1))
+        trainTrueIdxs = np.array(trainTrueIdxsList).reshape(-1)
+        print(trainTrueIdxs)
+        print(trainTrueIdxs.shape)
+        trainPredIdxs = np.array(trainPredIdxsList).reshape(-1)
+        print(trainPredIdxs)
+        print(trainPredIdxs.shape)
+        validationTrueIdxs = np.array(validationTrueIdxsList).reshape(-1)
+        print(validationTrueIdxs)
+        print(validationTrueIdxs.shape)
+        validationPredIdxs = np.array(validationPredIdxsList).reshape(-1)
+        print(validationPredIdxs)
+        print(validationPredIdxs.shape)
+        testTrueIdxs = np.array(testTrueIdxsList).reshape(-1)
+        print(testTrueIdxs)
+        print(testTrueIdxs.shape)
+        testPredIdxs = np.array(testPredIdxsList).reshape(-1)
+        print(testPredIdxs)
+        print(testPredIdxs.shape)
+        printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, "allTrainConfusionMatrix.png")
+        printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "allValidationConfusionMatrix.png")
+        printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "allTestConfusionMatrix.png")
+        printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, "allTrainReport.csv")
+        printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, "allValidationReport.csv")
+        printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, "allTestReport.csv")
 
-    def create_mc_model(model, dropProb=0.5):
-        layers = [layer for layer in model.layers]
-        x = layers[0].output
-        for i in range(1, len(layers)):
-            # Replace dropout layers with MC dropout layers
-            if isinstance(layers[i], Dropout):
-                x = Dropout(dropProb)(x, training=True)
-            else:
-                x = layers[i](x)
-        mc_model = Model(inputs=layers[0].input, outputs=x)
-        mc_model.set_weights(model.get_weights())
-        return mc_model
-
-    def patient_wise_uncertainty(files, x, y, model):
-        gt = []
-        logits = []
-        videos = []
-        files = np.array(files)
-        mc_model = create_mc_model(model)
-        mc_uncertainty = []
-        for video in np.unique(files):
-            current_data = x[files == video]
-            current_labels = y[files == video]
-            true_label = current_labels[0]
-            current_logits = model.predict(current_data)
-            mc_logits = []
-            for i in range(50):
-                mc_logits.append(mc_model.predict(current_data))
-            mc_uncertainty.append(np.max(np.std(mc_logits, axis=0)))
-            patient_logits = np.mean(current_logits, axis=0)
-            gt.append(true_label)
-            logits.append(patient_logits)
-            videos.append(video)
-        logits = np.array(logits)
-        print(logits)
-        gt = np.array(gt)
-        S = 3 + np.sum(logits, axis=1)
-        u = 3/S
-        probs = (logits+1)/S[:, None]
-        plot_loss_vs_uncertainty(labels=gt, loss=np.sum(np.abs(gt - probs), axis=1), uncertainty=u,
-                                 start_of_filename="evidential")
-        prediction_accuracies = np.argmax(gt, axis=1) == np.argmax(probs, axis=1)
-        plt.figure()
-        plot_rar_vs_rer(prediction_accuracies, u, tag='evidential', color='blue', m='*')
-        plot_rar_vs_rer(prediction_accuracies, mc_uncertainty, tag='mc', color='red', m='o')
-        print('these are the ones I wanna cutoff')
-        for i in range(len(u)):
-            if u[i] > 0.2:
-                print(videos[i])
-
-    print("-----------------------------TRAINING-----------------------------")
-    train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
-    print("-----------------------------VALIDATION-----------------------------")
-    validation_gt, validation_preds = calculate_patient_wise(validation_files, X_validation, Y_validation, model)
-    print("-----------------------------TESTING-----------------------------")
-    test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
-
-    if args.uncertainty:
-        print('-------------------------------uncertainty-----------------------------------')
-        patient_wise_uncertainty(test_files, X_test, Y_test, model)
-
-    printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, "trainReportPatients.csv")
-    printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, "validationReportPatients.csv")
-    printAndSaveClassificationReport(test_gt, test_preds, lb.classes_, "testReportPatients.csv")
-    printAndSaveConfusionMatrix(train_gt, train_preds, lb.classes_, "trainConfusionMatrixPatients.png")
-    printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, "validationConfusionMatrixPatients.png")
-    printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, "testConfusionMatrixPatients.png")
-
-    # plot the training loss and accuracy
-    plt.style.use('ggplot')
-    plt.figure()
-    plt.plot(np.arange(0, len(H.history['loss'])), H.history['loss'], label='train_loss')
-    plt.plot(np.arange(0, len(H.history['val_loss'])), H.history['val_loss'], label='val_loss')
-    plt.plot(np.arange(0, len(H.history['accuracy'])), H.history['accuracy'], label='train_acc')
-    plt.plot(np.arange(0, len(H.history['val_accuracy'])), H.history['val_accuracy'], label='val_acc')
-    plt.title('Training Loss and Accuracy on COVID-19 Dataset')
-    plt.xlabel('Epoch #')
-    plt.ylabel('Loss/Accuracy')
-    plt.legend(loc='lower left')
-    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, 'loss.png'))
+        trainTrueIdxsPatients = np.array(trainPatientTrueIdxsList).reshape(-1)
+        print(trainTrueIdxsPatients)
+        print(trainTrueIdxsPatients.shape)
+        trainPredIdxsPatients = np.array(trainPatientPredIdxsList).reshape(-1)
+        print(trainPredIdxsPatients)
+        print(trainPredIdxsPatients.shape)
+        validationTrueIdxsPatients = np.array(validationPatientTrueIdxsList).reshape(-1)
+        print(validationTrueIdxsPatients)
+        print(validationTrueIdxsPatients.shape)
+        validationPredIdxsPatients = np.array(validationPatientPredIdxsList).reshape(-1)
+        print(validationPredIdxsPatients)
+        print(validationPredIdxsPatients.shape)
+        testTrueIdxsPatients = np.array(testPatientTrueIdxsList).reshape(-1)
+        print(testTrueIdxsPatients)
+        print(testTrueIdxsPatients.shape)
+        testPredIdxsPatients = np.array(testPatientPredIdxsList).reshape(-1)
+        print(testPredIdxsPatients)
+        print(testPredIdxsPatients.shape)
+        printAndSaveConfusionMatrix(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainConfusionMatrixPatients.png")
+        printAndSaveConfusionMatrix(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, "allValidationConfusionMatrixPatients.png")
+        printAndSaveConfusionMatrix(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestConfusionMatrixPatients.png")
+        printAndSaveClassificationReport(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainReportPatients.csv")
+        printAndSaveClassificationReport(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, "allValidationReportPatients.csv")
+        printAndSaveClassificationReport(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestReportPatients.csv")
 
 
 if __name__ == '__main__':
