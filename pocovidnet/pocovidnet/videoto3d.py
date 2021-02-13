@@ -9,7 +9,7 @@ from pocovidnet import OPTICAL_FLOW_ALGORITHM_FACTORY
 
 class Videoto3D:
 
-    def __init__(self, vid_path, width=224, height=224, depth=5, framerate=5, grayscale=False, optical_flow_type=None):
+    def __init__(self, vid_path, width=224, height=224, depth=5, framerate=5, grayscale=False, optical_flow_type=None, verbose=False):
         self.vid_path = vid_path
         self.width = width
         self.height = height
@@ -19,16 +19,17 @@ class Videoto3D:
         self.max_vid = {"cov": 100, "pne": 100, "reg": 100}
         self.grayscale = grayscale
         self.optical_flow_type = optical_flow_type
+        self.verbose = verbose
 
     def save_data(self, data_3d, labels_3d, files_3d, save_path):
-        print("SAVE DATA", data_3d.shape, np.max(data_3d))
+        self._print_if_verbose("SAVE DATA", data_3d.shape, np.max(data_3d))
         with open(save_path, "wb") as outfile:
             pickle.dump((data_3d, labels_3d, files_3d), outfile)
 
     def video3d(self, vid_files, labels, save=None):
         # Iterate to fill data
         data_3d, labels_3d, files_3d = [], [], []
-        for vid, label in zip(vid_files, labels):
+        for vid, label in tqdm(zip(vid_files, labels), total=len(vid_files)):
             cap = cv2.VideoCapture(os.path.join(self.vid_path, vid))
             video_framerate = cap.get(cv2.CAP_PROP_FPS)
             video_num_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
@@ -36,8 +37,9 @@ class Videoto3D:
             show_every = math.ceil(video_framerate / self.framerate)  # ceil to avoid 0
             frames_available = video_num_frames / show_every
             video_clips_available = frames_available // self.depth
-            print(f"{vid}, {video_framerate} FPS, {video_num_frames} frames, show every {show_every} frames, " +
-                  f"available frames: {frames_available}, available video clips: {video_clips_available}")
+            self._print_if_verbose(f"{vid}, {video_framerate} FPS, {video_num_frames} frames, " +
+                                   f"show every {show_every} frames, available frames: {frames_available}, " +
+                                   f"available video clips: {video_clips_available}")
 
             video_clips_counter = 0
             current_data = []
@@ -65,7 +67,7 @@ class Videoto3D:
 
                 # Got max number of clips for this video
                 if video_clips_counter >= self.max_vid[label]:
-                    print(f"already {video_clips_counter} clips taken from this video")
+                    self._print_if_verbose(f"already {video_clips_counter} clips taken from this video")
                     break
 
             cap.release()
@@ -129,3 +131,7 @@ class Videoto3D:
         if save is not None:
             self.save_data(data, labels_3d, files_3d, save)
         return data, labels_3d, files_3d
+
+    def _print_if_verbose(self, text):
+        if self.verbose:
+            print(text)
