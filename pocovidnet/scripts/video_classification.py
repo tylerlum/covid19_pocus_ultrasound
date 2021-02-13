@@ -302,7 +302,7 @@ def main():
         # One-hot encoding
         lb = LabelBinarizer()
         lb.fit(raw_train_labels)
-        Y_train = lb.transform(raw_train_labels)
+        Y_train = np.array(lb.transform(raw_train_labels))
         Y_validation = np.array(lb.transform(raw_validation_labels))
         Y_test = np.array(lb.transform(raw_test_labels))
 
@@ -385,12 +385,6 @@ def main():
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
 
-    # Need to pass in raw training data to generator so that it can perform augmentation on NOT preprocessed images,
-    # then apply preprocessing after
-    if args.augment:
-        generator = DataGenerator(raw_train_data, Y_train, args.batch_size, input_shape, shuffle=True,
-                                  pretrained_cnn=args.pretrained_cnn)
-
     # VISUALIZE
     if args.visualize:
         num_show = 100
@@ -415,7 +409,13 @@ def main():
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
                                 optical_flow_frame)
 
-        if args.augment:
+    # Need to pass in raw training data to generator so that it can perform augmentation on NOT preprocessed images,
+    # then apply preprocessing after
+    if args.augment:
+        generator = DataGenerator(raw_train_data, Y_train, args.batch_size, input_shape, shuffle=True,
+                                  pretrained_cnn=args.pretrained_cnn)
+
+        if args.visualize:
             print("Visualizing 1 batch of augmented video clips")
             batchX, batchY = generator[0]
             for i, (video_clip, label) in enumerate(zip(batchX, batchY)):
@@ -451,6 +451,7 @@ def main():
     class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
     print(f"class_weight = {class_weight}")
 
+    # Delete raw data we will not use (save RAM)
     del raw_train_data, raw_train_labels
     del raw_validation_data, raw_validation_labels
     del raw_test_data, raw_test_labels
