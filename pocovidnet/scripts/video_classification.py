@@ -704,23 +704,40 @@ def main():
                 if u[i] > 0.2:
                     print(videos[i])
 
-        print("-----------------------------TRAINING-----------------------------")
-        train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
-        print("-----------------------------VALIDATION-----------------------------")
-        validation_gt, validation_preds = calculate_patient_wise(validation_files, X_validation, Y_validation, model)
-        print("-----------------------------TESTING-----------------------------")
-        test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
-
         if args.uncertainty:
             print('-------------------------------uncertainty-----------------------------------')
             patient_wise_uncertainty(test_files, X_test, Y_test, model)
 
-        printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, f"trainReportPatients-{test_fold}.csv")
-        printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, f"validationReportPatients-{test_fold}.csv")
-        printAndSaveClassificationReport(test_gt, test_preds, lb.classes_, f"testReportPatients-{test_fold}.csv")
-        printAndSaveConfusionMatrix(train_gt, train_preds, lb.classes_, f"trainConfusionMatrixPatients-{test_fold}.png")
-        printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, f"validationConfusionMatrixPatients-{test_fold}.png")
-        printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, f"testConfusionMatrixPatients-{test_fold}.png")
+        # Only works with public dataset
+        if not args.mat:
+            print("-----------------------------TRAINING-----------------------------")
+            train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
+            print("-----------------------------VALIDATION-----------------------------")
+            validation_gt, validation_preds = calculate_patient_wise(validation_files, X_validation, Y_validation, model)
+            print("-----------------------------TESTING-----------------------------")
+            test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
+
+            printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, f"trainReportPatients-{test_fold}.csv")
+            printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, f"validationReportPatients-{test_fold}.csv")
+            printAndSaveClassificationReport(test_gt, test_preds, lb.classes_, f"testReportPatients-{test_fold}.csv")
+            printAndSaveConfusionMatrix(train_gt, train_preds, lb.classes_, f"trainConfusionMatrixPatients-{test_fold}.png")
+            printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, f"validationConfusionMatrixPatients-{test_fold}.png")
+            printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, f"testConfusionMatrixPatients-{test_fold}.png")
+
+            trainPatientPredIdxsList.append(train_preds)
+            validationPatientPredIdxsList.append(validation_preds)
+            testPatientPredIdxsList.append(test_preds)
+            trainPatientTrueIdxsList.append(train_gt)
+            validationPatientTrueIdxsList.append(validation_gt)
+            testPatientTrueIdxsList.append(test_gt)
+
+        # Store results to aggregate
+        trainPredIdxsList.append(trainPredIdxs)
+        validationPredIdxsList.append(validationPredIdxs)
+        testPredIdxsList.append(testPredIdxs)
+        trainTrueIdxsList.append(trainTrueIdxs)
+        validationTrueIdxsList.append(validationTrueIdxs)
+        testTrueIdxsList.append(testTrueIdxs)
 
         # plot the training loss and accuracy
         plt.style.use('ggplot')
@@ -736,19 +753,6 @@ def main():
         plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f'loss_fold-{test_fold}.png'))
         plt.style.use('default')
 
-        # Store results to aggregate
-        trainPredIdxsList.append(trainPredIdxs)
-        validationPredIdxsList.append(validationPredIdxs)
-        testPredIdxsList.append(testPredIdxs)
-        trainTrueIdxsList.append(trainTrueIdxs)
-        validationTrueIdxsList.append(validationTrueIdxs)
-        testTrueIdxsList.append(testTrueIdxs)
-        trainPatientPredIdxsList.append(train_preds)
-        validationPatientPredIdxsList.append(validation_preds)
-        testPatientPredIdxsList.append(test_preds)
-        trainPatientTrueIdxsList.append(train_gt)
-        validationPatientTrueIdxsList.append(validation_gt)
-        testPatientTrueIdxsList.append(test_gt)
 
     # Aggregate results
     if len(test_folds) > 1:
@@ -766,18 +770,20 @@ def main():
         printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "allValidationConfusionMatrix.png", wandb_log=True)
         printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "allTestConfusionMatrix.png", wandb_log=True)
 
-        trainTrueIdxsPatients = np.concatenate(trainPatientTrueIdxsList, axis=None)
-        trainPredIdxsPatients = np.concatenate(trainPatientPredIdxsList, axis=None)
-        validationTrueIdxsPatients = np.concatenate(validationPatientTrueIdxsList, axis=None)
-        validationPredIdxsPatients = np.concatenate(validationPatientPredIdxsList, axis=None)
-        testTrueIdxsPatients = np.concatenate(testPatientTrueIdxsList, axis=None)
-        testPredIdxsPatients = np.concatenate(testPatientPredIdxsList, axis=None)
-        printAndSaveClassificationReport(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainReportPatients.csv", wandb_log=True)
-        printAndSaveClassificationReport(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, "allValidationReportPatients.csv", wandb_log=True)
-        printAndSaveClassificationReport(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestReportPatients.csv", wandb_log=True)
-        printAndSaveConfusionMatrix(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainConfusionMatrixPatients.png", wandb_log=True)
-        printAndSaveConfusionMatrix(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, "allValidationConfusionMatrixPatients.png", wandb_log=True)
-        printAndSaveConfusionMatrix(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestConfusionMatrixPatients.png", wandb_log=True)
+        if not args.mat:
+            trainTrueIdxsPatients = np.concatenate(trainPatientTrueIdxsList, axis=None)
+            trainPredIdxsPatients = np.concatenate(trainPatientPredIdxsList, axis=None)
+            validationTrueIdxsPatients = np.concatenate(validationPatientTrueIdxsList, axis=None)
+            validationPredIdxsPatients = np.concatenate(validationPatientPredIdxsList, axis=None)
+            testTrueIdxsPatients = np.concatenate(testPatientTrueIdxsList, axis=None)
+            testPredIdxsPatients = np.concatenate(testPatientPredIdxsList, axis=None)
+            printAndSaveClassificationReport(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainReportPatients.csv", wandb_log=True)
+            printAndSaveClassificationReport(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, "allValidationReportPatients.csv", wandb_log=True)
+            printAndSaveClassificationReport(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestReportPatients.csv", wandb_log=True)
+            printAndSaveConfusionMatrix(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainConfusionMatrixPatients.png", wandb_log=True)
+            printAndSaveConfusionMatrix(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, "allValidationConfusionMatrixPatients.png", wandb_log=True)
+            printAndSaveConfusionMatrix(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestConfusionMatrixPatients.png", wandb_log=True)
+
         classes_with_test = [f"{c} Test" for c in lb.classes_]
         wandb.log({f'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
                                                                 matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
