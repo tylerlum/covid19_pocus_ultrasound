@@ -582,13 +582,15 @@ def main():
         validationTrueIdxs = np.argmax(Y_validation, axis=1)
         testTrueIdxs = np.argmax(Y_test, axis=1)
 
-        classes_with_validation = [f"{c} Validation" for c in lb.classes_]
-        wandb.sklearn.plot_classifier(model, X_train, X_validation, trainTrueIdxs, validationTrueIdxs, validationPredIdxs,
-                                      rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
-        classes_with_test = [f"{c} Test" for c in lb.classes_]
-        wandb.log({f'Test Confusion Matrix {test_fold}': wandb.plots.HeatMap(classes_with_test, classes_with_test,
-                                                                matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
-                                                                show_text=True)})
+        # Only do this with one fold, else they will overwrite eachother
+        if len(test_folds) == 1:
+            classes_with_validation = [f"{c} Validation" for c in lb.classes_]
+            wandb.sklearn.plot_classifier(model, X_train, X_validation, trainTrueIdxs, validationTrueIdxs, validationPredIdxs,
+                                          rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
+            classes_with_test = [f"{c} Test" for c in lb.classes_]
+            wandb.log({f'Test Confusion Matrix {test_fold}': wandb.plots.HeatMap(classes_with_test, classes_with_test,
+                                                                    matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
+                                                                    show_text=True)})
 
         # compute the confusion matrix and and use it to derive the raw
         # accuracy, sensitivity, and specificity
@@ -776,6 +778,10 @@ def main():
         printAndSaveConfusionMatrix(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainConfusionMatrixPatients.png", wandb_log=True)
         printAndSaveConfusionMatrix(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, "allValidationConfusionMatrixPatients.png", wandb_log=True)
         printAndSaveConfusionMatrix(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestConfusionMatrixPatients.png", wandb_log=True)
+        classes_with_test = [f"{c} Test" for c in lb.classes_]
+        wandb.log({f'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
+                                                                matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
+                                                                show_text=True)})
 
 
 if __name__ == '__main__':
