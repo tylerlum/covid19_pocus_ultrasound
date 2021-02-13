@@ -454,10 +454,6 @@ def main():
     del raw_train_data, raw_train_labels
     del raw_validation_data, raw_validation_labels
     del raw_test_data, raw_test_labels
-    from guppy import hpy; h=hpy()
-    print(h.heap())
-    print(h.heap()[0].byvia)
-    print(h.heap()[0].referrers.byvia)
 
     model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
     print('---------------------------model---------------------\n', args.architecture)
@@ -561,9 +557,6 @@ def main():
     testLoss, testAcc = model.evaluate(X_test, Y_test, verbose=1)
     print('Test loss:', testLoss)
     print('Test accuracy:', testAcc)
-    print(h.heap())
-    print(h.heap()[0].byvia)
-    print(h.heap()[0].referrers.byvia)
 
     rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size, verbose=1)
     rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size, verbose=1)
