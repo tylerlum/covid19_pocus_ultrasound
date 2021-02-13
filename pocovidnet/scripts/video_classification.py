@@ -387,8 +387,9 @@ def main():
 
     # Need to pass in raw training data to generator so that it can perform augmentation on NOT preprocessed images,
     # then apply preprocessing after
-    generator = DataGenerator(raw_train_data, Y_train, args.batch_size, input_shape, shuffle=True,
-                              pretrained_cnn=args.pretrained_cnn)
+    if args.augment:
+        generator = DataGenerator(raw_train_data, Y_train, args.batch_size, input_shape, shuffle=True,
+                                  pretrained_cnn=args.pretrained_cnn)
 
     # VISUALIZE
     if args.visualize:
@@ -430,8 +431,6 @@ def main():
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
                                 optical_flow_frame)
 
-    del raw_train_data
-
     print()
     print("===========================")
     print("Printing details about dataset")
@@ -450,6 +449,10 @@ def main():
 
     class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
     print(f"class_weight = {class_weight}")
+
+    del raw_train_data, raw_train_labels
+    del raw_validation_data, raw_validation_labels
+    del raw_test_data, raw_test_labels
 
     model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
     print('---------------------------model---------------------\n', args.architecture)
@@ -554,9 +557,9 @@ def main():
     print('Test loss:', testLoss)
     print('Test accuracy:', testAcc)
 
-    rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
-    rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size)
-    rawTestPredIdxs = model.predict(X_test, batch_size=args.batch_size)
+    rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size, verbose=1)
+    rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size, verbose=1)
+    rawTestPredIdxs = model.predict(X_test, batch_size=args.batch_size, verbose=1)
 
     def savePredictionsToCSV(rawPredIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
         df = pd.DataFrame(rawPredIdxs)
