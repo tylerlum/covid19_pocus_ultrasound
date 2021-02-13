@@ -310,7 +310,7 @@ def main():
 
             # One-hot encoding
             lb = LabelBinarizer()
-            lb.fit(raw_train_labels)
+            lb.fit(np.concatenate([raw_train_labels, raw_validation_labels, raw_test_labels], axis=None))
             Y_train = np.array(lb.transform(raw_train_labels))
             Y_validation = np.array(lb.transform(raw_validation_labels))
             Y_test = np.array(lb.transform(raw_test_labels))
@@ -383,7 +383,7 @@ def main():
 
             # Onehot encode labels
             lb = LabelBinarizer()
-            lb.fit(raw_train_labels)
+            lb.fit(np.concatenate([raw_train_labels, raw_validation_labels, raw_test_labels], axis=None))
             Y_train = np.array(lb.transform(raw_train_labels))
             Y_validation = np.array(lb.transform(raw_validation_labels))
             Y_test = np.array(lb.transform(raw_test_labels))
@@ -448,7 +448,8 @@ def main():
         print(f"X_train.shape, Y_train.shape = {X_train.shape}, {Y_train.shape}")
         print(f"X_validation.shape, Y_validation.shape = {X_validation.shape}, {Y_validation.shape}")
         print(f"X_test.shape, Y_test.shape = {X_test.shape}, {Y_test.shape}")
-        nb_classes = len(np.unique(raw_train_labels))
+        uniques, counts = np.unique(np.concatenate([raw_train_labels, raw_validation_labels, raw_test_labels], axis=None), return_counts=True)
+        nb_classes = len(uniques)
         print(f"nb_classes, np.max(X_train) = {nb_classes}, {np.max(X_train)}")
         train_uniques, train_counts = np.unique(raw_train_labels, return_counts=True)
         validation_uniques, validation_counts = np.unique(raw_validation_labels, return_counts=True)
@@ -457,7 +458,14 @@ def main():
         print("unique labels in validation", (validation_uniques, validation_counts))
         print("unique labels in test", (test_uniques, test_counts))
 
-        class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
+        class_weight = {}
+        for class_ in range(len(uniques)):
+            values = train_uniques[np.where(train_uniques == class_)]
+            if values.size != 1:
+                weight = 0
+            else:
+                weight = sum(train_counts) / train_counts[np.where(train_uniques == class_)][0]
+            class_weight[class_] = weight
         print(f"class_weight = {class_weight}")
 
         # Delete raw data we will not use (save RAM)
@@ -598,12 +606,12 @@ def main():
             print(f'classification report sklearn for {reportFilename}')
             print(
                 classification_report(
-                    trueIdxs, predIdxs, target_names=classes
+                    trueIdxs, predIdxs, target_names=classes, labels=uniques,
                 )
             )
 
             report = classification_report(
-                trueIdxs, predIdxs, target_names=classes, output_dict=True
+                trueIdxs, predIdxs, target_names=classes, labels=uniques, output_dict=True
             )
             reportDf = pd.DataFrame(report).transpose()
             reportDf.to_csv(os.path.join(directory, reportFilename))
