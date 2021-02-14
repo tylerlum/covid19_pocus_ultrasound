@@ -20,7 +20,7 @@ class ConfusionMatrixEachEpochCallback(tf.keras.callbacks.Callback):
         predIdxs = np.argmax(self.model.predict(self.X_validation), axis=1)
         trueIdxs = np.argmax(self.Y_validation, axis=1)
         classes_with_epoch = [f"{c} E-{epoch}" for c in self.class_labels]
-        cm = confusion_matrix(trueIdxs, predIdxs)
+        cm = confusion_matrix(trueIdxs, predIdxs, labels=np.arange(len(self.class_labels)))
         wandb.log({f'Confusion Matrix. Epoch {epoch}':
                    wandb.plots.HeatMap(classes_with_epoch, classes_with_epoch, matrix_values=cm, show_text=True)})
 
