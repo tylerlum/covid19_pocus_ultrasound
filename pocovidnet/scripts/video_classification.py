@@ -366,7 +366,7 @@ def main():
 
                             video_clips.append(video_clip)
 
-                            labels.append(b_lines)
+                            labels.append(a_lines)
                 X = np.array(video_clips)
                 Y = np.array(labels)
                 return X, Y
@@ -388,8 +388,14 @@ def main():
             Y_validation = np.array(lb.transform(raw_validation_labels))
             Y_test = np.array(lb.transform(raw_test_labels))
 
+            # Handle edge case of binary labels, generalize to softmax
+            if Y_train.shape[1] == 1:
+                Y_train = tf.keras.utils.to_categorical(Y_train, num_classes=2, dtype=Y_train.dtype)
+                Y_validation = tf.keras.utils.to_categorical(Y_validation, num_classes=2, dtype=Y_validation.dtype)
+                Y_test = tf.keras.utils.to_categorical(Y_test, num_classes=2, dtype=Y_test.dtype)
+
             # Workaround to get text class names instead of numbers
-            lb.classes_ = ['No B-lines', '1-2 B-lines', '3+ B-lines', 'Confluent B-lines']
+            lb.classes_ = ['No A-lines', 'A-lines']
 
         input_shape = X_train.shape[1:]
         print(f"input_shape = {input_shape}")
