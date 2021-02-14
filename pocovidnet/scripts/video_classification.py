@@ -459,13 +459,14 @@ def main():
         print("unique labels in test", (test_uniques, test_counts))
 
         class_weight = {}
-        for class_ in range(len(uniques)):
+        for i in range(len(uniques)):
+            class_ = uniques[i]
             values = train_uniques[np.where(train_uniques == class_)]
             if values.size != 1:
                 weight = 0
             else:
                 weight = sum(train_counts) / train_counts[np.where(train_uniques == class_)][0]
-            class_weight[class_] = weight
+            class_weight[i] = weight
         print(f"class_weight = {class_weight}")
 
         # Delete raw data we will not use (save RAM)
@@ -597,21 +598,21 @@ def main():
                                           rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
             classes_with_test = [f"{c} Test" for c in lb.classes_]
             wandb.log({f'Test Confusion Matrix {test_fold}': wandb.plots.HeatMap(classes_with_test, classes_with_test,
-                                                                    matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
+                                                                    matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs, np.arange(len(lb.classes_))),
                                                                     show_text=True)})
 
         # compute the confusion matrix and and use it to derive the raw
         # accuracy, sensitivity, and specificity
-        def printAndSaveClassificationReport(trueIdxs, predIdxs, class_names, classes, reportFilename, directory=FINAL_OUTPUT_DIR, wandb_log=False):
+        def printAndSaveClassificationReport(trueIdxs, predIdxs, classes, reportFilename, directory=FINAL_OUTPUT_DIR, wandb_log=False):
             print(f'classification report sklearn for {reportFilename}')
             print(
                 classification_report(
-                    trueIdxs, predIdxs, target_names=class_names, labels=classes,
+                    trueIdxs, predIdxs, target_names=classes, labels=np.arange(len(classes)),
                 )
             )
 
             report = classification_report(
-                trueIdxs, predIdxs, target_names=class_names, labels=classes, output_dict=True
+                trueIdxs, predIdxs, target_names=classes, labels=np.arange(len(classes)), output_dict=True
             )
             reportDf = pd.DataFrame(report).transpose()
             reportDf.to_csv(os.path.join(directory, reportFilename))
@@ -619,14 +620,13 @@ def main():
             if wandb_log:
                 wandb_log_classification_table_and_plots(report, reportFilename)
 
-        printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, np.arange(len(uniques)), f"trainReport-{test_fold}.csv")
-        printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, np.arange(len(uniques)), f"validationReport-{test_fold}.csv")
-        printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, np.arange(len(uniques)), f"testReport-{test_fold}.csv")
+        printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, f"trainReport-{test_fold}.csv")
+        printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, f"validationReport-{test_fold}.csv")
+        printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, f"testReport-{test_fold}.csv")
 
         def printAndSaveConfusionMatrix(trueIdxs, predIdxs, classes, confusionMatrixFilename, directory=FINAL_OUTPUT_DIR, wandb_log=False):
             print(f'confusion matrix for {confusionMatrixFilename}')
-
-            cm = confusion_matrix(trueIdxs, predIdxs)
+            cm = confusion_matrix(trueIdxs, predIdxs, labels=np.arange(len(classes)))
             # show the confusion matrix, accuracy, sensitivity, and specificity
             print(cm)
 
@@ -725,9 +725,9 @@ def main():
             print("-----------------------------TESTING-----------------------------")
             test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
 
-            printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, np.arange(len(uniques)), f"trainReportPatients-{test_fold}.csv")
-            printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, np.arange(len(uniques)), f"validationReportPatients-{test_fold}.csv")
-            printAndSaveClassificationReport(test_gt, test_preds, lb.classes_, np.arange(len(uniques)), f"testReportPatients-{test_fold}.csv")
+            printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, f"trainReportPatients-{test_fold}.csv")
+            printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, f"validationReportPatients-{test_fold}.csv")
+            printAndSaveClassificationReport(test_gt, test_preds, lb.classes_, f"testReportPatients-{test_fold}.csv")
             printAndSaveConfusionMatrix(train_gt, train_preds, lb.classes_, f"trainConfusionMatrixPatients-{test_fold}.png")
             printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, f"validationConfusionMatrixPatients-{test_fold}.png")
             printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, f"testConfusionMatrixPatients-{test_fold}.png")
@@ -771,9 +771,9 @@ def main():
         validationPredIdxs = np.concatenate(validationPredIdxsList, axis=None)
         testTrueIdxs = np.concatenate(testTrueIdxsList, axis=None)
         testPredIdxs = np.concatenate(testPredIdxsList, axis=None)
-        printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, np.arange(len(uniques)), "allTrainReport.csv", wandb_log=True)
-        printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, np.arange(len(uniques)), "allValidationReport.csv", wandb_log=True)
-        printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, np.arange(len(uniques)), "allTestReport.csv", wandb_log=True)
+        printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, "allTrainReport.csv", wandb_log=True)
+        printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, "allValidationReport.csv", wandb_log=True)
+        printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, "allTestReport.csv", wandb_log=True)
         printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, "allTrainConfusionMatrix.png", wandb_log=True)
         printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "allValidationConfusionMatrix.png", wandb_log=True)
         printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "allTestConfusionMatrix.png", wandb_log=True)
@@ -785,16 +785,16 @@ def main():
             validationPredIdxsPatients = np.concatenate(validationPatientPredIdxsList, axis=None)
             testTrueIdxsPatients = np.concatenate(testPatientTrueIdxsList, axis=None)
             testPredIdxsPatients = np.concatenate(testPatientPredIdxsList, axis=None)
-            printAndSaveClassificationReport(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, np.arange(len(uniques)), "allTrainReportPatients.csv", wandb_log=True)
-            printAndSaveClassificationReport(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, np.arange(len(uniques)), "allValidationReportPatients.csv", wandb_log=True)
-            printAndSaveClassificationReport(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, np.arange(len(uniques)), "allTestReportPatients.csv", wandb_log=True)
+            printAndSaveClassificationReport(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainReportPatients.csv", wandb_log=True)
+            printAndSaveClassificationReport(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, "allValidationReportPatients.csv", wandb_log=True)
+            printAndSaveClassificationReport(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestReportPatients.csv", wandb_log=True)
             printAndSaveConfusionMatrix(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainConfusionMatrixPatients.png", wandb_log=True)
             printAndSaveConfusionMatrix(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, "allValidationConfusionMatrixPatients.png", wandb_log=True)
             printAndSaveConfusionMatrix(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestConfusionMatrixPatients.png", wandb_log=True)
 
         classes_with_test = [f"{c} Test" for c in lb.classes_]
         wandb.log({f'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
-                                                                matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
+                                                                matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs, np.arange(len(lb.classes_))),
                                                                 show_text=True)})
 
 
