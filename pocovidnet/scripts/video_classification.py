@@ -135,9 +135,13 @@ def main():
         default='../data/pocus_videos_Jan_30_2021/convex',
         help='directory where videos are stored'
     )
+
+    # Private dataset setup
     parser.add_argument('--mat', type=str2bool, nargs='?', const=True, default=False,
                         help=('for pocovidnet dataset, do not use. Only used for reading mat files,' +
                               'pass in the lung/labelled folder to --videos'))
+    parser.add_argument('--mat_task', type=str, default=False,
+                        help='perform prediction on this task: a_lines, b_lines, b_lines_binary')
 
     # Output files
     parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
@@ -366,7 +370,13 @@ def main():
 
                             video_clips.append(video_clip)
 
-                            labels.append(a_lines)
+                            if args.mat_task == 'a_lines':
+                                labels.append(a_lines)
+                            elif args.mat_task == 'b_lines_binary':
+                                labels.append(1 if b_lines > 0 else 0)
+                            elif args.mat_task == 'b_lines':
+                                labels.append(b_lines)
+
                 X = np.array(video_clips)
                 Y = np.array(labels)
                 return X, Y
@@ -395,7 +405,12 @@ def main():
                 Y_test = tf.keras.utils.to_categorical(Y_test, num_classes=2, dtype=Y_test.dtype)
 
             # Workaround to get text class names instead of numbers
-            lb.classes_ = ['No A-lines', 'A-lines']
+            if args.mat_task == 'a_lines':
+                lb.classes_ = ['No A-lines', 'A-lines']
+            elif args.mat_task == 'b_lines_binary':
+                lb.classes_ = ['No B-lines', 'B-lines']
+            elif args.mat_task == 'b_lines':
+                lb.classes_ = ['No B-lines', '1-2 B-lines', '3+ B-lines', 'Confluent B-lines']
 
         input_shape = X_train.shape[1:]
         print(f"input_shape = {input_shape}")
