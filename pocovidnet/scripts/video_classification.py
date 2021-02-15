@@ -1,4 +1,5 @@
 import wandb
+import math
 from wandb.keras import WandbCallback
 import argparse
 import os
@@ -350,15 +351,24 @@ def main():
                         pleural_effusions = mat['labels']['Pleural effussions']
                         no_lung_sliding = mat['labels']['No lung sliding']
 
+                        # Calculate frequency of getting frames
+                        # Some mat files are missing FrameTime
+                        if 'FrameTime' not in mat['dicom_info']:
+                            time_between_frames_ms = 50  # Typically is 50 for linear and 30 for curved
+                        else:
+                            time_between_frames_ms = mat['dicom_info']['FrameTime']
+                        video_framerate = 1.0 / (time_between_frames_ms / 1000)
+                        show_every = math.ceil(video_framerate / args.frame_rate)
+
                         # Get cine
                         cine = mat['cleaned']
-                        num_video_frames = stop_frame - start_frame + 1
+                        num_video_frames = (stop_frame - start_frame + 1) // show_every
                         num_clips = num_video_frames // args.depth
 
                         # Video clips
                         for i in range(num_clips):
-                            start, stop = start_frame + i*args.depth, start_frame + (i+1)*args.depth
-                            clip_data = cine[:, :, start:stop]
+                            start, stop = start_frame + i*args.depth*show_every, start_frame + (i+1)*args.depth*show_every
+                            clip_data = cine[:, :, start:stop:show_every]
                             video_clip = []
 
                             # Frames
