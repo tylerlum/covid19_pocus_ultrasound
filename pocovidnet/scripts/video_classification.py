@@ -481,7 +481,7 @@ def main():
         print(f"X_test.shape, Y_test.shape = {X_test.shape}, {Y_test.shape}")
         uniques, counts = np.unique(np.concatenate([raw_train_labels, raw_validation_labels, raw_test_labels], axis=None), return_counts=True)
         nb_classes = len(uniques)
-        print(f"nb_classes, np.max(X_train) = {nb_classes}, {np.max(X_train)}")
+        print(f"nb_classes, np.mean(X_train), np.mean(np.std(X_train, axis=(1,2,3,4))), np.max(X_train) = {nb_classes}, {np.mean(X_train)}, {np.mean(np.std(X_train, axis=(1,2,3,4)))}, {np.max(X_train)}")
         train_uniques, train_counts = np.unique(raw_train_labels, return_counts=True)
         validation_uniques, validation_counts = np.unique(raw_validation_labels, return_counts=True)
         test_uniques, test_counts = np.unique(raw_test_labels, return_counts=True)
