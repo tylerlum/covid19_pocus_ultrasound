@@ -562,7 +562,7 @@ def main():
             )
             callbacks.append(reduce_learning_rate_loss)
         if args.confusion_matrix_each_epoch:
-            callbacks.append(ConfusionMatrixEachEpochCallback(X_validation, Y_validation, lb.classes_))
+            callbacks.append(ConfusionMatrixEachEpochCallback(X_validation, Y_validation, lb.classes_, fold=test_fold))
 
         print()
         print("===========================")
