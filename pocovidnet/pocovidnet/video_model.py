@@ -186,9 +186,14 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
     model = Dropout(0.5)(model)
     model = Dense(64, activation='relu')(model)
     model = Dropout(0.5)(model)
-    act_fn = 'softmax' if not evidential else 'relu'
-    model = Dense(nb_classes, activation=act_fn)(model)
-    model = Model(inputs=input_tensor, outputs=model)
+    # act_fn = 'softmax' if not evidential else 'relu'
+    # TODO add some kind of multi task for every network
+    act_fn = 'sigmoid'
+    # model = Dense(nb_classes, activation=act_fn)(model)
+    outputs=[]
+    for i in range(nb_classes):
+        outputs.append(Dense(1, activation='sigmoid', name='head_{}'.format(i))(model))
+    model = Model(inputs=input_tensor, outputs=outputs)
 
     return model
 

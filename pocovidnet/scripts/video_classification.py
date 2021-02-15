@@ -134,7 +134,8 @@ def main():
         help='directory where videos are stored'
     )
     parser.add_argument('--mat', type=str2bool, nargs='?', const=True, default=False, help='for pocovidnet dataset, do not use. Only used for reading mat files, pass in the lung/labelled folder to --videos')
-
+    parser.add_argument('--multitask', type=str2bool, nargs='?', const=True, default=True, help='do multitask network or not')
+    
     # Output files
     parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
     parser.add_argument('--visualize', type=str2bool, nargs='?', const=True, default=False,
@@ -208,6 +209,11 @@ def main():
     else:
         evidential = False
         print("This model does not use evidential")
+
+    if args.multitask == True:
+        print('this is a multitask network')
+    else:
+        print('this is a regular network, not a multitask one')
 
     # Deterministic behavior
     set_random_seed(args.random_seed)
@@ -348,13 +354,13 @@ def main():
 
                     # Get cine
                     cine = mat['cleaned']
-                    num_video_frames = stop_frame - start_frame + 1
+                    num_video_frames = (stop_frame - start_frame + 1)//args.frame_rate
                     num_clips = num_video_frames // args.depth
 
                     # Video clips
                     for i in range(num_clips):
                         start, stop = start_frame + i*args.depth, start_frame + (i+1)*args.depth
-                        clip_data = cine[:, :, start:stop]
+                        clip_data = cine[:, :, start:stop:args.frame_rate]
                         video_clip = []
 
                         # Frames
@@ -366,8 +372,14 @@ def main():
                             video_clip.append(frame)
 
                         video_clips.append(video_clip)
-
-                        labels.append(b_lines)
+                        b = 0 # binary b_line label, for now
+                        if b_lines >= 1:
+                            b = 1
+                        # note: omitting the no_lung_sliding label because of the
+                        # low numbers (5 in total cases) that all appeared in test set
+                        labels.append({'head_0':b, 'head_1': subpleural_consolidations, 
+                                'head_2': a_lines, 'head_3': pleural_irregularities, 'head_4':lobar_consolidations, 
+                                'head_5': pleural_effusions})
             X = np.array(video_clips)
             Y = np.array(labels)
             return X, Y
@@ -377,18 +389,25 @@ def main():
         X_validation, Y_validation = get_video_clips_and_labels(validation_patient_dirs)
         X_test, Y_test = get_video_clips_and_labels(test_patient_dirs)
 
-        # Onehot encode labels
-        train_labels_text = Y_train
-        validation_labels_text = Y_validation
-        test_labels_text = Y_test
         lb = LabelBinarizer()
-        lb.fit(train_labels_text)
-        Y_train = np.array(lb.transform(train_labels_text))
-        Y_validation = np.array(lb.transform(Y_validation))
-        Y_test = np.array(lb.transform(Y_test))
+        # Onehot encode labels
+        if args.multitask == False:
+            train_labels_text = Y_train
+            validation_labels_text = Y_validation
+            test_labels_text = Y_test
+            lb.fit(train_labels_text)
+            Y_train = np.array(lb.transform(train_labels_text))
+            Y_validation = np.array(lb.transform(Y_validation))
+            Y_test = np.array(lb.transform(Y_test))
+        else:
+            Y_train = np.array(Y_train)
+            Y_validation = np.array(Y_validation)
+            Y_test = np.array(Y_test)
 
         # Workaround to get text class names
-        lb.classes_ = ['No B-lines', '1-2 B-lines', '3+ B-lines', 'Confluent B-lines']
+        lb.classes_ = ['b_lines', 'subpleural_consolidations', 
+                                'a_lines', 'pleural_irregularities', 'lobar_consolidations', 
+                                'pleural_effusions']
 
     input_shape = X_train.shape[1:]
     print(f"input_shape = {input_shape}")
@@ -442,17 +461,29 @@ def main():
     print(f"X_train.shape, Y_train.shape = {X_train.shape}, {Y_train.shape}")
     print(f"X_validation.shape, Y_validation.shape = {X_validation.shape}, {Y_validation.shape}")
     print(f"X_test.shape, Y_test.shape = {X_test.shape}, {Y_test.shape}")
-    nb_classes = len(np.unique(train_labels_text))
-    print(f"nb_classes, np.max(X_train) = {nb_classes}, {np.max(X_train)}")
-    train_uniques, train_counts = np.unique(train_labels_text, return_counts=True)
-    validation_uniques, validation_counts = np.unique(validation_labels_text, return_counts=True)
-    test_uniques, test_counts = np.unique(test_labels_text, return_counts=True)
-    print("unique labels in train", (train_uniques, train_counts))
-    print("unique labels in validation", (validation_uniques, validation_counts))
-    print("unique labels in test", (test_uniques, test_counts))
+    if args.multitask == False:
+        nb_classes = len(np.unique(train_labels_text))
+        print(f"nb_classes, np.max(X_train) = {nb_classes}, {np.max(X_train)}")
+        train_uniques, train_counts = np.unique(train_labels_text, return_counts=True)
+        validation_uniques, validation_counts = np.unique(validation_labels_text, return_counts=True)
+        test_uniques, test_counts = np.unique(test_labels_text, return_counts=True)
+        print("unique labels in train", (train_uniques, train_counts))
+        print("unique labels in validation", (validation_uniques, validation_counts))
+        print("unique labels in test", (test_uniques, test_counts))
+    else:
+        # print("sum of Y_train")
+        # train_counts = np.sum(Y_train, axis=0)
+        # nb_classes = len(train_counts)
+        # print(np.sum(Y_train, axis=0))
+        # print("sum of Y_test")
+        # print(np.sum(Y_test, axis=0))
+        # print("sum of Y_val")
+        # print(np.sum(Y_validation, axis=0))
+        nb_classes = 6
+        print("num of classes: ", nb_classes)
 
-    class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
-    print(f"class_weight = {class_weight}")
+    # class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
+    # print(f"class_weight = {class_weight}")
 
     model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
     print('---------------------------model---------------------\n', args.architecture)
@@ -491,11 +522,40 @@ def main():
     else:
         print(f"WARNING: invalid optimizer {args.optimizer}")
 
-    model.compile(
-        optimizer=opt, loss=loss, metrics=['accuracy']
-    )
+    if args.multitask:
+        from tensorflow.keras import metrics
+        losses = {
+    	"head_0": ["binary_crossentropy"],
+	    "head_1": ["binary_crossentropy"],
+        "head_2": ["binary_crossentropy"],
+        "head_3": ["binary_crossentropy"],
+        "head_4": ["binary_crossentropy"],
+        "head_5": ["binary_crossentropy"],
+        }
+        metrs = {
+    	"head_0": metrics.binary_accuracy,
+	    "head_1": metrics.binary_accuracy,
+        "head_2": metrics.binary_accuracy,
+        "head_3": metrics.binary_accuracy,
+        "head_4": metrics.binary_accuracy,
+        "head_5": metrics.binary_accuracy,
+        }
+        model.compile(optimizer=opt, loss=losses, metrics=metrs,
+        # loss_weights = {
+        #         "head_0": 2, 
+        #         "head_1": 10,
+        #         "head_2": 2, 
+        #         "head_3": 5, 
+        #         "head_4": 10, 
+        #         "head_5": 5,
+        #     },
+            )
+    else:
+        model.compile(
+            optimizer=opt, loss=loss, metrics=['accuracy']
+        )
 
-    wandb.init(entity='tylerlum', project=args.wandb_project)
+    wandb.init(entity='mobina', project=args.wandb_project)
     wandb.config.update(args)
     wandb.config.final_output_dir = FINAL_OUTPUT_DIR
 
@@ -527,18 +587,32 @@ def main():
             batch_size=args.batch_size,
             verbose=1,
             shuffle=True,
-            class_weight=class_weight,
+            # class_weight=class_weight,
             callbacks=callbacks,
         )
     else:
         H = model.fit(
-            X_train, Y_train,
-            validation_data=(X_validation, Y_validation),
+            X_train, 
+            y = {"head_0": np.array([t["head_0"] for t in Y_train]),
+                "head_1": np.array([t["head_1"] for t in Y_train]),
+                "head_2": np.array([t["head_2"] for t in Y_train]),
+                "head_3": np.array([t["head_3"] for t in Y_train]),
+                "head_4": np.array([t["head_4"] for t in Y_train]),
+                "head_5": np.array([t["head_5"] for t in Y_train]),
+                },
+            validation_data=(X_validation, {
+                "head_0": np.array([t["head_0"] for t in Y_validation]),
+                "head_1": np.array([t["head_1"] for t in Y_validation]),
+                "head_2": np.array([t["head_2"] for t in Y_validation]),
+                "head_3": np.array([t["head_3"] for t in Y_validation]),
+                "head_4": np.array([t["head_4"] for t in Y_validation]),
+                "head_5": np.array([t["head_5"] for t in Y_validation]),
+            }),
             epochs=args.epochs,
             batch_size=args.batch_size,
             verbose=1,
             shuffle=True,
-            class_weight=class_weight,
+            # class_weight=class_weigoht,
             callbacks=callbacks,
         )
 
@@ -547,66 +621,70 @@ def main():
     print("Evaluating network...")
     print("===========================")
     # Running inference on training set can cause out of memory issue when using larger framerate (OK on DGX)
-    trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
-    print('train loss:', trainLoss)
-    print('train accuracy:', trainAcc)
-    validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=1)
-    print('Validation loss:', validationLoss)
-    print('Validation accuracy:', validationAcc)
-    testLoss, testAcc = model.evaluate(X_test, Y_test, verbose=1)
-    print('Test loss:', testLoss)
-    print('Test accuracy:', testAcc)
+    Y_test_pred = model.predict(X_test)
+    for i in range(len(Y_test_pred)):
+        print("result of head_{}".format(i))
+        raw = Y_test_pred[i]
+        
+        raw[Y_test_pred[i] >= 0.5] = 1
+        raw[Y_test_pred[i] < 0.5] = 0
+        gt = np.array([t["head_{}".format(i)] for t in Y_test])
+        cm = confusion_matrix(gt, raw)
+        # show the confusion matrix, accuracy, sensitivity, and specificity
+        print(cm)
 
-    rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
-    rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size)
-    rawTestPredIdxs = model.predict(X_test, batch_size=args.batch_size)
+        
+    # rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
+    # rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size)
+    # rawTestPredIdxs = model.predict(X_test, batch_size=args.batch_size)
 
-    def savePredictionsToCSV(rawPredIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
-        df = pd.DataFrame(rawPredIdxs)
-        df.to_csv(os.path.join(directory, csvFilename))
-    savePredictionsToCSV(rawTrainPredIdxs, "train_preds_last_epoch.csv")
-    savePredictionsToCSV(rawValidationPredIdxs, "validation_preds_last_epoch.csv")
-    savePredictionsToCSV(rawTestPredIdxs, "test_preds_last_epoch.csv")
+    # def savePredictionsToCSV(rawPredIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
+    #     df = pd.DataFrame(rawPredIdxs)
+    #     df.to_csv(os.path.join(directory, csvFilename))
+    # savePredictionsToCSV(rawTrainPredIdxs, "train_preds_last_epoch.csv")
+    # savePredictionsToCSV(rawValidationPredIdxs, "validation_preds_last_epoch.csv")
+    # savePredictionsToCSV(rawTestPredIdxs, "test_preds_last_epoch.csv")
 
-    # for each image in the testing set we need to find the index of the
-    # label with corresponding largest predicted probability
-    trainPredIdxs = np.argmax(rawTrainPredIdxs, axis=1)
-    validationPredIdxs = np.argmax(rawValidationPredIdxs, axis=1)
-    testPredIdxs = np.argmax(rawTestPredIdxs, axis=1)
+    # # for each image in the testing set we need to find the index of the
+    # # label with corresponding largest predicted probability
+    # if args.multitask == False:
+    #     trainPredIdxs = np.argmax(rawTrainPredIdxs, axis=1)
+    #     validationPredIdxs = np.argmax(rawValidationPredIdxs, axis=1)
+    #     testPredIdxs = np.argmax(rawTestPredIdxs, axis=1)
 
-    trainTrueIdxs = np.argmax(Y_train, axis=1)
-    validationTrueIdxs = np.argmax(Y_validation, axis=1)
-    testTrueIdxs = np.argmax(Y_test, axis=1)
+    #     trainTrueIdxs = np.argmax(Y_train, axis=1)
+    #     validationTrueIdxs = np.argmax(Y_validation, axis=1)
+    #     testTrueIdxs = np.argmax(Y_test, axis=1)
 
-    classes_with_validation = [f"{c} Validation" for c in lb.classes_]
-    wandb.sklearn.plot_classifier(model, X_train, X_validation, trainTrueIdxs, validationTrueIdxs, validationPredIdxs,
-                                  rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
-    classes_with_test = [f"{c} Test" for c in lb.classes_]
-    wandb.log({'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
-                                                            matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
-                                                            show_text=True)})
+    # classes_with_validation = [f"{c} Validation" for c in lb.classes_]
+    # wandb.sklearn.plot_classifier(model, X_train, X_validation, trainTrueIdxs, validationTrueIdxs, validationPredIdxs,
+    #                               rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
+    # classes_with_test = [f"{c} Test" for c in lb.classes_]
+    # wandb.log({'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
+    #                                                         matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs),
+    #                                                         show_text=True)})
 
-    # compute the confusion matrix and and use it to derive the raw
-    # accuracy, sensitivity, and specificity
-    def printAndSaveClassificationReport(trueIdxs, predIdxs, classes, reportFilename, directory=FINAL_OUTPUT_DIR):
-        print(f'classification report sklearn for {reportFilename}')
-        print(
-            classification_report(
-                trueIdxs, predIdxs, target_names=classes
-            )
-        )
+    # # compute the confusion matrix and and use it to derive the raw
+    # # accuracy, sensitivity, and specificity
+    # def printAndSaveClassificationReport(trueIdxs, predIdxs, classes, reportFilename, directory=FINAL_OUTPUT_DIR):
+    #     print(f'classification report sklearn for {reportFilename}')
+    #     print(
+    #         classification_report(
+    #             trueIdxs, predIdxs, target_names=classes
+    #         )
+    #     )
 
-        report = classification_report(
-            trueIdxs, predIdxs, target_names=classes, output_dict=True
-        )
-        reportDf = pd.DataFrame(report).transpose()
-        reportDf.to_csv(os.path.join(directory, reportFilename))
+    #     report = classification_report(
+    #         trueIdxs, predIdxs, target_names=classes, output_dict=True
+    #     )
+    #     reportDf = pd.DataFrame(report).transpose()
+    #     reportDf.to_csv(os.path.join(directory, reportFilename))
 
-        wandb_log_classification_table_and_plots(report, reportFilename)
+    #     wandb_log_classification_table_and_plots(report, reportFilename)
 
-    printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainReport.csv")
-    printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationReport.csv")
-    printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, "testReport.csv")
+    # printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainReport.csv")
+    # printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationReport.csv")
+    # printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, "testReport.csv")
 
     def printAndSaveConfusionMatrix(trueIdxs, predIdxs, classes, confusionMatrixFilename, directory=FINAL_OUTPUT_DIR):
         print(f'confusion matrix for {confusionMatrixFilename}')
@@ -619,13 +697,13 @@ def main():
         cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
         cmDisplay.plot()
         plt.savefig(os.path.join(directory, confusionMatrixFilename))
-    printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
-    printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
-    printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
+    # printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
+    # printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
+    # printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
-    if args.save_model:
-        print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
-        model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
+    # if args.save_model:
+    #     print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
+    #     model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
 
     def calculate_patient_wise(files, x, y, model):
         # Calculate mean of video clips to predict patient-wise classification
@@ -693,36 +771,36 @@ def main():
             if u[i] > 0.2:
                 print(videos[i])
 
-    print("-----------------------------TRAINING-----------------------------")
-    train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
-    print("-----------------------------VALIDATION-----------------------------")
-    validation_gt, validation_preds = calculate_patient_wise(validation_files, X_validation, Y_validation, model)
-    print("-----------------------------TESTING-----------------------------")
-    test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
+    # print("-----------------------------TRAINING-----------------------------")
+    # train_gt, train_preds = calculate_patient_wise(train_files, X_train, Y_train, model)
+    # print("-----------------------------VALIDATION-----------------------------")
+    # validation_gt, validation_preds = calculate_patient_wise(validation_files, X_validation, Y_validation, model)
+    # print("-----------------------------TESTING-----------------------------")
+    # test_gt, test_preds = calculate_patient_wise(test_files, X_test, Y_test, model)
 
     if args.uncertainty:
         print('-------------------------------uncertainty-----------------------------------')
         patient_wise_uncertainty(test_files, X_test, Y_test, model)
 
-    printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, "trainReportPatients.csv")
-    printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, "validationReportPatients.csv")
-    printAndSaveClassificationReport(test_gt, test_preds, lb.classes_, "testReportPatients.csv")
-    printAndSaveConfusionMatrix(train_gt, train_preds, lb.classes_, "trainConfusionMatrixPatients.png")
-    printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, "validationConfusionMatrixPatients.png")
-    printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, "testConfusionMatrixPatients.png")
+    # printAndSaveClassificationReport(train_gt, train_preds, lb.classes_, "trainReportPatients.csv")
+    # printAndSaveClassificationReport(validation_gt, validation_preds, lb.classes_, "validationReportPatients.csv")
+    # printAndSaveClassificationReport(test_gt, test_preds, lb.classes_, "testReportPatients.csv")
+    # printAndSaveConfusionMatrix(train_gt, train_preds, lb.classes_, "trainConfusionMatrixPatients.png")
+    # printAndSaveConfusionMatrix(validation_gt, validation_preds, lb.classes_, "validationConfusionMatrixPatients.png")
+    # printAndSaveConfusionMatrix(test_gt, test_preds, lb.classes_, "testConfusionMatrixPatients.png")
 
     # plot the training loss and accuracy
-    plt.style.use('ggplot')
-    plt.figure()
-    plt.plot(np.arange(0, len(H.history['loss'])), H.history['loss'], label='train_loss')
-    plt.plot(np.arange(0, len(H.history['val_loss'])), H.history['val_loss'], label='val_loss')
-    plt.plot(np.arange(0, len(H.history['accuracy'])), H.history['accuracy'], label='train_acc')
-    plt.plot(np.arange(0, len(H.history['val_accuracy'])), H.history['val_accuracy'], label='val_acc')
-    plt.title('Training Loss and Accuracy on COVID-19 Dataset')
-    plt.xlabel('Epoch #')
-    plt.ylabel('Loss/Accuracy')
-    plt.legend(loc='lower left')
-    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, 'loss.png'))
+    # plt.style.use('ggplot')
+    # plt.figure()
+    # plt.plot(np.arange(0, len(H.history['loss'])), H.history['loss'], label='train_loss')
+    # plt.plot(np.arange(0, len(H.history['val_loss'])), H.history['val_loss'], label='val_loss')
+    # plt.plot(np.arange(0, len(H.history['accuracy'])), H.history['accuracy'], label='train_acc')
+    # plt.plot(np.arange(0, len(H.history['val_accuracy'])), H.history['val_accuracy'], label='val_acc')
+    # plt.title('Training Loss and Accuracy on COVID-19 Dataset')
+    # plt.xlabel('Epoch #')
+    # plt.ylabel('Loss/Accuracy')
+    # plt.legend(loc='lower left')
+    # plt.savefig(os.path.join(FINAL_OUTPUT_DIR, 'loss.png'))
 
 
 if __name__ == '__main__':
