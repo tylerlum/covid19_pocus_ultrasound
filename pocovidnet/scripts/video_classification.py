@@ -427,7 +427,7 @@ def main():
 
         # VISUALIZE
         if args.visualize:
-            num_show = 100
+            num_show = 1000
             print(f"Visualizing {num_show} video clips, storing them in {FINAL_OUTPUT_DIR}")
             for i in range(raw_train_data.shape[0]):
                 # End early
@@ -456,21 +456,23 @@ def main():
                                       pretrained_cnn=args.pretrained_cnn)
 
             if args.visualize:
-                print("Visualizing 1 batch of augmented video clips")
-                batchX, batchY = generator[0]
-                for i, (video_clip, label) in enumerate(zip(batchX, batchY)):
-                    for j, frame in enumerate(video_clip):
-                        num_channels = frame.shape[2]
-                        if num_channels == 1 or num_channels == 3:
-                            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment_Fold-{test_fold}_Example-{i}_Frame-{j}_Label-{label}.jpg"),
-                                        frame)
-                        elif num_channels == 6:
-                            rgb_frame = frame[:, :, :3]
-                            optical_flow_frame = frame[:, :, 3:]
-                            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment_Fold-{test_fold}_Example-{i}_Frame-{j}_Label-{label}.jpg"),
-                                        rgb_frame)
-                            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment_Fold-{test_fold}_Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
-                                        optical_flow_frame)
+                num_batches = 10
+                print(f"Visualizing {num_batches} batch of augmented video clips")
+                for k in range(num_batches):
+                    batchX, batchY = generator[k]
+                    for i, (video_clip, label) in enumerate(zip(batchX, batchY)):
+                        for j, frame in enumerate(video_clip):
+                            num_channels = frame.shape[2]
+                            if num_channels == 1 or num_channels == 3:
+                                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment_Fold-{test_fold}_Example-{k*batchX.shape[0]+i}_Frame-{j}_Label-{label}.jpg"),
+                                            frame)
+                            elif num_channels == 6:
+                                rgb_frame = frame[:, :, :3]
+                                optical_flow_frame = frame[:, :, 3:]
+                                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment_Fold-{test_fold}_Example-{k*batchX.shape[0]+i}_Frame-{j}_Label-{label}.jpg"),
+                                            rgb_frame)
+                                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment_Fold-{test_fold}_Example-{k*batchX.shape[0]+i}_Frame-{j}_Label-{label}-opt.jpg"),
+                                            optical_flow_frame)
 
         print()
         print("===========================")
