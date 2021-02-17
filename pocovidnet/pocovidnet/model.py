@@ -15,7 +15,7 @@ def get_model(
     hidden_size: int = 64,
     dropout: float = 0.5,
     num_classes: int = 3,
-    trainable_layers: int = 2,
+    trainable_layers: int = 100,
     log_softmax: bool = True,
     mc_dropout: bool = False,
     evidential = False,
@@ -34,6 +34,11 @@ def get_model(
                     input_tensor = Input(shape=(input_size))
                 )
 
+    if pretrained_cnn.startswith("resnet"):
+        layer = 'conv4_block3_out'
+        baseModel = tf.keras.Model(
+            inputs=baseModel.input,
+            outputs=baseModel.get_layer(layer).output)
     tf.keras.utils.plot_model(baseModel, f"baseModel.png", show_shapes=True)
 
     # Fix layers, then set trainable ones

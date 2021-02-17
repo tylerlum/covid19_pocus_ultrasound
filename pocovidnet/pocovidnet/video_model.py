@@ -542,7 +542,8 @@ def get_2D_3D_model(input_shape, nb_classes, pretrained_cnn, evidential=False):
         inputs=base_model.input,
         outputs=base_model.get_layer(layer).output)
     for layer in base_model.layers:
-        layer.trainable = False
+        # layer.trainable = False
+        break
     print(base_model.summary())
     tf.keras.utils.plot_model(base_model, f"2D_3D.png", show_shapes=True)
 
