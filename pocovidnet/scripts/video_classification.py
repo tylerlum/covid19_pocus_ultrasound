@@ -251,8 +251,8 @@ def main():
         print(f"Performing k-fold splitting with validation fold {validation_fold} and test fold {test_fold}")
         print("===========================")
         # StratifiedKFold Doesn't work when not enough datapoints of each class
-        # k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
-        k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+        k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+        # k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
         def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
             for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
@@ -322,79 +322,125 @@ def main():
 
         # Use private lung dataset
         else:
-            # Split up patients to train/validation/test
+            # Split up mat files to train/validation/test
             all_patient_dirs = [os.path.join(args.videos, name) for name in os.listdir(args.videos)
                                 if os.path.isdir(os.path.join(args.videos, name))]
-            train_patient_dirs, _, validation_patient_dirs, _, test_patient_dirs, _ = (
+            # Get all mat files
+            all_mat_files = []
+            for patient_dir in all_patient_dirs:
+                for mat_or_dir in os.listdir(patient_dir):
+                    path_to_mat_or_dir = os.path.join(patient_dir, mat_or_dir)
+
+                    # Handle folders with mat files one level deeper
+                    if os.path.isdir(path_to_mat_or_dir):
+                        for mat in os.listdir(path_to_mat_or_dir):
+                            all_mat_files.append(os.path.join(path_to_mat_or_dir, mat))
+                    else:
+                        all_mat_files.append(path_to_mat_or_dir)
+
+            def get_labels(mat_files):
+                labels = []
+                for mat_file in mat_files:
+                    mat = loadmat(mat_file)
+
+                    # Get labels
+                    b_lines = mat['labels']['B-lines']
+                    stop_frame = mat['labels']['stop_frame']
+                    start_frame = mat['labels']['start_frame']
+                    subpleural_consolidations = mat['labels']['Sub-pleural consolidations']
+                    pleural_irregularities = mat['labels']['Pleural irregularities']
+                    a_lines = mat['labels']['A-lines']
+                    lobar_consolidations = mat['labels']['Lobar consolidations']
+                    pleural_effusions = mat['labels']['Pleural effussions']
+                    no_lung_sliding = mat['labels']['No lung sliding']
+
+                    if args.mat_task == 'a_lines':
+                        labels.append(a_lines)
+                    elif args.mat_task == 'b_lines_binary':
+                        labels.append(1 if b_lines > 0 else 0)
+                    elif args.mat_task == 'b_lines':
+                        labels.append(b_lines)
+                return labels
+
+            all_labels = get_labels(all_mat_files)
+
+            train_mats, train_labels, validation_mats, validation_labels, test_mats, test_labels = (
                     get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation,
-                                                    all_patient_dirs, all_patient_dirs)
+                                                    all_mat_files, all_labels)
                     )
 
-            def get_video_clips_and_labels(patient_dirs):
+            def get_video_clips_and_labels(mat_files):
                 video_clips = []
                 labels = []
-                # Patient directories
-                for patient_dir in tqdm(patient_dirs):
 
-                    # Mat files
-                    for mat_file in os.listdir(patient_dir):
-                        mat = loadmat(os.path.join(patient_dir, mat_file))
+                # Mat files
+                for mat_file in mat_files:
+                    print(mat_file)
+                    mat = loadmat(os.path.join(patient_dir, mat_file))
 
-                        # Get labels
-                        b_lines = mat['labels']['B-lines']
-                        stop_frame = mat['labels']['stop_frame']
-                        start_frame = mat['labels']['start_frame']
-                        subpleural_consolidations = mat['labels']['Sub-pleural consolidations']
-                        pleural_irregularities = mat['labels']['Pleural irregularities']
-                        a_lines = mat['labels']['A-lines']
-                        lobar_consolidations = mat['labels']['Lobar consolidations']
-                        pleural_effusions = mat['labels']['Pleural effussions']
-                        no_lung_sliding = mat['labels']['No lung sliding']
+                    # Get labels
+                    b_lines = mat['labels']['B-lines']
+                    stop_frame = mat['labels']['stop_frame']
+                    start_frame = mat['labels']['start_frame']
+                    subpleural_consolidations = mat['labels']['Sub-pleural consolidations']
+                    pleural_irregularities = mat['labels']['Pleural irregularities']
+                    a_lines = mat['labels']['A-lines']
+                    lobar_consolidations = mat['labels']['Lobar consolidations']
+                    pleural_effusions = mat['labels']['Pleural effussions']
+                    no_lung_sliding = mat['labels']['No lung sliding']
 
-                        # Calculate frequency of getting frames
-                        # Some mat files are missing FrameTime
-                        if 'FrameTime' not in mat['dicom_info']:
-                            time_between_frames_ms = 50  # Typically is 50 for linear and 30 for curved
-                        else:
-                            time_between_frames_ms = mat['dicom_info']['FrameTime']
-                        video_framerate = 1.0 / (time_between_frames_ms / 1000)
-                        show_every = math.ceil(video_framerate / args.frame_rate)
+                    # Calculate frequency of getting frames
+                    # Some mat files are missing FrameTime
+                    if 'FrameTime' not in mat['dicom_info']:
+                        time_between_frames_ms = 50  # Typically is 50 for linear and 30 for curved
+                    else:
+                        time_between_frames_ms = mat['dicom_info']['FrameTime']
+                    video_framerate = 1.0 / (time_between_frames_ms / 1000)
+                    show_every = math.ceil(video_framerate / args.frame_rate)
 
-                        # Get cine
+                    # Get cine
+                    if 'cropped' in mat.keys() and 'cleaned' in mat.keys():
+                        raise ValueError(f"{mat_file} has both cropped and cleaned")
+                    if 'cropped' not in mat.keys() and 'cleaned' not in mat.keys():
+                        raise ValueError(f"{mat_file} has neither cropped or cleaned")
+                    if 'cropped' in mat.keys():
+                        cine = mat['cropped']
+                    if 'cleaned' in mat.keys():
                         cine = mat['cleaned']
-                        num_video_frames = (stop_frame - start_frame + 1) // show_every
-                        num_clips = num_video_frames // args.depth
 
-                        # Video clips
-                        for i in range(num_clips):
-                            start, stop = start_frame + i*args.depth*show_every, start_frame + (i+1)*args.depth*show_every
-                            clip_data = cine[:, :, start:stop:show_every]
-                            video_clip = []
+                    num_video_frames = (stop_frame - start_frame + 1) // show_every
+                    num_clips = num_video_frames // args.depth
 
-                            # Frames
-                            for frame_i in range(clip_data.shape[-1]):
-                                frame = cv2.resize(clip_data[:, :, frame_i], (args.width, args.height))
-                                frame = frame[:, :, np.newaxis]
-                                frame = cv2.merge([frame, frame, frame])
-                                video_clip.append(frame)
+                    # Video clips
+                    for i in range(num_clips):
+                        start, stop = start_frame + i*args.depth*show_every, start_frame + (i+1)*args.depth*show_every
+                        clip_data = cine[:, :, start:stop:show_every]
+                        video_clip = []
 
-                            video_clips.append(video_clip)
+                        # Frames
+                        for frame_i in range(clip_data.shape[-1]):
+                            frame = cv2.resize(clip_data[:, :, frame_i], (args.width, args.height))
+                            frame = frame[:, :, np.newaxis]
+                            frame = cv2.merge([frame, frame, frame])
+                            video_clip.append(frame)
 
-                            if args.mat_task == 'a_lines':
-                                labels.append(a_lines)
-                            elif args.mat_task == 'b_lines_binary':
-                                labels.append(1 if b_lines > 0 else 0)
-                            elif args.mat_task == 'b_lines':
-                                labels.append(b_lines)
+                        video_clips.append(video_clip)
+
+                        if args.mat_task == 'a_lines':
+                            labels.append(a_lines)
+                        elif args.mat_task == 'b_lines_binary':
+                            labels.append(1 if b_lines > 0 else 0)
+                        elif args.mat_task == 'b_lines':
+                            labels.append(b_lines)
 
                 X = np.array(video_clips)
                 Y = np.array(labels)
                 return X, Y
 
             # Get video clips and labels
-            raw_train_data, raw_train_labels = get_video_clips_and_labels(train_patient_dirs)
-            raw_validation_data, raw_validation_labels = get_video_clips_and_labels(validation_patient_dirs)
-            raw_test_data, raw_test_labels = get_video_clips_and_labels(test_patient_dirs)
+            raw_train_data, raw_train_labels = get_video_clips_and_labels(train_mats)
+            raw_validation_data, raw_validation_labels = get_video_clips_and_labels(validation_mats)
+            raw_test_data, raw_test_labels = get_video_clips_and_labels(test_mats)
 
             # Preprocess dataset
             X_train = preprocess_video_dataset(raw_train_data, args.pretrained_cnn)

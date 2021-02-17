@@ -1,0 +1,149 @@
+from pocovidnet.read_mat import loadmat
+import argparse
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+from tqdm import tqdm
+
+# Parse arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("--path_to_lung_dataset", type=str, required=True, help='path to lung dataset')
+args = parser.parse_args()
+print(f"Looking at {args.path_to_lung_dataset}")
+
+all_mat_files = []
+
+# Patients
+for patient_dir in tqdm(os.listdir(args.path_to_lung_dataset)):
+    path_to_patient_dir = os.path.join(args.path_to_lung_dataset, patient_dir)
+
+    # Mat files OR directories to mat files
+    for mat_or_dir in os.listdir(path_to_patient_dir):
+        path_to_mat_or_dir = os.path.join(path_to_patient_dir, mat_or_dir)
+
+        # Mat file
+        if not os.path.isdir(path_to_mat_or_dir):
+            all_mat_files.append(path_to_mat_or_dir)
+
+        # Directory to mat files
+        else:
+            for mat_file in os.listdir(path_to_mat_or_dir):
+                all_mat_files.append(os.path.join(path_to_mat_or_dir, mat_file))
+
+print(f"Got {len(all_mat_files)} mat files")
+print("Loading mat files in now")
+b_lines_list = []
+stop_frame_list = []
+start_frame_list = []
+subpleural_consolidations_list = []
+pleural_irregularities_list = []
+a_lines_list = []
+lobar_consolidations_list = []
+pleural_effusions_list = []
+no_lung_sliding_list = []
+
+width_list = []
+height_list = []
+frames_list = []
+view_list = []
+
+frame_time_list = []
+
+for mat_file in tqdm(all_mat_files):
+    mat = loadmat(mat_file)
+
+    # Get labels
+    b_lines = mat['labels']['B-lines']
+    stop_frame = mat['labels']['stop_frame']
+    start_frame = mat['labels']['start_frame']
+    subpleural_consolidations = mat['labels']['Sub-pleural consolidations']
+    pleural_irregularities = mat['labels']['Pleural irregularities']
+    a_lines = mat['labels']['A-lines']
+    lobar_consolidations = mat['labels']['Lobar consolidations']
+    pleural_effusions = mat['labels']['Pleural effussions']
+    no_lung_sliding = mat['labels']['No lung sliding']
+
+    b_lines_list.append(b_lines)
+    stop_frame_list.append(stop_frame)
+    start_frame_list.append(start_frame)
+    subpleural_consolidations_list.append(subpleural_consolidations)
+    pleural_irregularities_list.append(pleural_irregularities)
+    a_lines_list.append(a_lines)
+    lobar_consolidations_list.append(lobar_consolidations)
+    pleural_effusions_list.append(pleural_effusions)
+    no_lung_sliding_list.append(no_lung_sliding)
+
+    # Check data
+    cine = mat['cleaned']
+    height_list.append(cine.shape[0])
+    width_list.append(cine.shape[1])
+    frames_list.append(cine.shape[2])
+
+    # Check view
+    view = mat['labels']['view']
+    view_list.append(view)
+
+    # Check framerate
+    if 'FrameTime' in mat['dicom_info'].keys():
+        frame_time_list.append(mat['dicom_info']['FrameTime'])
+    else:
+        frame_time_list.append(-1)
+
+print(f"b_lines_list = {np.unique(b_lines_list)}")
+print(f"stop_frame_list = {np.unique(stop_frame_list)}")
+print(f"start_frame_list = {np.unique(start_frame_list)}")
+print(f"subpleural_consolidations_list = {np.unique(subpleural_consolidations_list)}")
+print(f"pleural_irregularities_list = {np.unique(pleural_irregularities_list)}")
+print(f"a_lines_list = {np.unique(a_lines_list)}")
+print(f"lobar_consolidations_list = {np.unique(lobar_consolidations_list)}")
+print(f"pleural_effusions_list = {np.unique(pleural_effusions_list)}")
+print(f"no_lung_sliding_list = {np.unique(no_lung_sliding_list)}")
+print(f"width_list = {np.unique(width_list)}")
+print(f"height_list = {np.unique(height_list)}")
+print(f"frames_list = {np.unique(frames_list)}")
+print(f"view_list = {np.unique(view_list)}")
+
+plt.figure()
+plt.hist(b_lines_list)
+plt.savefig("b_lines_list.pdf")
+plt.figure()
+plt.hist(stop_frame_list)
+plt.savefig("stop_frame_list.pdf")
+plt.figure()
+plt.hist(start_frame_list)
+plt.savefig("start_frame_list.pdf")
+plt.figure()
+plt.hist(subpleural_consolidations_list)
+plt.savefig("subpleural_consolidations_list.pdf")
+plt.figure()
+plt.hist(pleural_irregularities_list)
+plt.savefig("pleural_irregularities_list.pdf")
+plt.figure()
+plt.hist(a_lines_list)
+plt.savefig("a_lines_list.pdf")
+plt.figure()
+plt.hist(lobar_consolidations_list)
+plt.savefig("lobar_consolidations_list.pdf")
+plt.figure()
+plt.hist(pleural_effusions_list)
+plt.savefig("pleural_effusions_list.pdf")
+plt.figure()
+plt.hist(no_lung_sliding_list)
+plt.savefig("no_lung_sliding_list.pdf")
+
+plt.figure()
+plt.hist(width_list)
+plt.savefig("width_list.pdf")
+plt.figure()
+plt.hist(height_list)
+plt.savefig("height_list.pdf")
+plt.figure()
+plt.hist(frames_list)
+plt.savefig("frames_list.pdf")
+plt.figure()
+plt.hist(view_list)
+plt.savefig("view_list.pdf")
+
+plt.figure()
+plt.hist(frame_time_list)
+plt.savefig("frame_time_list.pdf")
