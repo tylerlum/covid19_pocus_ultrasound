@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 import cv2
-from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay, roc_curve
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import StratifiedKFold, KFold
 import tensorflow as tf
@@ -377,9 +377,8 @@ def main():
                             b = 1
                         # note: omitting the no_lung_sliding label because of the
                         # low numbers (5 in total cases) that all appeared in test set
-                        labels.append({'head_0':b, 'head_1': subpleural_consolidations, 
-                                'head_2': a_lines, 'head_3': pleural_irregularities, 'head_4':lobar_consolidations, 
-                                'head_5': pleural_effusions})
+                        labels.append({'head_0':b, 
+                                'head_1': a_lines})
             X = np.array(video_clips)
             Y = np.array(labels)
             return X, Y
@@ -479,7 +478,7 @@ def main():
         # print(np.sum(Y_test, axis=0))
         # print("sum of Y_val")
         # print(np.sum(Y_validation, axis=0))
-        nb_classes = 6
+        nb_classes = 2
         print("num of classes: ", nb_classes)
 
     # class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
@@ -527,18 +526,18 @@ def main():
         losses = {
     	"head_0": ["binary_crossentropy"],
 	    "head_1": ["binary_crossentropy"],
-        "head_2": ["binary_crossentropy"],
-        "head_3": ["binary_crossentropy"],
-        "head_4": ["binary_crossentropy"],
-        "head_5": ["binary_crossentropy"],
+        # "head_2": ["binary_crossentropy"],
+        # "head_3": ["binary_crossentropy"],
+        # "head_4": ["binary_crossentropy"],
+        # "head_5": ["binary_crossentropy"],
         }
         metrs = {
-    	"head_0": metrics.binary_accuracy,
-	    "head_1": metrics.binary_accuracy,
-        "head_2": metrics.binary_accuracy,
-        "head_3": metrics.binary_accuracy,
-        "head_4": metrics.binary_accuracy,
-        "head_5": metrics.binary_accuracy,
+    	"head_0": 'AUC',
+	    "head_1": 'AUC',
+        # "head_2": 'accuracy',
+        # "head_3": 'accuracy',
+        # "head_4": 'accuracy',
+        # "head_5": 'accuracy',
         }
         model.compile(optimizer=opt, loss=losses, metrics=metrs,
         # loss_weights = {
@@ -595,24 +594,31 @@ def main():
             X_train, 
             y = {"head_0": np.array([t["head_0"] for t in Y_train]),
                 "head_1": np.array([t["head_1"] for t in Y_train]),
-                "head_2": np.array([t["head_2"] for t in Y_train]),
-                "head_3": np.array([t["head_3"] for t in Y_train]),
-                "head_4": np.array([t["head_4"] for t in Y_train]),
-                "head_5": np.array([t["head_5"] for t in Y_train]),
+                # "head_2": np.array([t["head_2"] for t in Y_train]),
+                # "head_3": np.array([t["head_3"] for t in Y_train]),
+                # "head_4": np.array([t["head_4"] for t in Y_train]),
+                # "head_5": np.array([t["head_5"] for t in Y_train]),
                 },
             validation_data=(X_validation, {
                 "head_0": np.array([t["head_0"] for t in Y_validation]),
                 "head_1": np.array([t["head_1"] for t in Y_validation]),
-                "head_2": np.array([t["head_2"] for t in Y_validation]),
-                "head_3": np.array([t["head_3"] for t in Y_validation]),
-                "head_4": np.array([t["head_4"] for t in Y_validation]),
-                "head_5": np.array([t["head_5"] for t in Y_validation]),
+                # "head_2": np.array([t["head_2"] for t in Y_validation]),
+                # "head_3": np.array([t["head_3"] for t in Y_validation]),
+                # "head_4": np.array([t["head_4"] for t in Y_validation]),
+                # "head_5": np.array([t["head_5"] for t in Y_validation]),
             }),
             epochs=args.epochs,
             batch_size=args.batch_size,
             verbose=1,
             shuffle=True,
-            # class_weight=class_weigoht,
+            # class_weight = {
+            #     "head_0": {0: 1, 1:1},
+            #     "head_1": {0: 1, 1:1},
+            #     "head_2": {0: 1, 1:1},
+            #     "head_3": {0: 1, 1:1},
+            #     "head_4": {0: 1, 1:1},
+            #     "head_5": {0: 1, 1:1},
+            # },
             callbacks=callbacks,
         )
 
@@ -624,12 +630,18 @@ def main():
     Y_test_pred = model.predict(X_test)
     for i in range(len(Y_test_pred)):
         print("result of head_{}".format(i))
-        raw = Y_test_pred[i]
         
-        raw[Y_test_pred[i] >= 0.5] = 1
-        raw[Y_test_pred[i] < 0.5] = 0
         gt = np.array([t["head_{}".format(i)] for t in Y_test])
+        fpr, tpr, thresholds = roc_curve(gt , Y_test_pred[i])
+        gmeans = np.sqrt(tpr * (1-fpr))
+        ix = np.argmax(gmeans)
+        th = thresholds[ix]
+        raw = Y_test_pred[i]
+        print('best threshold was ', th)
+        raw[Y_test_pred[i] >= th] = 1
+        raw[Y_test_pred[i] < th] = 0
         cm = confusion_matrix(gt, raw)
+        print(classification_report(gt, raw))
         # show the confusion matrix, accuracy, sensitivity, and specificity
         print(cm)
 

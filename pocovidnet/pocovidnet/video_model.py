@@ -12,10 +12,10 @@ from pocovidnet.transformer import TransformerBlock
 from .unet3d_genesis import unet_model_3d
 
 
-def get_model_remove_last_n_layers(input_shape, n_remove, nb_classes, pretrained_cnn):
+def get_model_remove_last_n_layers(input_shape, n_remove, nb_classes, pretrained_cnn, trainable_layers):
     '''Helper function for getting base cnn_model'''
     # Use pretrained cnn_model
-    cnn_model = get_model(input_size=input_shape, log_softmax=False, num_classes=nb_classes, pretrained_cnn=pretrained_cnn)
+    cnn_model = get_model(input_size=input_shape, log_softmax=False, num_classes=nb_classes, pretrained_cnn=pretrained_cnn, trainable_layers=trainable_layers)
 
     # Remove the last n layers
     for _ in range(n_remove):
@@ -153,7 +153,7 @@ def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class,
 def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional, evidential=False):
     # Use pretrained cnn_model
     # Remove the layers after convolution
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn, trainable_layers=8)
     tf.keras.utils.plot_model(cnn_model, "cnn_model_before_LSTM.png", show_shapes=True)
 
     # Run LSTM over CNN outputs
@@ -184,8 +184,8 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
 
     model = Dense(2048, activation='relu')(model)
     model = Dropout(0.5)(model)
-    model = Dense(64, activation='relu')(model)
-    model = Dropout(0.5)(model)
+    # model = Dense(64, activation='relu')(model)
+    # model = Dropout(0.5)(model)
     # act_fn = 'softmax' if not evidential else 'relu'
     # TODO add some kind of multi task for every network
     act_fn = 'sigmoid'
