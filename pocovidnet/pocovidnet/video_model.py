@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import (
     Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, MaxPooling2D, Input,
-    Lambda, GlobalAveragePooling3D, Average, ReLU, ZeroPadding3D,
+    Lambda, GlobalMaxPooling3D, GlobalAveragePooling3D, Average, ReLU, ZeroPadding3D,
     Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, GlobalAveragePooling1D, Concatenate
 )
 from tensorflow.keras.layers import BatchNormalization
@@ -534,7 +534,9 @@ def get_2D_3D_model(input_shape, nb_classes, pretrained_cnn, evidential=False):
     # Setup base model
     base_model = tf.keras.applications.resnet_v2.ResNet50V2(include_top=False,
                                                             weights='imagenet',
-                                                            pooling='max')
+                                                            pooling='max',  # Set this to None?
+                                                            input_tensor = Input(shape=(input_shape[1:]))
+                                                            )
     layer = 'conv4_block3_out'
     base_model = tf.keras.Model(
         inputs=base_model.input,
@@ -542,9 +544,10 @@ def get_2D_3D_model(input_shape, nb_classes, pretrained_cnn, evidential=False):
     for layer in base_model.layers:
         layer.trainable = False
     print(base_model.summary())
+    tf.keras.utils.plot_model(base_model, f"2D_3D.png", show_shapes=True)
 
     # Setup layers
-    conv_layers = [tf.keras.layers.Conv3D(64, 3, padding='same')
+    conv_layers = [tf.keras.layers.Conv3D(64, 3, padding='valid', activation='relu')
                         for _ in range(2)]
     pool_layers = [tf.keras.layers.MaxPooling3D(pool_size=(2,2,2), strides=(2,2,2))
                         for _ in range(2)]
@@ -559,9 +562,14 @@ def get_2D_3D_model(input_shape, nb_classes, pretrained_cnn, evidential=False):
     x = TimeDistributed(base_model)(input_tensor)
     for conv, pool, bn in zip(conv_layers, pool_layers, bn_layers):
         x = conv(x)
-        x = bn(x)
-        x = pool(x)
-    x = Flatten()(x)
+        # x = bn(x)
+        # x = pool(x)
+
+    # Flatten 3D+Channel => 1D, default GlobalMaxPooling3D in google-research
+    # x = Flatten()(x)
+    # x = GlobalAveragePooling3D()(x)
+    x = GlobalMaxPooling3D()(x)
+
     for fc in fc_layers:
         x = fc(x)
 
