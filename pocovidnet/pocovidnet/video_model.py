@@ -542,13 +542,12 @@ def get_2D_3D_model(input_shape, nb_classes, pretrained_cnn, evidential=False):
         inputs=base_model.input,
         outputs=base_model.get_layer(layer).output)
     for layer in base_model.layers:
-        # layer.trainable = False
-        break
+        layer.trainable = False
     print(base_model.summary())
     tf.keras.utils.plot_model(base_model, f"2D_3D.png", show_shapes=True)
 
     # Setup layers
-    conv_layers = [tf.keras.layers.Conv3D(64, 3, padding='valid', activation='relu')
+    conv_layers = [tf.keras.layers.Conv3D(64, 3, padding='same', activation='relu')
                         for _ in range(2)]
     pool_layers = [tf.keras.layers.MaxPooling3D(pool_size=(2,2,2), strides=(2,2,2))
                         for _ in range(2)]
