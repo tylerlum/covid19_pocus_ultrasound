@@ -41,12 +41,10 @@ a_lines_list = []
 lobar_consolidations_list = []
 pleural_effusions_list = []
 no_lung_sliding_list = []
-
 width_list = []
 height_list = []
 frames_list = []
 view_list = []
-
 frame_time_list = []
 
 for mat_file in tqdm(all_mat_files):
@@ -87,7 +85,7 @@ for mat_file in tqdm(all_mat_files):
     if 'FrameTime' in mat['dicom_info'].keys():
         frame_time_list.append(mat['dicom_info']['FrameTime'])
     else:
-        frame_time_list.append(-1)
+        frame_time_list.append(-100)
 
 print(f"b_lines_list = {np.unique(b_lines_list)}")
 print(f"stop_frame_list = {np.unique(stop_frame_list)}")
@@ -103,47 +101,60 @@ print(f"height_list = {np.unique(height_list)}")
 print(f"frames_list = {np.unique(frames_list)}")
 print(f"view_list = {np.unique(view_list)}")
 
+data_source = args.path_to_lung_dataset.split(os.sep)[-1]
+
 plt.figure()
 plt.hist(b_lines_list)
-plt.savefig("b_lines_list.pdf")
+plt.savefig(f"{data_source} b_lines_list.pdf")
+
 plt.figure()
 plt.hist(stop_frame_list)
-plt.savefig("stop_frame_list.pdf")
+plt.savefig(f"{data_source} stop_frame_list.pdf")
+
 plt.figure()
 plt.hist(start_frame_list)
-plt.savefig("start_frame_list.pdf")
+plt.savefig(f"{data_source} start_frame_list.pdf")
+
 plt.figure()
 plt.hist(subpleural_consolidations_list)
-plt.savefig("subpleural_consolidations_list.pdf")
+plt.savefig(f"{data_source} subpleural_consolidations_list.pdf")
+
 plt.figure()
 plt.hist(pleural_irregularities_list)
-plt.savefig("pleural_irregularities_list.pdf")
+plt.savefig(f"{data_source} pleural_irregularities_list.pdf")
+
 plt.figure()
 plt.hist(a_lines_list)
-plt.savefig("a_lines_list.pdf")
+plt.savefig(f"{data_source} a_lines_list.pdf")
+
 plt.figure()
 plt.hist(lobar_consolidations_list)
-plt.savefig("lobar_consolidations_list.pdf")
+plt.savefig(f"{data_source} lobar_consolidations_list.pdf")
+
 plt.figure()
 plt.hist(pleural_effusions_list)
-plt.savefig("pleural_effusions_list.pdf")
+plt.savefig(f"{data_source} pleural_effusions_list.pdf")
+
 plt.figure()
 plt.hist(no_lung_sliding_list)
-plt.savefig("no_lung_sliding_list.pdf")
+plt.savefig(f"{data_source} no_lung_sliding_list.pdf")
 
 plt.figure()
 plt.hist(width_list)
-plt.savefig("width_list.pdf")
+plt.savefig(f"{data_source} width_list.pdf")
+
 plt.figure()
 plt.hist(height_list)
-plt.savefig("height_list.pdf")
+plt.savefig(f"{data_source} height_list.pdf")
+
 plt.figure()
 plt.hist(frames_list)
-plt.savefig("frames_list.pdf")
+plt.savefig(f"{data_source} frames_list.pdf")
+
 plt.figure()
 plt.hist(view_list)
-plt.savefig("view_list.pdf")
+plt.savefig(f"{data_source} view_list.pdf")
 
 plt.figure()
 plt.hist(frame_time_list)
-plt.savefig("frame_time_list.pdf")
+plt.savefig(f"{data_source} frame_time_list.pdf")
