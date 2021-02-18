@@ -15,7 +15,7 @@ def get_model(
     hidden_size: int = 64,
     dropout: float = 0.5,
     num_classes: int = 3,
-    trainable_layers: int = 100,
+    trainable_layers: int = 4,
     log_softmax: bool = True,
     mc_dropout: bool = False,
     evidential = False,

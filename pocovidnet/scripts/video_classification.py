@@ -233,10 +233,6 @@ def main():
     if not os.path.exists(FINAL_OUTPUT_DIR):
         os.makedirs(FINAL_OUTPUT_DIR)
 
-    SAVE_DIR = '../data/video_input_data/'
-    if not os.path.isdir(SAVE_DIR):
-        os.makedirs(SAVE_DIR)
-
     # Setup folds
     test_folds = [args.test_fold] if args.test_fold != -1 else [t for t in range(args.num_folds)]
     print(f"Going to run on these test folds {test_folds}")
@@ -340,7 +336,8 @@ def main():
 
             def get_labels(mat_files):
                 labels = []
-                for mat_file in mat_files:
+                print("Getting labels for stratified k-fold splitting")
+                for mat_file in tqdm(mat_files):
                     mat = loadmat(mat_file)
 
                     # Get labels
@@ -375,7 +372,6 @@ def main():
 
                 # Mat files
                 for mat_file in mat_files:
-                    print(mat_file)
                     mat = loadmat(os.path.join(patient_dir, mat_file))
 
                     # Get labels
