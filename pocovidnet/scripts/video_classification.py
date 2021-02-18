@@ -371,7 +371,8 @@ def main():
                 labels = []
 
                 # Mat files
-                for mat_file in mat_files:
+                print("Collecting video clips and labels")
+                for mat_file in tqdm(mat_files):
                     mat = loadmat(os.path.join(patient_dir, mat_file))
 
                     # Get labels
@@ -498,7 +499,7 @@ def main():
                                       pretrained_cnn=args.pretrained_cnn)
 
             if args.visualize:
-                num_batches = 10
+                num_batches = 100
                 print(f"Visualizing {num_batches} batch of augmented video clips")
                 for k in range(num_batches):
                     batchX, batchY = generator[k]

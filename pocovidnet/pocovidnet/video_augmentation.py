@@ -23,6 +23,8 @@ class DataGenerator(keras.utils.Sequence):
             iaa.Affine(rotate=(-10, 10)),
             iaa.TranslateX(percent=(-0.1, 0.1)),
             iaa.TranslateY(percent=(-0.1, 0.1)),
+            iaa.Crop(percent=(0, 0.1)),
+            iaa.Pad(percent=(0, 0.1)),
             ])
 
     def __len__(self):
