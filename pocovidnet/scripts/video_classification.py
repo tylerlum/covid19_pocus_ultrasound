@@ -15,6 +15,7 @@ import cv2
 from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.model_selection import StratifiedKFold, KFold
+from sklearn.utils import class_weight as cw
 import tensorflow as tf
 from tensorflow.keras.callbacks import (
     ReduceLROnPlateau
@@ -534,15 +535,7 @@ def main():
         print("unique labels in validation", (validation_uniques, validation_counts))
         print("unique labels in test", (test_uniques, test_counts))
 
-        class_weight = {}
-        for i in range(len(uniques)):
-            class_ = uniques[i]
-            values = train_uniques[np.where(train_uniques == class_)]
-            if values.size != 1:
-                weight = 0
-            else:
-                weight = sum(train_counts) / train_counts[np.where(train_uniques == class_)][0]
-            class_weight[i] = weight
+        class_weight = dict(zip(uniques, cw.compute_class_weight('balanced', uniques, raw_train_labels)))
         print(f"class_weight = {class_weight}")
 
         # Delete raw data we will not use (save RAM)
