@@ -20,11 +20,14 @@ class DataGenerator(keras.utils.Sequence):
             iaa.Add((-50, 50)),
             iaa.Fliplr(0.5),
             iaa.Affine(scale=(0.9, 1.1)),
-            iaa.Affine(rotate=(-10, 10)),
+            iaa.Affine(rotate=(-5, 5)),
             iaa.TranslateX(percent=(-0.1, 0.1)),
             iaa.TranslateY(percent=(-0.1, 0.1)),
             iaa.Crop(percent=(0, 0.1)),
             iaa.Pad(percent=(0, 0.1)),
+            iaa.AdditiveGaussianNoise(scale=(0, 0.1*255)),
+            iaa.GaussianBlur(sigma=(0, 1.0)),
+            iaa.GammaContrast((0.5, 2.0)),
             ])
 
     def __len__(self):
