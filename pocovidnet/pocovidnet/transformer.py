@@ -6,17 +6,30 @@ import numpy as np
 
 # Source: https://keras.io/examples/nlp/text_classification_with_transformer/
 class MultiHeadSelfAttention(layers.Layer):
-    def __init__(self, embed_dim, num_heads=8):
-        super(MultiHeadSelfAttention, self).__init__()
+    def __init__(self, embed_dim, num_heads=8, **kwargs):
+        super(MultiHeadSelfAttention, self).__init__(**kwargs)
+
+        # Store input arguments
         self.embed_dim = embed_dim
         self.num_heads = num_heads
+
         if embed_dim % num_heads != 0:
             raise ValueError(f"embedding dimension = {embed_dim} should be divisible by number of heads = {num_heads}")
+
+        # Setup layers
         self.projection_dim = embed_dim // num_heads
         self.query_dense = layers.Dense(embed_dim)
         self.key_dense = layers.Dense(embed_dim)
         self.value_dense = layers.Dense(embed_dim)
         self.combine_heads = layers.Dense(embed_dim)
+
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            "embed_dim": self.embed_dim,
+            "num_heads": self.num_heads,
+        })
+        return config
 
     def attention(self, query, key, value):
         score = tf.matmul(query, key, transpose_b=True)
@@ -47,8 +60,18 @@ class MultiHeadSelfAttention(layers.Layer):
 
 
 class TransformerBlock(layers.Layer):
-    def __init__(self, embed_dim, num_heads, ff_dim, timesteps, positional_encoding, rate=0.1):
-        super(TransformerBlock, self).__init__()
+    def __init__(self, embed_dim, num_heads, ff_dim, timesteps, positional_encoding, rate=0.1, **kwargs):
+        super(TransformerBlock, self).__init__(**kwargs)
+
+        # Store input arguments
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.ff_dim = ff_dim
+        self.timesteps = timesteps
+        self.positional_encoding = positional_encoding
+        self.rate = rate
+
+        # Setup layers
         self.att = MultiHeadSelfAttention(embed_dim, num_heads)
 
         # self.att = MultiHeadAttention(num_heads, embed_dim) NEED tf-nightly for this package
@@ -62,6 +85,18 @@ class TransformerBlock(layers.Layer):
         self.layernorm2 = layers.LayerNormalization(epsilon=1e-6)
         self.dropout1 = layers.Dropout(rate)
         self.dropout2 = layers.Dropout(rate)
+
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            "embed_dim": self.embed_dim,
+            "num_heads": self.num_heads,
+            "ff_dim": self.ff_dim,
+            "timesteps": self.timesteps,
+            "positional_encoding": self.positional_encoding,
+            "rate": self.rate,
+        })
+        return config
 
     def call(self, inputs):
         # Rescale inputs to be in [0, sqrt(embed_dim)] to ensure positional encoding is not too large, following
