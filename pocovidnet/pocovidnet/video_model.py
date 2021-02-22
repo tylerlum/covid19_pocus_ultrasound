@@ -324,7 +324,7 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     for _ in range(num_blocks):
         transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps,
                                              positional_encoding=positional_encoding)
-        model = transformer_block(model)
+        model, attn_weights = transformer_block(model)
     model = GlobalAveragePooling1D()(model)
     model = Dense(256, activation='relu')(model)
     model = Dropout(0.5)(model)

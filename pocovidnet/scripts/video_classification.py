@@ -547,15 +547,18 @@ def main():
         del raw_validation_data, raw_validation_labels
         del raw_test_data, raw_test_labels
 
-        model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
+        # model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
         print('---------------------------model---------------------\n', args.architecture)
 
         if len(args.transferred_model) > 0:
             print("WARNING: using transferred model, assuming transformer")
             from pocovidnet.transformer import TransformerBlock
             model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
-            model = Model(model.input, model.layers[-2].output)
-            model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
+            attn_weights0 = model.layers[-8].output[1]
+            attn_weights1 = model.layers[-7].output[1]
+            model = Model(model.input, [model.output, attn_weights0, attn_weights1])
+            # model = Model(model.input, model.layers[-2].output)
+            # model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
 
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
@@ -594,6 +597,63 @@ def main():
         model.compile(
             optimizer=opt, loss=loss, metrics=['accuracy']
         )
+        Y_train = np.argmax(Y_train, axis=1)
+        Y_validation = np.argmax(Y_validation, axis=1)
+        Y_test = np.argmax(Y_test, axis=1)
+        Y_train = np.where(Y_train == 2, 1, 0)
+        Y_validation = np.where(Y_validation == 2, 1, 0)
+        Y_test = np.where(Y_test == 2, 1, 0)
+        Y_train = tf.keras.utils.to_categorical(Y_train, num_classes=2, dtype=Y_train.dtype)
+        Y_validation = tf.keras.utils.to_categorical(Y_validation, num_classes=2, dtype=Y_validation.dtype)
+        Y_test = tf.keras.utils.to_categorical(Y_test, num_classes=2, dtype=Y_test.dtype)
+        # trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
+        # print('train loss:', trainLoss)
+        # print('train accuracy:', trainAcc)
+        # validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=1)
+        # print('Validation loss:', validationLoss)
+        # print('Validation accuracy:', validationAcc)
+        # testLoss, testAcc = model.evaluate(X_test, Y_test, verbose=1)
+        # print('Test loss:', testLoss)
+        # print('Test accuracy:', testAcc)
+        rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size, verbose=1)
+        rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size, verbose=1)
+        rawTestPredIdxs = model.predict(X_test, batch_size=args.batch_size, verbose=1)
+        print(f"rawTrainPredIdxs = {rawTrainPredIdxs}")
+        print(f"rawValidationPredIdxs = {rawValidationPredIdxs}")
+        print(f"rawTestPredIdxs = {rawTestPredIdxs}")
+        print(f"len(rawTrainPredIdxs) = {len(rawTrainPredIdxs)}")
+        print(f"len(rawValidationPredIdxs) = {len(rawValidationPredIdxs)}")
+        print(f"len(rawTestPredIdxs) = {len(rawTestPredIdxs)}")
+        print(f"rawTrainPredIdxs[0].shape = {rawTrainPredIdxs[0].shape}")
+        print(f"rawValidationPredIdxs[0].shape = {rawValidationPredIdxs[0].shape}")
+        print(f"rawTestPredIdxs[0].shape = {rawTestPredIdxs[0].shape}")
+        print(f"rawTrainPredIdxs[1].shape = {rawTrainPredIdxs[1].shape}")
+        print(f"rawValidationPredIdxs[1].shape = {rawValidationPredIdxs[1].shape}")
+        print(f"rawTestPredIdxs[1].shape = {rawTestPredIdxs[1].shape}")
+        print(f"rawTrainPredIdxs[2].shape = {rawTrainPredIdxs[2].shape}")
+        print(f"rawValidationPredIdxs[2].shape = {rawValidationPredIdxs[2].shape}")
+        print(f"rawTestPredIdxs[2].shape = {rawTestPredIdxs[2].shape}")
+        for example in range(2):
+            for block in range(1, 3):
+                for head in range(4):
+                    plt.figure()
+                    plt.matshow(rawTrainPredIdxs[block][example][head])
+                    plt.savefig(f"attention_ex-{example}_block-{block}_head-{head}.png")
+        sfds
+
+        trainPredIdxs = np.argmax(rawTrainPredIdxs, axis=1)
+        validationPredIdxs = np.argmax(rawValidationPredIdxs, axis=1)
+        testPredIdxs = np.argmax(rawTestPredIdxs, axis=1)
+        Y_train = np.argmax(Y_train, axis=1)
+        Y_validation = np.argmax(Y_validation, axis=1)
+        Y_test = np.argmax(Y_test, axis=1)
+#        for i in range(trainPredIdxs.shape[0]):
+#            print(f"{trainPredIdxs[i]} => {Y_train[i]}")
+#        for i in range(validationPredIdxs.shape[0]):
+#            print(f"{validationPredIdxs[i]} => {Y_validation[i]}")
+#        for i in range(testPredIdxs.shape[0]):
+#            print(f"{testPredIdxs[i]} => {Y_test[i]}")
+        sdfds
 
         wandb.init(entity='tylerlum', project=args.wandb_project)
         wandb.config.update(args)
