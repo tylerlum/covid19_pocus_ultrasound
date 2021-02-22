@@ -32,7 +32,7 @@ from pocovidnet.read_mat import loadmat
 from pocovidnet.video_dataset_preprocess import preprocess_video_dataset
 from datetime import datetime
 from datetime import date
-from keras.layers import Dropout
+from keras.layers import Dropout, Dense
 from keras.models import Model
 
 
@@ -144,6 +144,10 @@ def main():
                               'pass in the lung/labelled folder to --videos'))
     parser.add_argument('--mat_task', type=str, default=False,
                         help='perform prediction on this task: a_lines, b_lines, b_lines_binary')
+
+    # Transfer between tasks
+    parser.add_argument("--transferred_model", type=str, default="",
+                        help="path to knowledge transferred model, ignored if empty string")
 
     # Output files
     parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
@@ -535,7 +539,7 @@ def main():
         print("unique labels in validation", (validation_uniques, validation_counts))
         print("unique labels in test", (test_uniques, test_counts))
 
-        class_weight = dict(zip(uniques, cw.compute_class_weight('balanced', uniques, raw_train_labels)))
+        class_weight = dict(zip(np.arange(len(uniques)), cw.compute_class_weight('balanced', uniques, raw_train_labels)))
         print(f"class_weight = {class_weight}")
 
         # Delete raw data we will not use (save RAM)
@@ -545,6 +549,13 @@ def main():
 
         model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
         print('---------------------------model---------------------\n', args.architecture)
+
+        if len(args.transferred_model) > 0:
+            print("WARNING: using transferred model, assuming transformer")
+            from pocovidnet.transformer import TransformerBlock
+            model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
+            model = Model(model.input, model.layers[-2].output)
+            model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
 
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
