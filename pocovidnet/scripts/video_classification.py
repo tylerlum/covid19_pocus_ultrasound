@@ -599,7 +599,7 @@ def main():
         wandb.config.update(args)
         wandb.config.final_output_dir = FINAL_OUTPUT_DIR
 
-        callbacks = [WandbCallback(save_model=False)]
+        callbacks = [WandbCallback(save_model=args.save_model)]
         if args.reduce_learning_rate:
             reduce_learning_rate_loss = ReduceLROnPlateau(
                 monitor=args.reduce_learning_rate_monitor,
