@@ -378,6 +378,7 @@ def main():
                 # Mat files
                 print("Collecting video clips and labels")
                 for mat_file in tqdm(mat_files):
+                    print(f"mat_file = {mat_file}")
                     mat = loadmat(os.path.join(patient_dir, mat_file))
 
                     # Get labels
@@ -650,10 +651,10 @@ def main():
         # trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
         # print('train loss:', trainLoss)
         # print('train accuracy:', trainAcc)
-        validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=1)
+        validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, batch_size=args.batch_size, verbose=1)
         print('Validation loss:', validationLoss)
         print('Validation accuracy:', validationAcc)
-        testLoss, testAcc = model.evaluate(X_test, Y_test, verbose=1)
+        testLoss, testAcc = model.evaluate(X_test, Y_test, batch_size=args.batch_size, verbose=1)
         print('Test loss:', testLoss)
         print('Test accuracy:', testAcc)
 
