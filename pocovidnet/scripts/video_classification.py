@@ -632,32 +632,42 @@ def main():
                     # the convolution and guided gradients have a batch dimension
                     # (which we don't need) so let's grab the volume itself and
                     # discard the batch
-                    convOutputs = convOutputs[0][0]
-                    guidedGrads = guidedGrads[0][0]
+                    convOutputs = convOutputs[0]
+                    guidedGrads = guidedGrads[0]
                     print(f"AFTER convOutputs.shape = {convOutputs.shape}, from 2d should be (7, 7, 512)")
                     print(f"AFTER guidedGrads.shape = {guidedGrads.shape}, from 2d should be (7, 7, 512)")
                     # compute the average of the gradient values, and using them
                     # as weights, compute the ponderation of the filters with
                     # respect to the weights
-                    weights = tf.reduce_mean(guidedGrads, axis=(0, 1))
+                    weights = tf.reduce_mean(guidedGrads, axis=(1, 2))
                     print(f"weights.shape = {weights.shape}, from 2d should be (512,)")
-                    cam = tf.reduce_sum(tf.multiply(weights, convOutputs), axis=-1)
+                    # cam = tf.reduce_sum(tf.multiply(weights, convOutputs), axis=-1)
+                    cam = []
+                    for i in range(len(weights)):
+                        cam.append(tf.reduce_sum(tf.multiply(weights[i], convOutputs[i]), axis=-1))
+                    cam = np.array(cam)
+
+                    # cam = tf.reduce_sum(tf.multiply(weights, convOutputs), axis=-1)
                     print(f"cam.shape = {cam.shape}, from 2d should be (7, 7)")
                     # grab the spatial dimensions of the input image and resize
                     # the output class activation map to match the input image
                     # dimensions
-                    heatmap = cv2.resize(cam.numpy(), (224, 224))
-                    print(f"heatmap.shape = {heatmap.shape}, from 2d should be (224, 224)")
-                    # normalize the heatmap such that all values lie in the range
+                    heatmaps = []
+                    for i in range(len(cam)):
+                        heatmap = cv2.resize(cam[i], (224, 224))
+                        heatmaps.append(heatmap)
+                    heatmaps = np.array(heatmaps)
+                    print(f"heatmaps.shape = {heatmaps.shape}, from 2d should be (224, 224)")
+                    # normalize the heatmaps such that all values lie in the range
                     # [0, 1], scale the resulting values to the range [0, 255],
                     # and then convert to an unsigned 8-bit integer
-                    numer = heatmap - np.min(heatmap)
-                    denom = (heatmap.max() - heatmap.min()) + eps
-                    heatmap = numer / denom
-                    heatmap = (heatmap * 255).astype("uint8")
-                    print(f"heatmap.shape = {heatmap.shape}, from 2d should be (224, 224)")
-                    # return the resulting heatmap to the calling function
-                    return heatmap
+                    numer = heatmaps - np.min(heatmaps)
+                    denom = (heatmaps.max() - heatmaps.min()) + eps
+                    heatmaps = numer / denom
+                    heatmaps = (heatmaps * 255).astype("uint8")
+                    print(f"heatmaps.shape = {heatmaps.shape}, from 2d should be (224, 224)")
+                    # return the resulting heatmaps to the calling function
+                    return heatmaps
 
                 def overlay_heatmap(self, heatmap, image, alpha=0.5,
                     colormap=cv2.COLORMAP_VIRIDIS):
@@ -682,18 +692,18 @@ def main():
             print(f"Y_test[0] = {Y_test[0]}")
             print(f"i = {i}")
             cam = GradCAM(model, i)
-            heatmap = cam.compute_heatmap(inputs)
-            print(f"heatmap = {heatmap}")
-            print(f"heatmap.shape = {heatmap.shape}")
-            heatmap = cv2.resize(heatmap, (img[0].shape[1], img[0].shape[0]))
-            print(f"heatmap = {heatmap}")
-            print(f"heatmap.shape = {heatmap.shape}")
-            (heatmap, output) = cam.overlay_heatmap(heatmap, img[0], alpha=0.5)
-            # (heatmap, output) = cam.overlay_heatmap(heatmap, img, alpha=0.5)
-            print(f"heatmap = {heatmap}")
-            cv2.imwrite('output.jpg', output)
-            cv2.imwrite('heatmap.jpg', heatmap)
-            cv2.imwrite('img.jpg', img[0])
+            heatmaps = cam.compute_heatmap(inputs)
+            # print(f"heatmap = {heatmap}")
+            print(f"heatmaps.shape = {heatmaps.shape}")
+            # heatmap = cv2.resize(heatmap, (img[0].shape[1], img[0].shape[0]))
+            # print(f"heatmap = {heatmap}")
+            # print(f"heatmap.shape = {heatmap.shape}")
+            for j in range(len(heatmaps)):
+                (heatmap, output) = cam.overlay_heatmap(heatmaps[j], img[j], alpha=0.5)
+                # (heatmap, output) = cam.overlay_heatmap(heatmap, img, alpha=0.5)
+                cv2.imwrite(f'output-{j}.jpg', output)
+                cv2.imwrite(f'heatmap-{j}.jpg', heatmap)
+                cv2.imwrite(f'img-{j}.jpg', img[j])
             dsfds
 
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
