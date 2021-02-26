@@ -578,11 +578,12 @@ def main():
                     for layer in reversed(self.model.layers):
                         if isinstance(layer, TimeDistributed):
                             print(f"found: {layer.name}")
-                            return layer.name
-
-                        # check to see if the layer has a 4D output
-                        if len(layer.output_shape) == 4:
-                            return layer.name
+                            base_cnn = self.model.get_layer(layer.name).layer
+                            for base_layer in reversed(base_cnn.layers):
+                                # check to see if the layer has a 4D output
+                                if len(base_layer.output_shape) == 4:
+                                    print(f"FOUND: {base_layer.name}")
+                                    return layer.name, base_layer.name
                     # otherwise, we could not find a 4D layer so the GradCAM
                     # algorithm cannot be applied
                     raise ValueError("Could not find 4D layer. Cannot apply GradCAM.")
@@ -592,15 +593,17 @@ def main():
                     # to our pre-trained model, (2) the output of the (presumably)
                     # final 4D layer in the network, and (3) the output of the
                     # softmax activations from the model
-                    print(f"self.model.get_layer(self.layerName) = {self.model.get_layer(self.layerName)}")
-                    print(f"self.model.get_layer(self.layerName).layer = {self.model.get_layer(self.layerName).layer}")
-                    print(f"type(self.model.get_layer(self.layerName).layer) = {type(self.model.get_layer(self.layerName).layer)}")
-                    print(f"self.model.get_layer(self.layerName).layer.layers = {self.model.get_layer(self.layerName).layer.layers}")
-                    print(f"len(self.model.get_layer(self.layerName).layer.layers) = {len(self.model.get_layer(self.layerName).layer.layers)}")
-                    print(self.model.get_layer(self.layerName).layer.summary())
+                    timedistributed_layer_name, cnn_layer_name = self.layerName
+                    print("++++++++++++++++++++++++++++")
+                    print(self.model.get_layer(timedistributed_layer_name).layer.get_layer(cnn_layer_name).output)
+                    print(self.model.get_layer(timedistributed_layer_name).output)
+                    # grads = self.model.optimizer.get_gradients(self.model.total_loss, self.model.get_layer(timedistributed_layer_name).output)
                     gradModel = tf.keras.models.Model(
                         [self.model.inputs],
-                        [self.model.get_layer(self.layerName).output])
+                        # [self.model.get_layer(self.layerName).output])
+                        # [self.model.get_layer(timedistributed_layer_name).layer.get_layer(cnn_layer_name).output])
+                        [self.model.get_layer(timedistributed_layer_name).output,
+                         self.model.output])
 
                         # [self.model.get_layer(self.layerName).output,
                             # self.model.output])
@@ -614,30 +617,34 @@ def main():
                         (convOutputs, predictions) = gradModel(inputs)
                         loss = predictions[:, self.classIdx]
                     # use automatic differentiation to compute the gradients
-                    print(f"convOutputs.shape = {convOutputs.shape}")
+                    print(f"convOutputs.shape = {convOutputs.shape}, from 2d should be (1, 7, 7, 512)")
                     grads = tape.gradient(loss, convOutputs)
-                    print(f"grads.shape = {grads.shape}")
+                    print(f"grads.shape = {grads.shape}, from 2d should be (1, 7, 7, 512)")
                     # compute the guided gradients
                     castConvOutputs = tf.cast(convOutputs > 0, "float32")
                     castGrads = tf.cast(grads > 0, "float32")
                     guidedGrads = castConvOutputs * castGrads * grads
+                    print(f"guidedGrads.shape = {guidedGrads.shape}, from 2d should be (1, 7, 7, 512)")
                     # the convolution and guided gradients have a batch dimension
                     # (which we don't need) so let's grab the volume itself and
                     # discard the batch
                     convOutputs = convOutputs[0]
                     guidedGrads = guidedGrads[0]
+                    print(f"AFTER convOutputs.shape = {convOutputs.shape}, from 2d should be (7, 7, 512)")
+                    print(f"AFTER grads.shape = {grads.shape}, from 2d should be (7, 7, 512)")
                     # compute the average of the gradient values, and using them
                     # as weights, compute the ponderation of the filters with
                     # respect to the weights
                     weights = tf.reduce_mean(guidedGrads, axis=(0, 1))
-                    print(f"weights.shape = {weights.shape}")
+                    print(f"weights.shape = {weights.shape}, from 2d should be (512,)")
                     cam = tf.reduce_sum(tf.multiply(weights, convOutputs), axis=-1)
-                    print(f"cam.shape = {cam.shape}")
+                    print(f"cam.shape = {cam.shape}, from 2d should be (7, 7)")
                     # grab the spatial dimensions of the input image and resize
                     # the output class activation map to match the input image
                     # dimensions
                     (w, h) = (image.shape[2], image.shape[1])
                     heatmap = cv2.resize(cam.numpy(), (w, h))
+                    print(f"heatmap.shape = {heatmap.shape}, from 2d should be (224, 224)")
                     # normalize the heatmap such that all values lie in the range
                     # [0, 1], scale the resulting values to the range [0, 255],
                     # and then convert to an unsigned 8-bit integer
@@ -645,6 +652,7 @@ def main():
                     denom = (heatmap.max() - heatmap.min()) + eps
                     heatmap = numer / denom
                     heatmap = (heatmap * 255).astype("uint8")
+                    print(f"heatmap.shape = {heatmap.shape}, from 2d should be (224, 224)")
                     # return the resulting heatmap to the calling function
                     return heatmap
 
