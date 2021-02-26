@@ -576,6 +576,9 @@ def main():
                     # attempt to find the final convolutional layer in the network
                     # by looping over the layers of the network in reverse order
                     for layer in reversed(self.model.layers):
+                        if len(layer.output_shape) == 5:
+                            print(f"FOUND: {layer.name}")
+                            return layer.name
                         if isinstance(layer, TimeDistributed):
                             print(f"found: {layer.name}")
                             base_cnn = self.model.get_layer(layer.name).layer
@@ -593,10 +596,11 @@ def main():
                     # to our pre-trained model, (2) the output of the (presumably)
                     # final 4D layer in the network, and (3) the output of the
                     # softmax activations from the model
-                    timedistributed_layer_name, cnn_layer_name = self.layerName
+                    if not isinstance(self.layerName, str):
+                        timedistributed_layer_name, cnn_layer_name = self.layerName
+                    else:
+                        timedistributed_layer_name = self.layerName
                     print("++++++++++++++++++++++++++++")
-                    print(self.model.get_layer(timedistributed_layer_name).layer.get_layer(cnn_layer_name).output)
-                    print(self.model.get_layer(timedistributed_layer_name).output)
                     # grads = self.model.optimizer.get_gradients(self.model.total_loss, self.model.get_layer(timedistributed_layer_name).output)
                     gradModel = tf.keras.models.Model(
                         [self.model.inputs],
@@ -628,10 +632,10 @@ def main():
                     # the convolution and guided gradients have a batch dimension
                     # (which we don't need) so let's grab the volume itself and
                     # discard the batch
-                    convOutputs = convOutputs[0]
-                    guidedGrads = guidedGrads[0]
+                    convOutputs = convOutputs[0][0]
+                    guidedGrads = guidedGrads[0][0]
                     print(f"AFTER convOutputs.shape = {convOutputs.shape}, from 2d should be (7, 7, 512)")
-                    print(f"AFTER grads.shape = {grads.shape}, from 2d should be (7, 7, 512)")
+                    print(f"AFTER guidedGrads.shape = {guidedGrads.shape}, from 2d should be (7, 7, 512)")
                     # compute the average of the gradient values, and using them
                     # as weights, compute the ponderation of the filters with
                     # respect to the weights
@@ -642,8 +646,7 @@ def main():
                     # grab the spatial dimensions of the input image and resize
                     # the output class activation map to match the input image
                     # dimensions
-                    (w, h) = (image.shape[2], image.shape[1])
-                    heatmap = cv2.resize(cam.numpy(), (w, h))
+                    heatmap = cv2.resize(cam.numpy(), (224, 224))
                     print(f"heatmap.shape = {heatmap.shape}, from 2d should be (224, 224)")
                     # normalize the heatmap such that all values lie in the range
                     # [0, 1], scale the resulting values to the range [0, 255],
