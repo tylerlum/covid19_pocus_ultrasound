@@ -543,7 +543,7 @@ def main():
         print(f"class_weight = {class_weight}")
 
         # Delete raw data we will not use (save RAM)
-        del raw_train_data, raw_train_labels
+        # del raw_train_data, raw_train_labels
         del raw_validation_data, raw_validation_labels
         del raw_test_data, raw_test_labels
 
@@ -633,13 +633,32 @@ def main():
         print(f"rawTrainPredIdxs[2].shape = {rawTrainPredIdxs[2].shape}")
         print(f"rawValidationPredIdxs[2].shape = {rawValidationPredIdxs[2].shape}")
         print(f"rawTestPredIdxs[2].shape = {rawTestPredIdxs[2].shape}")
-        for example in range(2):
+        for example in range(200):
+            matrices = []
+            labelll = rawTrainPredIdxs[0][example]
+            print(labelll)
             for block in range(1, 3):
                 for head in range(4):
                     plt.figure()
                     plt.matshow(rawTrainPredIdxs[block][example][head])
-                    plt.savefig(f"attention_ex-{example}_block-{block}_head-{head}.png")
-        sfds
+                    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"attention_ex-{example}_block-{block}_head-{head}_predict-{labelll}.png"))
+                    if block == 1:
+                        matrices.append(rawTrainPredIdxs[block][example][head])
+            # Compute summary matrix
+            matrices = np.array(matrices)
+            print(f"matrices.shape = {matrices.shape}")
+            matrices = np.mean(matrices, axis=0)
+            print(f"matrices.shape = {matrices.shape}")
+            matrices = np.mean(matrices, axis=0)
+            print(f"matrices.shape = {matrices.shape}")
+            plt.figure()
+            plt.imshow(np.reshape(matrices, (-1, len(matrices))))
+            plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"attention_summary_ex-{example}_predict-{labelll}.png"))
+
+            for i in range(len(X_train[example])):
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-frame-{i}.jpg"), X_train[example][i])
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"raw-ex-{example}-frame-{i}.jpg"), raw_train_data[example][i])
+        sfds = sfd
 
         trainPredIdxs = np.argmax(rawTrainPredIdxs, axis=1)
         validationPredIdxs = np.argmax(rawValidationPredIdxs, axis=1)
