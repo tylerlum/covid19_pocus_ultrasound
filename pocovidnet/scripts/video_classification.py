@@ -252,8 +252,8 @@ def main():
         print(f"Performing k-fold splitting with validation fold {validation_fold} and test fold {test_fold}")
         print("===========================")
         # StratifiedKFold Doesn't work when not enough datapoints of each class
-        k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
-        # k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+        # k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+        k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
         def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
             for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
@@ -339,7 +339,7 @@ def main():
                     else:
                         all_mat_files.append(path_to_mat_or_dir)
 
-            all_mat_files = all_mat_files[:len(all_mat_files)//3]
+            all_mat_files = all_mat_files[:len(all_mat_files)//5]
             def get_labels(mat_files):
                 labels = []
                 print("Getting labels for stratified k-fold splitting")
@@ -577,6 +577,7 @@ def main():
                     # by looping over the layers of the network in reverse order
                     for layer in reversed(self.model.layers):
                         if isinstance(layer, TimeDistributed):
+                            print(f"found: {layer.name}")
                             return layer.name
 
                         # check to see if the layer has a 4D output
@@ -591,6 +592,12 @@ def main():
                     # to our pre-trained model, (2) the output of the (presumably)
                     # final 4D layer in the network, and (3) the output of the
                     # softmax activations from the model
+                    print(f"self.model.get_layer(self.layerName) = {self.model.get_layer(self.layerName)}")
+                    print(f"self.model.get_layer(self.layerName).layer = {self.model.get_layer(self.layerName).layer}")
+                    print(f"type(self.model.get_layer(self.layerName).layer) = {type(self.model.get_layer(self.layerName).layer)}")
+                    print(f"self.model.get_layer(self.layerName).layer.layers = {self.model.get_layer(self.layerName).layer.layers}")
+                    print(f"len(self.model.get_layer(self.layerName).layer.layers) = {len(self.model.get_layer(self.layerName).layer.layers)}")
+                    print(self.model.get_layer(self.layerName).layer.summary())
                     gradModel = tf.keras.models.Model(
                         [self.model.inputs],
                         [self.model.get_layer(self.layerName).output])
