@@ -543,11 +543,11 @@ def main():
         print(f"class_weight = {class_weight}")
 
         # Delete raw data we will not use (save RAM)
-        # del raw_train_data, raw_train_labels
+        del raw_train_data, raw_train_labels
         del raw_validation_data, raw_validation_labels
         del raw_test_data, raw_test_labels
 
-        # model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
+        model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
         print('---------------------------model---------------------\n', args.architecture)
 
         if len(args.transferred_model) > 0:
@@ -597,6 +597,7 @@ def main():
         model.compile(
             optimizer=opt, loss=loss, metrics=['accuracy']
         )
+        rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size, verbose=1)
         for example in range(200):
             matrices = []
             labelll = rawTrainPredIdxs[0][example]
@@ -621,7 +622,6 @@ def main():
 
             for i in range(len(X_train[example])):
                 cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-frame-{i}.jpg"), X_train[example][i])
-                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"raw-ex-{example}-frame-{i}.jpg"), raw_train_data[example][i])
         sfds = sfd
 
         wandb.init(entity='tylerlum', project=args.wandb_project)
