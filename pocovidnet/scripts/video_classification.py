@@ -30,6 +30,7 @@ from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classification_table_and_plots
 from pocovidnet.read_mat import loadmat
 from pocovidnet.video_dataset_preprocess import preprocess_video_dataset
+from pocovidnet.attention_explanation import AttentionExplanation
 from datetime import datetime
 from datetime import date
 from keras.layers import Dropout, Dense
@@ -597,28 +598,15 @@ def main():
         model.compile(
             optimizer=opt, loss=loss, metrics=['accuracy']
         )
-        rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size, verbose=1)
-        for example in range(200):
-            matrices = []
-            labelll = rawTrainPredIdxs[0][example]
-            print(labelll)
-            for block in range(1, 3):
-                for head in range(4):
-                    plt.figure()
-                    plt.matshow(rawTrainPredIdxs[block][example][head])
-                    plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"attention_ex-{example}_block-{block}_head-{head}_predict-{labelll}.png"))
-                    if block == 1:
-                        matrices.append(rawTrainPredIdxs[block][example][head])
-            # Compute summary matrix
-            matrices = np.array(matrices)
-            print(f"matrices.shape = {matrices.shape}")
-            matrices = np.mean(matrices, axis=0)
-            print(f"matrices.shape = {matrices.shape}")
-            matrices = np.mean(matrices, axis=0)
-            print(f"matrices.shape = {matrices.shape}")
+
+
+        explainer = AttentionExplanation(model)
+        for example in range(10):
+            video = X_train[example]
+            attn_weights = explainer.compute_attention_map(video)
             plt.figure()
-            plt.imshow(np.reshape(matrices, (-1, len(matrices))))
-            plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"attention_summary_ex-{example}_predict-{labelll}.png"))
+            plt.imshow(np.reshape(attn_weights, (-1, len(attn_weights))))
+            plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"attention_summary_ex-{example}.png"))
 
             for i in range(len(X_train[example])):
                 cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-frame-{i}.jpg"), X_train[example][i])
