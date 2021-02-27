@@ -37,13 +37,13 @@ class MultiHeadSelfAttention(layers.Layer):
         scaled_score = score / tf.math.sqrt(dim_key)
         weights = tf.nn.softmax(scaled_score, axis=-1)
         output = tf.matmul(weights, value)
-        return output, weights
+        return output, weights  # Could also return scaled score instead
 
     def separate_heads(self, x, batch_size):
         x = tf.reshape(x, (batch_size, -1, self.num_heads, self.projection_dim))
         return tf.transpose(x, perm=[0, 2, 1, 3])
 
-    def call(self, inputs):
+    def call(self, inputs, return_weights=True):
         # inputs.shape = [batch_size, seq_len, embedding_dim]
         batch_size = tf.shape(inputs)[0]
         query = self.query_dense(inputs)
@@ -56,6 +56,8 @@ class MultiHeadSelfAttention(layers.Layer):
         attention = tf.transpose(attention, perm=[0, 2, 1, 3])
         concat_attention = tf.reshape(attention, (batch_size, -1, self.embed_dim))
         output = self.combine_heads(concat_attention)
+        if return_weights:
+            return output, weights
         return output
 
 
@@ -105,12 +107,12 @@ class TransformerBlock(layers.Layer):
         scaled_input = (tf.math.divide_no_nan(inputs, tf.expand_dims(tf.math.reduce_max(inputs, axis=2), axis=2))
                         * tf.math.sqrt(tf.cast(self.att.embed_dim, tf.float32)))
         inputs_with_position = scaled_input + self.pos_encoding
-        attn_output = self.att(inputs_with_position)
+        attn_output, attn_weights = self.att(inputs_with_position)
         attn_output = self.dropout1(attn_output)
         out1 = self.layernorm1(inputs_with_position + attn_output)
         ffn_output = self.ffn(out1)
         ffn_output = self.dropout2(ffn_output)
-        return self.layernorm2(out1 + ffn_output)
+        return self.layernorm2(out1 + ffn_output), attn_weights
 
     def _positional_encoding(self, position, d_model):
         def get_angles(pos, i, d_model):

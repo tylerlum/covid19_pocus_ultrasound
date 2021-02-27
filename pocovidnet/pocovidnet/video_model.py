@@ -310,6 +310,7 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     # Use pretrained cnn_model
     # Remove all layers including flatten and avg pool
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=7, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
+    tf.keras.utils.plot_model(cnn_model, "cnn_model_before_transformer.png", show_shapes=True)
 
     # Run CNN on each frame
     input_tensor = Input(shape=(input_shape))
@@ -332,7 +333,7 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     for _ in range(num_blocks):
         transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps,
                                              positional_encoding=positional_encoding)
-        model = transformer_block(model)
+        model, attn_weights = transformer_block(model)
     model = GlobalAveragePooling1D()(model)  # Change to Conv1D?
     model = Dense(256, activation='relu')(model)
     model = Dropout(0.5)(model)

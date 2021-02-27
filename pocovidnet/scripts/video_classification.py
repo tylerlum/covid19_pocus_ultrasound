@@ -30,9 +30,11 @@ from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classification_table_and_plots
 from pocovidnet.read_mat import loadmat
 from pocovidnet.video_dataset_preprocess import preprocess_video_dataset
+from pocovidnet.video_grad_cam_attention import VideoGradCAMAttention
+from pocovidnet.video_grad_cam import VideoGradCAM
 from datetime import datetime
 from datetime import date
-from keras.layers import Dropout, Dense
+from keras.layers import Dropout, Dense, TimeDistributed
 from keras.models import Model
 
 
@@ -148,6 +150,10 @@ def main():
     # Transfer between tasks
     parser.add_argument("--transferred_model", type=str, default="",
                         help="path to knowledge transferred model, ignored if empty string")
+
+    # Explainability
+    parser.add_argument("--explain", type=str2bool, nargs='?', const=True, default=False,
+                        help="save explanation heatmaps for video classification. Requires setting transferred_model to a CNN_transformer model with a TimeDistributed layer output shape (batch, seq_len, height, width, channels) and an TransformerBlock output shape (batch, seq_len, embed_dim)")
 
     # Output files
     parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
@@ -338,6 +344,8 @@ def main():
                             all_mat_files.append(os.path.join(path_to_mat_or_dir, mat))
                     else:
                         all_mat_files.append(path_to_mat_or_dir)
+
+            # all_mat_files = all_mat_files[:len(all_mat_files)//5]  # only used to save time
 
             def get_labels(mat_files):
                 labels = []
@@ -555,19 +563,55 @@ def main():
             print("WARNING: using transferred model, assuming transformer")
             from pocovidnet.transformer import TransformerBlock
             model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
-            model = Model(model.input, model.layers[-2].output)
-            model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
+            # Remove head and add new heads
+            # model = Model(model.input, model.layers[-2].output)
+            # model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
+
+            if args.explain:
+                print("TESTING GRAD CAMS AND ATTENTION EXPLAINER")
+                explainer = VideoGradCAMAttention(model)
+                cam = VideoGradCAM(model)
+                # Run explainer on X examples
+                for example in tqdm(range(30)):
+                    video = X_train[example]
+
+                    # New explainer method
+                    (heatmaps, overlays) = explainer.compute_attention_maps(video)
+
+                    # Old explainer method
+                    old_heatmaps = cam.compute_heatmaps(video)
+                    (old_heatmaps, old_overlays) = cam.overlay_heatmaps(old_heatmaps, video)
+
+                    # Save heatmaps overlayed on images
+                    images = []
+                    old_images = []
+                    for i in range(len(overlays)):
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg'), overlays[i])
+                        images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg')))
+
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg'), old_overlays[i])
+                        old_images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg')))
+
+                    # Save videos
+                    slower_frame_rate = 1
+                    output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
+                    old_output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'old-video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
+                    for i in range(len(images)):
+                        output_video.write(images[i])
+                        old_output_video.write(old_images[i])
+                    output_video.release()
+                    old_output_video.release()
 
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
         # evidential loss function
         def KL(alpha, K):
-            beta=tf.constant(np.ones((1,K)),dtype=tf.float32)
-            S_alpha = tf.reduce_sum(alpha,axis=1,keepdims=True)
-        
-            KL = tf.reduce_sum((alpha - beta)*(tf.math.digamma(alpha)-tf.math.digamma(S_alpha)),axis=1,keepdims=True) + \
-            tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha),axis=1,keepdims=True) + \
-            tf.reduce_sum(tf.math.lgamma(beta), axis=1, keepdims=True) - tf.math.lgamma(tf.reduce_sum(beta, axis=1, keepdims=True))
+            beta = tf.constant(np.ones((1, K)), dtype=tf.float32)
+            S_alpha = tf.reduce_sum(alpha, axis=1, keepdims=True)
+
+            KL = (tf.reduce_sum((alpha - beta)*(tf.math.digamma(alpha)-tf.math.digamma(S_alpha)), axis=1, keepdims=True) +
+                  tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha), axis=1, keepdims=True) +
+                  tf.reduce_sum(tf.math.lgamma(beta), axis=1, keepdims=True) - tf.math.lgamma(tf.reduce_sum(beta, axis=1, keepdims=True)))
             return KL
 
         def loss_eq5(actual, pred, K, global_step, annealing_step):
@@ -679,8 +723,8 @@ def main():
                                           rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
             classes_with_test = [f"{c} Test" for c in lb.classes_]
             wandb.log({f'Test Confusion Matrix {test_fold}': wandb.plots.HeatMap(classes_with_test, classes_with_test,
-                                                                    matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs, np.arange(len(lb.classes_))),
-                                                                    show_text=True)})
+                                                                                 matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs, np.arange(len(lb.classes_))),
+                                                                                 show_text=True)})
 
         # compute the confusion matrix and and use it to derive the raw
         # accuracy, sensitivity, and specificity
@@ -842,7 +886,6 @@ def main():
         plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f'loss_fold-{test_fold}.png'))
         plt.style.use('default')
 
-
     # Aggregate results
     if len(test_folds) > 1:
         print('-------------------------------Aggregated Results-----------------------------------')
@@ -874,7 +917,7 @@ def main():
             printAndSaveConfusionMatrix(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestConfusionMatrixPatients.png", wandb_log=True)
 
         classes_with_test = [f"{c} Test" for c in lb.classes_]
-        wandb.log({f'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
+        wandb.log({'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
                                                                 matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs, np.arange(len(lb.classes_))),
                                                                 show_text=True)})
 
