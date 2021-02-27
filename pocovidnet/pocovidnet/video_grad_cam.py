@@ -119,7 +119,7 @@ class VideoGradCAM:
         # return the resulting heatmaps to the calling function
         return scaled_heatmaps
 
-    def overlay_heatmap(self, heatmaps, video, alpha=0.5, colormap=cv2.COLORMAP_VIRIDIS):
+    def overlay_heatmaps(self, heatmaps, video, alpha=0.5, colormap=cv2.COLORMAP_VIRIDIS):
         # Expect heatmaps.shape = (seq_len, height, width)
         # Expect video.shape = (seq_len, height, width, channels)
 

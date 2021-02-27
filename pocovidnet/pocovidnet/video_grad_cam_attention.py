@@ -19,9 +19,9 @@ class VideoGradCAMAttention:
         for i in range(len(heatmaps)):
             scaled_heatmap = heatmaps[i] * attn_weights[0][i] * attn_weights.size  # Scale by weights, then scale up to same mean
             scaled_heatmap = np.clip(scaled_heatmap, 0, 255)  # Avoid out of bounds
-            scaled_heatmap[np.where(scaled_heatmap < 100)] = 0  # Filter out low activations
+            # scaled_heatmap[np.where(scaled_heatmap < 100)] = 0  # Filter out low activations
             scaled_heatmaps.append(scaled_heatmap)
         scaled_heatmaps = np.array(scaled_heatmaps)
 
-        (scaled_heatmaps, overlays) = self.video_grad_cam.overlay_heatmap(scaled_heatmaps, video, alpha=0.5)
+        (scaled_heatmaps, overlays) = self.video_grad_cam.overlay_heatmaps(scaled_heatmaps, video, alpha=0.5)
         return scaled_heatmaps, overlays

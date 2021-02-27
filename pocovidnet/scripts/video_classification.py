@@ -31,6 +31,7 @@ from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classif
 from pocovidnet.read_mat import loadmat
 from pocovidnet.video_dataset_preprocess import preprocess_video_dataset
 from pocovidnet.video_grad_cam_attention import VideoGradCAMAttention
+from pocovidnet.video_grad_cam import VideoGradCAM
 from datetime import datetime
 from datetime import date
 from keras.layers import Dropout, Dense, TimeDistributed
@@ -568,14 +569,38 @@ def main():
             if args.explain:
                 print("TESTING GRAD CAMS AND ATTENTION EXPLAINER")
                 explainer = VideoGradCAMAttention(model)
-                for example in range(10):
+                cam = VideoGradCAM(model)
+                # Run explainer on X examples
+                for example in tqdm(range(30)):
                     video = X_train[example]
 
+                    # New explainer method
                     (heatmaps, overlays) = explainer.compute_attention_maps(video)
 
+                    # Old explainer method
+                    old_heatmaps = cam.compute_heatmaps(video)
+                    (old_heatmaps, old_overlays) = cam.overlay_heatmaps(old_heatmaps, video)
+
+                    # Save heatmaps overlayed on images
+                    images = []
+                    old_images = []
                     for i in range(len(overlays)):
                         cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg'), overlays[i])
-                dsfds
+                        images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg')))
+
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg'), old_overlays[i])
+                        old_images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg')))
+
+                    # Save videos
+                    slower_frame_rate = 1
+                    output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
+                    old_output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'old-video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
+                    for i in range(len(images)):
+                        output_video.write(images[i])
+                        old_output_video.write(old_images[i])
+                    output_video.release()
+                    old_output_video.release()
+                sdfsd
 
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
