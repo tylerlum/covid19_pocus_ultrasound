@@ -558,6 +558,11 @@ def main():
             print("WARNING: using transferred model, assuming transformer")
             from pocovidnet.transformer import TransformerBlock
             model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
+            # Remove head and add new heads
+            # model = Model(model.input, model.layers[-2].output)
+            # model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
+
+            print("TESTING ATTENTION EXPLAINER")
             explainer = AttentionExplanation(model)
             for example in range(10):
                 video = X_train[example]
@@ -565,35 +570,23 @@ def main():
                 plt.figure()
                 plt.imshow(attn_weights)
                 plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"attention_summary_ex-{example}.png"))
-
-            for i in range(len(X_train[example])):
-                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-frame-{i}.jpg"), X_train[example][i])
-        sfds = sfd
-
-            # model = Model(model.input, model.layers[-2].output)
-            # model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
+                for i in range(len(X_train[example])):
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-frame-{i}.jpg"), X_train[example][i])
 
             print("TESTING GRAD CAMS")
-            test_idx = 1
-            video = X_test[test_idx]
-            print(f"video.shape = {video.shape}")
+            cam = VideoGradCAM(model)
 
-            preds = model.predict(np.expand_dims(video, axis=0))
-            i = np.argmax(preds[0])
-            print(f"True label np.argmax(Y_test[test_idx]) = {np.argmax(Y_test[test_idx])}")
-            print(f"Predicted label i = {i}")
+            for example in range(10):
+                video = X_train[example]
+                preds = model.predict(np.expand_dims(video, axis=0))
+                predClassIdx = np.argmax(preds[0])
 
-            cam = VideoGradCAM(model, i)
-            heatmaps = cam.compute_heatmaps(video)
-            print(f"heatmaps.shape = {heatmaps.shape}")
-
-            (heatmaps, overlays) = cam.overlay_heatmap(heatmaps, video, alpha=0.5)
-            print(f"heatmaps.shape = {heatmaps.shape}")
-            print(f"overlays.shape = {overlays.shape}")
-            for j in range(len(heatmaps)):
-                cv2.imwrite(f'overlay-{j}.jpg', overlays[j])
-                cv2.imwrite(f'heatmap-{j}.jpg', heatmaps[j])
-                cv2.imwrite(f'video-{j}.jpg', video[j])
+                heatmaps = cam.compute_heatmaps(video, predClassIdx)
+                (heatmaps, overlays) = cam.overlay_heatmap(heatmaps, video, alpha=0.5)
+                for i in range(len(heatmaps)):
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlay-{i}.jpg'), overlays[i])
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-heatmap-{i}.jpg'), heatmaps[i])
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-video-{i}.jpg'), video[i])
             dsfds
 
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)

@@ -9,20 +9,18 @@ from keras.layers import TimeDistributed
 
 
 class VideoGradCAM:
-    def __init__(self, model, classIdx, layerName=None):
+    def __init__(self, model, layerName=None):
         """
         Initialize video grad cam for specific class
         Args:
             model (tf.keras.Model): tf.keras model to inspect. Must be video input model,
                                     with a TimeDistributed layer outputing
                                     (batch_size, seq_len, height, width, embed_dim)
-            class_index (int): Index of targeted class
             layer_name (str): Targeted layer for VideoGradCAM. If no layer is
                               provided, it is automatically infered from the model
                               architecture.
         """
         self.model = model
-        self.classIdx = classIdx
         self.layerName = layerName
         # if the layer name is None, attempt to automatically find the target output layer
         if self.layerName is None:
@@ -40,7 +38,7 @@ class VideoGradCAM:
         # algorithm cannot be applied
         raise ValueError("Could not find 4D layer. Cannot apply VideoGradCAM.")
 
-    def compute_heatmaps(self, video, eps=1e-8):
+    def compute_heatmaps(self, video, classIdx, eps=1e-8):
         # Expect video.shape = (seq_len, height, width, channels)
 
         # construct our gradient model by supplying (1) the inputs
@@ -57,7 +55,7 @@ class VideoGradCAM:
             # associated with the specific class index
             inputs = tf.cast(np.expand_dims(video, axis=0), tf.float32)
             (convOutputs, predictions) = gradModel(inputs)
-            loss = predictions[:, self.classIdx]
+            loss = predictions[:, classIdx]
 
         # use automatic differentiation to compute the gradients
         print(f"convOutputs.shape = {convOutputs.shape}, from 2d should be (1, 7, 7, 512)")
