@@ -386,6 +386,7 @@ def main():
                 # Mat files
                 print("Collecting video clips and labels")
                 for mat_file in tqdm(mat_files):
+                    print(f"mat_file = {mat_file}")
                     mat = loadmat(os.path.join(patient_dir, mat_file))
 
                     # Get labels
@@ -691,23 +692,23 @@ def main():
         print("Evaluating network...")
         print("===========================")
         # Running inference on training set can cause out of memory issue when using larger framerate (OK on DGX)
-        trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
-        print('train loss:', trainLoss)
-        print('train accuracy:', trainAcc)
-        validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, verbose=1)
+        # trainLoss, trainAcc = model.evaluate(X_train, Y_train, verbose=1)
+        # print('train loss:', trainLoss)
+        # print('train accuracy:', trainAcc)
+        validationLoss, validationAcc = model.evaluate(X_validation, Y_validation, batch_size=args.batch_size, verbose=1)
         print('Validation loss:', validationLoss)
         print('Validation accuracy:', validationAcc)
-        testLoss, testAcc = model.evaluate(X_test, Y_test, verbose=1)
+        testLoss, testAcc = model.evaluate(X_test, Y_test, batch_size=args.batch_size, verbose=1)
         print('Test loss:', testLoss)
         print('Test accuracy:', testAcc)
 
-        rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size, verbose=1)
+        # rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size, verbose=1)
         rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size, verbose=1)
         rawTestPredIdxs = model.predict(X_test, batch_size=args.batch_size, verbose=1)
 
         # for each image in the testing set we need to find the index of the
         # label with corresponding largest predicted probability
-        trainPredIdxs = np.argmax(rawTrainPredIdxs, axis=1)
+        # trainPredIdxs = np.argmax(rawTrainPredIdxs, axis=1)
         validationPredIdxs = np.argmax(rawValidationPredIdxs, axis=1)
         testPredIdxs = np.argmax(rawTestPredIdxs, axis=1)
 
@@ -744,7 +745,7 @@ def main():
             if wandb_log:
                 wandb_log_classification_table_and_plots(report, reportFilename)
 
-        printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, f"trainReport-{test_fold}.csv")
+        # printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, f"trainReport-{test_fold}.csv")
         printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, f"validationReport-{test_fold}.csv")
         printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, f"testReport-{test_fold}.csv")
 
@@ -761,7 +762,7 @@ def main():
             if wandb_log:
                 wandb.log({confusionMatrixFilename: plt})
 
-        printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, f"trainConfusionMatrix-{test_fold}.png")
+        # printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, f"trainConfusionMatrix-{test_fold}.png")
         printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, f"validationConfusionMatrix-{test_fold}.png")
         printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, f"testConfusionMatrix-{test_fold}.png")
 
@@ -864,10 +865,10 @@ def main():
             testPatientTrueIdxsList.append(test_gt)
 
         # Store results to aggregate
-        trainPredIdxsList.append(trainPredIdxs)
+        # trainPredIdxsList.append(trainPredIdxs)
         validationPredIdxsList.append(validationPredIdxs)
         testPredIdxsList.append(testPredIdxs)
-        trainTrueIdxsList.append(trainTrueIdxs)
+        # trainTrueIdxsList.append(trainTrueIdxs)
         validationTrueIdxsList.append(validationTrueIdxs)
         testTrueIdxsList.append(testTrueIdxs)
 
@@ -888,30 +889,30 @@ def main():
     # Aggregate results
     if len(test_folds) > 1:
         print('-------------------------------Aggregated Results-----------------------------------')
-        trainTrueIdxs = np.concatenate(trainTrueIdxsList, axis=None)
-        trainPredIdxs = np.concatenate(trainPredIdxsList, axis=None)
+        # trainTrueIdxs = np.concatenate(trainTrueIdxsList, axis=None)
+        # trainPredIdxs = np.concatenate(trainPredIdxsList, axis=None)
         validationTrueIdxs = np.concatenate(validationTrueIdxsList, axis=None)
         validationPredIdxs = np.concatenate(validationPredIdxsList, axis=None)
         testTrueIdxs = np.concatenate(testTrueIdxsList, axis=None)
         testPredIdxs = np.concatenate(testPredIdxsList, axis=None)
-        printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, "allTrainReport.csv", wandb_log=True)
+        # printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, "allTrainReport.csv", wandb_log=True)
         printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, "allValidationReport.csv", wandb_log=True)
         printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, "allTestReport.csv", wandb_log=True)
-        printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, "allTrainConfusionMatrix.png", wandb_log=True)
+        # printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, "allTrainConfusionMatrix.png", wandb_log=True)
         printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "allValidationConfusionMatrix.png", wandb_log=True)
         printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "allTestConfusionMatrix.png", wandb_log=True)
 
         if not args.mat:
-            trainTrueIdxsPatients = np.concatenate(trainPatientTrueIdxsList, axis=None)
-            trainPredIdxsPatients = np.concatenate(trainPatientPredIdxsList, axis=None)
+            # trainTrueIdxsPatients = np.concatenate(trainPatientTrueIdxsList, axis=None)
+            # trainPredIdxsPatients = np.concatenate(trainPatientPredIdxsList, axis=None)
             validationTrueIdxsPatients = np.concatenate(validationPatientTrueIdxsList, axis=None)
             validationPredIdxsPatients = np.concatenate(validationPatientPredIdxsList, axis=None)
             testTrueIdxsPatients = np.concatenate(testPatientTrueIdxsList, axis=None)
             testPredIdxsPatients = np.concatenate(testPatientPredIdxsList, axis=None)
-            printAndSaveClassificationReport(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainReportPatients.csv", wandb_log=True)
+            # printAndSaveClassificationReport(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainReportPatients.csv", wandb_log=True)
             printAndSaveClassificationReport(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, "allValidationReportPatients.csv", wandb_log=True)
             printAndSaveClassificationReport(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestReportPatients.csv", wandb_log=True)
-            printAndSaveConfusionMatrix(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainConfusionMatrixPatients.png", wandb_log=True)
+            # printAndSaveConfusionMatrix(trainTrueIdxsPatients, trainPredIdxsPatients, lb.classes_, "allTrainConfusionMatrixPatients.png", wandb_log=True)
             printAndSaveConfusionMatrix(validationTrueIdxsPatients, validationPredIdxsPatients, lb.classes_, "allValidationConfusionMatrixPatients.png", wandb_log=True)
             printAndSaveConfusionMatrix(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestConfusionMatrixPatients.png", wandb_log=True)
 

@@ -3,7 +3,8 @@ from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import (
     Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, MaxPooling2D, Input,
     Lambda, GlobalMaxPooling3D, GlobalAveragePooling3D, Average, ReLU, ZeroPadding3D,
-    Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, GlobalAveragePooling1D, Concatenate
+    Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, GlobalAveragePooling1D, Concatenate,
+    AveragePooling2D
 )
 from tensorflow.keras.layers import BatchNormalization
 from .utils import fix_layers
@@ -307,13 +308,20 @@ def get_CNN_transformer_evidential_model(input_shape, nb_classes, pretrained_cnn
 
 def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding, evidential=False):
     # Use pretrained cnn_model
-    # Remove all layers until flatten
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
+    # Remove all layers including flatten and avg pool
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=7, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
     tf.keras.utils.plot_model(cnn_model, "cnn_model_before_transformer.png", show_shapes=True)
 
-    # Run Conv1D over CNN outputs
+    # Run CNN on each frame
     input_tensor = Input(shape=(input_shape))
     timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
+
+    # Run avg pool and flatten on each frame
+    inp = Input(shape=(cnn_model.layers[-1].output_shape[1:]))
+    x = AveragePooling2D(pool_size=(4, 4))(inp)
+    x = Flatten(name="flatten")(x)
+    end_of_cnn_model = Model(inputs=inp, outputs=x)
+    timeDistributed_layer = TimeDistributed(end_of_cnn_model)(timeDistributed_layer)
 
     # timeDistributed_layer.shape = (batch_size, timesteps, embed_dim)
     timesteps = timeDistributed_layer.shape[1]
@@ -326,7 +334,7 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
         transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps,
                                              positional_encoding=positional_encoding)
         model, attn_weights = transformer_block(model)
-    model = GlobalAveragePooling1D()(model)
+    model = GlobalAveragePooling1D()(model)  # Change to Conv1D?
     model = Dense(256, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(64, activation='relu')(model)
