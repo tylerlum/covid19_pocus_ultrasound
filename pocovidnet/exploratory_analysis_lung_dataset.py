@@ -173,7 +173,7 @@ plt.savefig(f"{data_source} height_list.png")
 
 plt.figure()
 plt.hist(frames_list)
-plt.title("number of frames histogram")
+plt.title("total number of frames histogram")
 plt.ylabel("Frequency")
 plt.savefig(f"{data_source} frames_list.png")
 
@@ -188,7 +188,6 @@ plt.hist(frame_time_list)
 plt.title("time between frames (ms) histogram")
 plt.ylabel("Frequency")
 plt.savefig(f"{data_source} frame_time_list.png")
-
 
 a_line_b_line_tuple_list.append((a_lines, b_lines))
 b_lines_with_a_lines = np.array([b for a, b in a_line_b_line_tuple_list if a == 1])
@@ -207,3 +206,10 @@ plt.hist(b_lines_with_a_lines)
 plt.title("b lines severity (with a lines) histogram")
 plt.ylabel("Frequency")
 plt.savefig(f"{data_source} b_lines_with_a_lines.png")
+
+plt.figure()
+stop_minus_start_list = np.array(stop_frame_list) - np.array(start_frame_list)
+plt.hist(stop_minus_start_list)
+plt.title("used number of frames (stop - start) histogram")
+plt.ylabel("Frequency")
+plt.savefig(f"{data_source} stop_minus_start_list.png")
