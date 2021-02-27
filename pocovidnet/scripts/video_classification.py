@@ -555,9 +555,18 @@ def main():
             print("WARNING: using transferred model, assuming transformer")
             from pocovidnet.transformer import TransformerBlock
             model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
-            attn_weights0 = model.layers[-8].output[1]
-            attn_weights1 = model.layers[-7].output[1]
-            model = Model(model.input, [model.output, attn_weights0, attn_weights1])
+            explainer = AttentionExplanation(model)
+            for example in range(10):
+                video = X_train[example]
+                attn_weights = explainer.compute_attention_map(video)
+                plt.figure()
+                plt.imshow(np.reshape(attn_weights, (-1, len(attn_weights))))
+                plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"attention_summary_ex-{example}.png"))
+
+            for i in range(len(X_train[example])):
+                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-frame-{i}.jpg"), X_train[example][i])
+        sfds = sfd
+
             # model = Model(model.input, model.layers[-2].output)
             # model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
 
@@ -598,19 +607,6 @@ def main():
         model.compile(
             optimizer=opt, loss=loss, metrics=['accuracy']
         )
-
-
-        explainer = AttentionExplanation(model)
-        for example in range(10):
-            video = X_train[example]
-            attn_weights = explainer.compute_attention_map(video)
-            plt.figure()
-            plt.imshow(np.reshape(attn_weights, (-1, len(attn_weights))))
-            plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"attention_summary_ex-{example}.png"))
-
-            for i in range(len(X_train[example])):
-                cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-frame-{i}.jpg"), X_train[example][i])
-        sfds = sfd
 
         wandb.init(entity='tylerlum', project=args.wandb_project)
         wandb.config.update(args)
