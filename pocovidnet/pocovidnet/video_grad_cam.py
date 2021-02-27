@@ -58,30 +58,25 @@ class VideoGradCAM:
             loss = predictions[:, classIdx]
 
         # use automatic differentiation to compute the gradients
-        print(f"convOutputs.shape = {convOutputs.shape}, from 2d should be (1, 7, 7, 512)")
         grads = tape.gradient(loss, convOutputs)
-        print(f"grads.shape = {grads.shape}, from 2d should be (1, 7, 7, 512)")
 
         # compute the guided gradients
         castConvOutputs = tf.cast(convOutputs > 0, "float32")
         castGrads = tf.cast(grads > 0, "float32")
         guidedGrads = castConvOutputs * castGrads * grads
-        print(f"guidedGrads.shape = {guidedGrads.shape}, from 2d should be (1, 7, 7, 512)")
 
         # the convolution and guided gradients have a batch dimension
         # (which we don't need) so let's grab the volume itself and
         # discard the batch
         convOutputs = convOutputs[0]
         guidedGrads = guidedGrads[0]
-        print(f"AFTER convOutputs.shape = {convOutputs.shape}, from 2d should be (7, 7, 512)")
-        print(f"AFTER guidedGrads.shape = {guidedGrads.shape}, from 2d should be (7, 7, 512)")
+
         # compute the average of the gradient values, and using them
         # as weights, compute the ponderation of the filters with
         # respect to the weights
         # guidedGrads.shape = (seq_len, height, width, embed_dim)
         # Average across height and width
         weights = tf.reduce_mean(guidedGrads, axis=(1, 2))
-        print(f"weights.shape = {weights.shape}, from 2d should be (512,)")
 
         # weights.shape = (seq_len, embed_dim)
         # convOutputs.shape = (seq_len, height, width, embed_dim)
@@ -91,7 +86,6 @@ class VideoGradCAM:
         for i in range(len(weights)):
             cam.append(tf.reduce_sum(tf.multiply(weights[i], convOutputs[i]), axis=-1))
         cam = np.array(cam)  # cam.shape = (seq_len, height, width)
-        print(f"cam.shape = {cam.shape}, from 2d should be (7, 7)")
 
         # grab the spatial dimensions of the input video and resize
         # the output class activation map to match the input video
@@ -101,7 +95,6 @@ class VideoGradCAM:
         for i in range(len(cam)):
             heatmaps.append(cv2.resize(cam[i], (width, height)))
         heatmaps = np.array(heatmaps)  # heatmaps.shape = (seq_len, width, height)
-        print(f"heatmaps.shape = {heatmaps.shape}, from 2d should be (224, 224)")
 
         # normalize the heatmaps such that all values lie in the range
         # [0, 1], scale the resulting values to the range [0, 255],
@@ -120,7 +113,6 @@ class VideoGradCAM:
         # OPTIONAL: Clean output with zeroing like
         # scaled_heatmaps[np.where(scaled_heatmaps < 0.4)] = 0
 
-        print(f"scaled_heatmaps.shape = {scaled_heatmaps.shape}, from 2d should be (224, 224)")
         # return the resulting heatmaps to the calling function
         return scaled_heatmaps
 
@@ -136,6 +128,7 @@ class VideoGradCAM:
 
             # apply the supplied color map to the heatmap and then
             # overlay the heatmap on the input image
+            heatmap = heatmap.astype(np.uint8)
             heatmap = cv2.applyColorMap(heatmap, colormap)
             heatmap = heatmap.astype(image.dtype)
 

@@ -587,6 +587,36 @@ def main():
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlay-{i}.jpg'), overlays[i])
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-heatmap-{i}.jpg'), heatmaps[i])
                     cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-video-{i}.jpg'), video[i])
+
+            print("TESTING GRAD CAMS AND ATTENTION EXPLAINER")
+            for example in range(10):
+                video = X_train[example]
+                preds = model.predict(np.expand_dims(video, axis=0))
+                predClassIdx = np.argmax(preds[0])
+
+                heatmaps = cam.compute_heatmaps(video, predClassIdx)
+                attn_weights = explainer.compute_attention_map(video)
+
+                scaled_heatmaps = []
+                for i in range(len(heatmaps)):
+                    print(f"heatmaps[i] = {heatmaps[i]}")
+                    print(f"attn_weights[0][i] = {attn_weights[0][i]}")
+                    scaled_heatmap = heatmaps[i] * attn_weights[0][i] * attn_weights.size
+                    scaled_heatmap = np.clip(scaled_heatmap, 0, 255)
+                    print(f"scaled_heatmap = {scaled_heatmap}")
+                    print("----------------")
+                    scaled_heatmaps.append(scaled_heatmap)
+                scaled_heatmaps = np.array(scaled_heatmaps)
+                print(f"scaled_heatmaps.shape = {scaled_heatmaps.shape}")
+                print(f"np.mean(scaled_heatmaps) = {np.mean(scaled_heatmaps)}")
+                print(f"heatmaps.shape = {heatmaps.shape}")
+                print(f"np.mean(heatmaps) = {np.mean(heatmaps)}")
+                print("==================")
+
+                (scaled_heatmaps, overlays) = cam.overlay_heatmap(scaled_heatmaps, video, alpha=0.5)
+
+                for i in range(len(scaled_heatmaps)):
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-scaled-overlays-{i}.jpg'), overlays[i])
             dsfds
 
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
