@@ -30,12 +30,11 @@ from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classification_table_and_plots
 from pocovidnet.read_mat import loadmat
 from pocovidnet.video_dataset_preprocess import preprocess_video_dataset
-from pocovidnet.attention_explanation import AttentionExplanation
+from pocovidnet.video_grad_cam_attention import VideoGradCAMAttention
 from datetime import datetime
 from datetime import date
 from keras.layers import Dropout, Dense, TimeDistributed
 from keras.models import Model
-from pocovidnet.video_grad_cam import VideoGradCAM
 
 
 warnings.filterwarnings("ignore")
@@ -150,6 +149,10 @@ def main():
     # Transfer between tasks
     parser.add_argument("--transferred_model", type=str, default="",
                         help="path to knowledge transferred model, ignored if empty string")
+
+    # Explainability
+    parser.add_argument("--explain", type=str2bool, nargs='?', const=True, default=False,
+                        help="save explanation heatmaps for video classification. Requires setting transferred_model to a CNN_transformer model with a TimeDistributed layer output shape (batch, seq_len, height, width, channels) and an TransformerBlock output shape (batch, seq_len, embed_dim)")
 
     # Output files
     parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
@@ -562,29 +565,17 @@ def main():
             # model = Model(model.input, model.layers[-2].output)
             # model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
 
-            print("TESTING GRAD CAMS AND ATTENTION EXPLAINER")
-            explainer = AttentionExplanation(model)
-            cam = VideoGradCAM(model)
-            for example in range(10):
-                video = X_train[example]
+            if args.explain:
+                print("TESTING GRAD CAMS AND ATTENTION EXPLAINER")
+                explainer = VideoGradCAMAttention(model)
+                for example in range(10):
+                    video = X_train[example]
 
-                # CAM and attention
-                heatmaps = cam.compute_heatmaps(video)
-                attn_weights = explainer.compute_attention_map(video)
+                    (heatmaps, overlays) = explainer.compute_attention_maps(video)
 
-                # Combine
-                scaled_heatmaps = []
-                for i in range(len(heatmaps)):
-                    scaled_heatmap = heatmaps[i] * attn_weights[0][i] * attn_weights.size  # Scale by weights, then scale up so activations are still same
-                    scaled_heatmap = np.clip(scaled_heatmap, 0, 255)  # Avoid out of bounds, could also rescale
-                    scaled_heatmaps.append(scaled_heatmap)
-                scaled_heatmaps = np.array(scaled_heatmaps)
-
-                (scaled_heatmaps, overlays) = cam.overlay_heatmap(scaled_heatmaps, video, alpha=0.5)
-
-                for i in range(len(scaled_heatmaps)):
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-scaled-overlays-{i}.jpg'), overlays[i])
-            dsfds
+                    for i in range(len(overlays)):
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg'), overlays[i])
+                dsfds
 
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 

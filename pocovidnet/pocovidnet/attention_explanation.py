@@ -20,7 +20,7 @@ class AttentionExplanation:
                 return layer.name
         raise ValueError("Could not find TransformerBlock. Cannot apply AttentionExplanation")
 
-    def compute_attention_map(self, video):
+    def compute_attention_weights(self, video):
         # Expect video.shape = (seq_len, height, width, channels)
 
         # Get model that outputs both attention weights and predictions
