@@ -34,6 +34,7 @@ from datetime import datetime
 from datetime import date
 from keras.layers import Dropout, Dense, TimeDistributed
 from keras.models import Model
+from pocovidnet.video_grad_cam import VideoGradCAM
 
 
 warnings.filterwarnings("ignore")
@@ -340,6 +341,7 @@ def main():
                         all_mat_files.append(path_to_mat_or_dir)
 
             all_mat_files = all_mat_files[:len(all_mat_files)//5]
+
             def get_labels(mat_files):
                 labels = []
                 print("Getting labels for stratified k-fold splitting")
@@ -558,164 +560,39 @@ def main():
             model = Model(model.input, model.layers[-2].output)
             model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
 
-            # import the necessary packages
-            class GradCAM:
-                def __init__(self, model, classIdx, layerName=None):
-                    # store the model, the class index used to measure the class
-                    # activation map, and the layer to be used when visualizing
-                    # the class activation map
-                    self.model = model
-                    self.classIdx = classIdx
-                    self.layerName = layerName
-                    # if the layer name is None, attempt to automatically find
-                    # the target output layer
-                    if self.layerName is None:
-                        self.layerName = self.find_target_layer()
+            print("TESTING GRAD CAMS")
+            test_idx = 1
+            video = X_test[test_idx]
+            print(f"video.shape = {video.shape}")
 
-                def find_target_layer(self):
-                    # attempt to find the final convolutional layer in the network
-                    # by looping over the layers of the network in reverse order
-                    for layer in reversed(self.model.layers):
-                        if len(layer.output_shape) == 5:
-                            print(f"FOUND: {layer.name}")
-                            return layer.name
-                        if isinstance(layer, TimeDistributed):
-                            print(f"found: {layer.name}")
-                            base_cnn = self.model.get_layer(layer.name).layer
-                            for base_layer in reversed(base_cnn.layers):
-                                # check to see if the layer has a 4D output
-                                if len(base_layer.output_shape) == 4:
-                                    print(f"FOUND: {base_layer.name}")
-                                    return layer.name, base_layer.name
-                    # otherwise, we could not find a 4D layer so the GradCAM
-                    # algorithm cannot be applied
-                    raise ValueError("Could not find 4D layer. Cannot apply GradCAM.")
-
-                def compute_heatmap(self, image, eps=1e-8):
-                    # construct our gradient model by supplying (1) the inputs
-                    # to our pre-trained model, (2) the output of the (presumably)
-                    # final 4D layer in the network, and (3) the output of the
-                    # softmax activations from the model
-                    if not isinstance(self.layerName, str):
-                        timedistributed_layer_name, cnn_layer_name = self.layerName
-                    else:
-                        timedistributed_layer_name = self.layerName
-                    print("++++++++++++++++++++++++++++")
-                    # grads = self.model.optimizer.get_gradients(self.model.total_loss, self.model.get_layer(timedistributed_layer_name).output)
-                    gradModel = tf.keras.models.Model(
-                        [self.model.inputs],
-                        # [self.model.get_layer(self.layerName).output])
-                        # [self.model.get_layer(timedistributed_layer_name).layer.get_layer(cnn_layer_name).output])
-                        [self.model.get_layer(timedistributed_layer_name).output,
-                         self.model.output])
-
-                        # [self.model.get_layer(self.layerName).output,
-                            # self.model.output])
-
-                    # record operations for automatic differentiation
-                    with tf.GradientTape() as tape:
-                        # cast the image tensor to a float-32 data type, pass the
-                        # image through the gradient model, and grab the loss
-                        # associated with the specific class index
-                        inputs = tf.cast(image, tf.float32)
-                        (convOutputs, predictions) = gradModel(inputs)
-                        loss = predictions[:, self.classIdx]
-                    # use automatic differentiation to compute the gradients
-                    print(f"convOutputs.shape = {convOutputs.shape}, from 2d should be (1, 7, 7, 512)")
-                    grads = tape.gradient(loss, convOutputs)
-                    print(f"grads.shape = {grads.shape}, from 2d should be (1, 7, 7, 512)")
-                    # compute the guided gradients
-                    castConvOutputs = tf.cast(convOutputs > 0, "float32")
-                    castGrads = tf.cast(grads > 0, "float32")
-                    guidedGrads = castConvOutputs * castGrads * grads
-                    print(f"guidedGrads.shape = {guidedGrads.shape}, from 2d should be (1, 7, 7, 512)")
-                    # the convolution and guided gradients have a batch dimension
-                    # (which we don't need) so let's grab the volume itself and
-                    # discard the batch
-                    convOutputs = convOutputs[0]
-                    guidedGrads = guidedGrads[0]
-                    print(f"AFTER convOutputs.shape = {convOutputs.shape}, from 2d should be (7, 7, 512)")
-                    print(f"AFTER guidedGrads.shape = {guidedGrads.shape}, from 2d should be (7, 7, 512)")
-                    # compute the average of the gradient values, and using them
-                    # as weights, compute the ponderation of the filters with
-                    # respect to the weights
-                    weights = tf.reduce_mean(guidedGrads, axis=(1, 2))
-                    print(f"weights.shape = {weights.shape}, from 2d should be (512,)")
-                    # cam = tf.reduce_sum(tf.multiply(weights, convOutputs), axis=-1)
-                    cam = []
-                    for i in range(len(weights)):
-                        cam.append(tf.reduce_sum(tf.multiply(weights[i], convOutputs[i]), axis=-1))
-                    cam = np.array(cam)
-
-                    # cam = tf.reduce_sum(tf.multiply(weights, convOutputs), axis=-1)
-                    print(f"cam.shape = {cam.shape}, from 2d should be (7, 7)")
-                    # grab the spatial dimensions of the input image and resize
-                    # the output class activation map to match the input image
-                    # dimensions
-                    heatmaps = []
-                    for i in range(len(cam)):
-                        heatmap = cv2.resize(cam[i], (224, 224))
-                        heatmaps.append(heatmap)
-                    heatmaps = np.array(heatmaps)
-                    print(f"heatmaps.shape = {heatmaps.shape}, from 2d should be (224, 224)")
-                    # normalize the heatmaps such that all values lie in the range
-                    # [0, 1], scale the resulting values to the range [0, 255],
-                    # and then convert to an unsigned 8-bit integer
-                    numer = heatmaps - np.min(heatmaps)
-                    denom = (heatmaps.max() - heatmaps.min()) + eps
-                    heatmaps = numer / denom
-                    heatmaps = (heatmaps * 255).astype("uint8")
-                    print(f"heatmaps.shape = {heatmaps.shape}, from 2d should be (224, 224)")
-                    # return the resulting heatmaps to the calling function
-                    return heatmaps
-
-                def overlay_heatmap(self, heatmap, image, alpha=0.5,
-                    colormap=cv2.COLORMAP_VIRIDIS):
-                    # apply the supplied color map to the heatmap and then
-                    # overlay the heatmap on the input image
-                    heatmap = cv2.applyColorMap(heatmap, colormap)
-                    heatmap = heatmap.astype(image.dtype)
-                    print(f"image.shape = {image.shape}")
-                    print(f"heatmap.shape = {heatmap.shape}")
-                    print(f"image.dtype = {image.dtype}")
-                    print(f"heatmap.dtype = {heatmap.dtype}")
-                    output = cv2.addWeighted(image, alpha, heatmap, 1 - alpha, 0)
-                    # return a 2-tuple of the color mapped heatmap and the output,
-                    # overlaid image
-                    return (heatmap, output)
-            img = X_test[0]
-            print(f"img.shape = {img.shape}")
-            inputs = np.expand_dims(img, axis=0)
-            print(f"inputs.shape = {inputs.shape}")
-            preds = model.predict(inputs)
+            preds = model.predict(np.expand_dims(video, axis=0))
             i = np.argmax(preds[0])
-            print(f"Y_test[0] = {Y_test[0]}")
-            print(f"i = {i}")
-            cam = GradCAM(model, i)
-            heatmaps = cam.compute_heatmap(inputs)
-            # print(f"heatmap = {heatmap}")
+            print(f"True label np.argmax(Y_test[test_idx]) = {np.argmax(Y_test[test_idx])}")
+            print(f"Predicted label i = {i}")
+
+            cam = VideoGradCAM(model, i)
+            heatmaps = cam.compute_heatmaps(video)
             print(f"heatmaps.shape = {heatmaps.shape}")
-            # heatmap = cv2.resize(heatmap, (img[0].shape[1], img[0].shape[0]))
-            # print(f"heatmap = {heatmap}")
-            # print(f"heatmap.shape = {heatmap.shape}")
+
+            (heatmaps, overlays) = cam.overlay_heatmap(heatmaps, video, alpha=0.5)
+            print(f"heatmaps.shape = {heatmaps.shape}")
+            print(f"overlays.shape = {overlays.shape}")
             for j in range(len(heatmaps)):
-                (heatmap, output) = cam.overlay_heatmap(heatmaps[j], img[j], alpha=0.5)
-                # (heatmap, output) = cam.overlay_heatmap(heatmap, img, alpha=0.5)
-                cv2.imwrite(f'output-{j}.jpg', output)
-                cv2.imwrite(f'heatmap-{j}.jpg', heatmap)
-                cv2.imwrite(f'img-{j}.jpg', img[j])
+                cv2.imwrite(f'overlay-{j}.jpg', overlays[j])
+                cv2.imwrite(f'heatmap-{j}.jpg', heatmaps[j])
+                cv2.imwrite(f'video-{j}.jpg', video[j])
             dsfds
 
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
         # evidential loss function
         def KL(alpha, K):
-            beta=tf.constant(np.ones((1,K)),dtype=tf.float32)
-            S_alpha = tf.reduce_sum(alpha,axis=1,keepdims=True)
-        
-            KL = tf.reduce_sum((alpha - beta)*(tf.math.digamma(alpha)-tf.math.digamma(S_alpha)),axis=1,keepdims=True) + \
-            tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha),axis=1,keepdims=True) + \
-            tf.reduce_sum(tf.math.lgamma(beta), axis=1, keepdims=True) - tf.math.lgamma(tf.reduce_sum(beta, axis=1, keepdims=True))
+            beta = tf.constant(np.ones((1, K)), dtype=tf.float32)
+            S_alpha = tf.reduce_sum(alpha, axis=1, keepdims=True)
+
+            KL = (tf.reduce_sum((alpha - beta)*(tf.math.digamma(alpha)-tf.math.digamma(S_alpha)), axis=1, keepdims=True) +
+                  tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha), axis=1, keepdims=True) +
+                  tf.reduce_sum(tf.math.lgamma(beta), axis=1, keepdims=True) - tf.math.lgamma(tf.reduce_sum(beta, axis=1, keepdims=True)))
             return KL
 
         def loss_eq5(actual, pred, K, global_step, annealing_step):
@@ -827,8 +704,8 @@ def main():
                                           rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
             classes_with_test = [f"{c} Test" for c in lb.classes_]
             wandb.log({f'Test Confusion Matrix {test_fold}': wandb.plots.HeatMap(classes_with_test, classes_with_test,
-                                                                    matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs, np.arange(len(lb.classes_))),
-                                                                    show_text=True)})
+                                                                                 matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs, np.arange(len(lb.classes_))),
+                                                                                 show_text=True)})
 
         # compute the confusion matrix and and use it to derive the raw
         # accuracy, sensitivity, and specificity
@@ -990,7 +867,6 @@ def main():
         plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f'loss_fold-{test_fold}.png'))
         plt.style.use('default')
 
-
     # Aggregate results
     if len(test_folds) > 1:
         print('-------------------------------Aggregated Results-----------------------------------')
@@ -1022,7 +898,7 @@ def main():
             printAndSaveConfusionMatrix(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestConfusionMatrixPatients.png", wandb_log=True)
 
         classes_with_test = [f"{c} Test" for c in lb.classes_]
-        wandb.log({f'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
+        wandb.log({'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
                                                                 matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs, np.arange(len(lb.classes_))),
                                                                 show_text=True)})
 

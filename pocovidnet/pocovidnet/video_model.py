@@ -309,6 +309,7 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     # Use pretrained cnn_model
     # Remove all layers until flatten
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
+    tf.keras.utils.plot_model(cnn_model, "cnn_model_before_transformer.png", show_shapes=True)
 
     # Run Conv1D over CNN outputs
     input_tensor = Input(shape=(input_shape))
