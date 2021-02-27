@@ -41,4 +41,8 @@ class AttentionExplanation:
         attn_weights = np.mean(attn_matrix, axis=0)
         # attn_weights.shape = (seq_len)
 
+        # Reshape attention so it can be plotted nicely
+        attn_weights = np.reshape(attn_weights, (-1, len(attn_weights)))
+        # attn_weights.shape = (1, seq_len)
+
         return attn_weights

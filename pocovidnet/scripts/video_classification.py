@@ -560,7 +560,7 @@ def main():
                 video = X_train[example]
                 attn_weights = explainer.compute_attention_map(video)
                 plt.figure()
-                plt.imshow(np.reshape(attn_weights, (-1, len(attn_weights))))
+                plt.imshow(attn_weights)
                 plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"attention_summary_ex-{example}.png"))
 
             for i in range(len(X_train[example])):
