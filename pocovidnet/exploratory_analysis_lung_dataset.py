@@ -47,6 +47,7 @@ frames_list = []
 view_list = []
 frame_time_list = []
 
+a_line_b_line_tuple_list = []
 for mat_file in tqdm(all_mat_files):
     mat = loadmat(mat_file)
 
@@ -70,6 +71,7 @@ for mat_file in tqdm(all_mat_files):
     lobar_consolidations_list.append(lobar_consolidations)
     pleural_effusions_list.append(pleural_effusions)
     no_lung_sliding_list.append(no_lung_sliding)
+    a_line_b_line_tuple_list.append((a_lines, b_lines))
 
     # Check data
     cine = mat['cleaned']
@@ -186,3 +188,22 @@ plt.hist(frame_time_list)
 plt.title("time between frames (ms) histogram")
 plt.ylabel("Frequency")
 plt.savefig(f"{data_source} frame_time_list.png")
+
+
+a_line_b_line_tuple_list.append((a_lines, b_lines))
+b_lines_with_a_lines = np.array([b for a, b in a_line_b_line_tuple_list if a == 1])
+b_lines_without_a_lines = np.array([b for a, b in a_line_b_line_tuple_list if a == 0])
+print(f"len(b_lines_without_a_lines) = {len(b_lines_without_a_lines)}")
+print(f"len(b_lines_with_a_lines) = {len(b_lines_with_a_lines)}")
+print(f"len(a_line_b_line_tuple_list) = {len(a_line_b_line_tuple_list)}")
+plt.figure()
+plt.hist(b_lines_without_a_lines)
+plt.title("b lines severity (without a lines) histogram")
+plt.ylabel("Frequency")
+plt.savefig(f"{data_source} b_lines_without_a_lines.png")
+
+plt.figure()
+plt.hist(b_lines_with_a_lines)
+plt.title("b lines severity (with a lines) histogram")
+plt.ylabel("Frequency")
+plt.savefig(f"{data_source} b_lines_with_a_lines.png")
