@@ -38,8 +38,9 @@ class VideoGradCAM:
         # algorithm cannot be applied
         raise ValueError("Could not find 4D layer. Cannot apply VideoGradCAM.")
 
-    def compute_heatmaps(self, video, classIdx, eps=1e-8):
+    def compute_heatmaps(self, video, classIdx=None, eps=1e-8):
         # Expect video.shape = (seq_len, height, width, channels)
+        # If classIdx not given, just use the class with highest prediction likelihood
 
         # construct our gradient model by supplying (1) the inputs
         # to our pre-trained model, (2) the output of the (presumably)
@@ -55,6 +56,8 @@ class VideoGradCAM:
             # associated with the specific class index
             inputs = tf.cast(np.expand_dims(video, axis=0), tf.float32)
             (convOutputs, predictions) = gradModel(inputs)
+            if classIdx is None:
+                classIdx = np.argmax(predictions[0])
             loss = predictions[:, classIdx]
 
         # use automatic differentiation to compute the gradients

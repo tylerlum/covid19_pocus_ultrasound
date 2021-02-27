@@ -562,56 +562,23 @@ def main():
             # model = Model(model.input, model.layers[-2].output)
             # model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
 
-            print("TESTING ATTENTION EXPLAINER")
-            explainer = AttentionExplanation(model)
-            for example in range(10):
-                video = X_train[example]
-                attn_weights = explainer.compute_attention_map(video)
-                plt.figure()
-                plt.imshow(attn_weights)
-                plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"attention_summary_ex-{example}.png"))
-                for i in range(len(X_train[example])):
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-frame-{i}.jpg"), X_train[example][i])
-
-            print("TESTING GRAD CAMS")
-            cam = VideoGradCAM(model)
-
-            for example in range(10):
-                video = X_train[example]
-                preds = model.predict(np.expand_dims(video, axis=0))
-                predClassIdx = np.argmax(preds[0])
-
-                heatmaps = cam.compute_heatmaps(video, predClassIdx)
-                (heatmaps, overlays) = cam.overlay_heatmap(heatmaps, video, alpha=0.5)
-                for i in range(len(heatmaps)):
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlay-{i}.jpg'), overlays[i])
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-heatmap-{i}.jpg'), heatmaps[i])
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-video-{i}.jpg'), video[i])
-
             print("TESTING GRAD CAMS AND ATTENTION EXPLAINER")
+            explainer = AttentionExplanation(model)
+            cam = VideoGradCAM(model)
             for example in range(10):
                 video = X_train[example]
-                preds = model.predict(np.expand_dims(video, axis=0))
-                predClassIdx = np.argmax(preds[0])
 
-                heatmaps = cam.compute_heatmaps(video, predClassIdx)
+                # CAM and attention
+                heatmaps = cam.compute_heatmaps(video)
                 attn_weights = explainer.compute_attention_map(video)
 
+                # Combine
                 scaled_heatmaps = []
                 for i in range(len(heatmaps)):
-                    print(f"heatmaps[i] = {heatmaps[i]}")
-                    print(f"attn_weights[0][i] = {attn_weights[0][i]}")
-                    scaled_heatmap = heatmaps[i] * attn_weights[0][i] * attn_weights.size
-                    scaled_heatmap = np.clip(scaled_heatmap, 0, 255)
-                    print(f"scaled_heatmap = {scaled_heatmap}")
-                    print("----------------")
+                    scaled_heatmap = heatmaps[i] * attn_weights[0][i] * attn_weights.size  # Scale by weights, then scale up so activations are still same
+                    scaled_heatmap = np.clip(scaled_heatmap, 0, 255)  # Avoid out of bounds, could also rescale
                     scaled_heatmaps.append(scaled_heatmap)
                 scaled_heatmaps = np.array(scaled_heatmaps)
-                print(f"scaled_heatmaps.shape = {scaled_heatmaps.shape}")
-                print(f"np.mean(scaled_heatmaps) = {np.mean(scaled_heatmaps)}")
-                print(f"heatmaps.shape = {heatmaps.shape}")
-                print(f"np.mean(heatmaps) = {np.mean(heatmaps)}")
-                print("==================")
 
                 (scaled_heatmaps, overlays) = cam.overlay_heatmap(scaled_heatmaps, video, alpha=0.5)
 
