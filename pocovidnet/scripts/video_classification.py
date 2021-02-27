@@ -33,8 +33,9 @@ from pocovidnet.video_dataset_preprocess import preprocess_video_dataset
 from pocovidnet.attention_explanation import AttentionExplanation
 from datetime import datetime
 from datetime import date
-from keras.layers import Dropout, Dense
+from keras.layers import Dropout, Dense, TimeDistributed
 from keras.models import Model
+from pocovidnet.video_grad_cam import VideoGradCAM
 
 
 warnings.filterwarnings("ignore")
@@ -253,8 +254,8 @@ def main():
         print(f"Performing k-fold splitting with validation fold {validation_fold} and test fold {test_fold}")
         print("===========================")
         # StratifiedKFold Doesn't work when not enough datapoints of each class
-        k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
-        # k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+        # k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+        k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
         def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
             for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
@@ -339,6 +340,8 @@ def main():
                             all_mat_files.append(os.path.join(path_to_mat_or_dir, mat))
                     else:
                         all_mat_files.append(path_to_mat_or_dir)
+
+            all_mat_files = all_mat_files[:len(all_mat_files)//5]
 
             def get_labels(mat_files):
                 labels = []
@@ -570,16 +573,39 @@ def main():
             # model = Model(model.input, model.layers[-2].output)
             # model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
 
+            print("TESTING GRAD CAMS")
+            test_idx = 1
+            video = X_test[test_idx]
+            print(f"video.shape = {video.shape}")
+
+            preds = model.predict(np.expand_dims(video, axis=0))
+            i = np.argmax(preds[0])
+            print(f"True label np.argmax(Y_test[test_idx]) = {np.argmax(Y_test[test_idx])}")
+            print(f"Predicted label i = {i}")
+
+            cam = VideoGradCAM(model, i)
+            heatmaps = cam.compute_heatmaps(video)
+            print(f"heatmaps.shape = {heatmaps.shape}")
+
+            (heatmaps, overlays) = cam.overlay_heatmap(heatmaps, video, alpha=0.5)
+            print(f"heatmaps.shape = {heatmaps.shape}")
+            print(f"overlays.shape = {overlays.shape}")
+            for j in range(len(heatmaps)):
+                cv2.imwrite(f'overlay-{j}.jpg', overlays[j])
+                cv2.imwrite(f'heatmap-{j}.jpg', heatmaps[j])
+                cv2.imwrite(f'video-{j}.jpg', video[j])
+            dsfds
+
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
         # evidential loss function
         def KL(alpha, K):
-            beta=tf.constant(np.ones((1,K)),dtype=tf.float32)
-            S_alpha = tf.reduce_sum(alpha,axis=1,keepdims=True)
-        
-            KL = tf.reduce_sum((alpha - beta)*(tf.math.digamma(alpha)-tf.math.digamma(S_alpha)),axis=1,keepdims=True) + \
-            tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha),axis=1,keepdims=True) + \
-            tf.reduce_sum(tf.math.lgamma(beta), axis=1, keepdims=True) - tf.math.lgamma(tf.reduce_sum(beta, axis=1, keepdims=True))
+            beta = tf.constant(np.ones((1, K)), dtype=tf.float32)
+            S_alpha = tf.reduce_sum(alpha, axis=1, keepdims=True)
+
+            KL = (tf.reduce_sum((alpha - beta)*(tf.math.digamma(alpha)-tf.math.digamma(S_alpha)), axis=1, keepdims=True) +
+                  tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha), axis=1, keepdims=True) +
+                  tf.reduce_sum(tf.math.lgamma(beta), axis=1, keepdims=True) - tf.math.lgamma(tf.reduce_sum(beta, axis=1, keepdims=True)))
             return KL
 
         def loss_eq5(actual, pred, K, global_step, annealing_step):
@@ -691,8 +717,8 @@ def main():
                                           rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
             classes_with_test = [f"{c} Test" for c in lb.classes_]
             wandb.log({f'Test Confusion Matrix {test_fold}': wandb.plots.HeatMap(classes_with_test, classes_with_test,
-                                                                    matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs, np.arange(len(lb.classes_))),
-                                                                    show_text=True)})
+                                                                                 matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs, np.arange(len(lb.classes_))),
+                                                                                 show_text=True)})
 
         # compute the confusion matrix and and use it to derive the raw
         # accuracy, sensitivity, and specificity
@@ -854,7 +880,6 @@ def main():
         plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f'loss_fold-{test_fold}.png'))
         plt.style.use('default')
 
-
     # Aggregate results
     if len(test_folds) > 1:
         print('-------------------------------Aggregated Results-----------------------------------')
@@ -886,7 +911,7 @@ def main():
             printAndSaveConfusionMatrix(testTrueIdxsPatients, testPredIdxsPatients, lb.classes_, "allTestConfusionMatrixPatients.png", wandb_log=True)
 
         classes_with_test = [f"{c} Test" for c in lb.classes_]
-        wandb.log({f'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
+        wandb.log({'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
                                                                 matrix_values=confusion_matrix(testTrueIdxs, testPredIdxs, np.arange(len(lb.classes_))),
                                                                 show_text=True)})
 
