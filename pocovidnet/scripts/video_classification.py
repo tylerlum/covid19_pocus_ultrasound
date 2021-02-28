@@ -150,6 +150,10 @@ def main():
     # Transfer between tasks
     parser.add_argument("--transferred_model", type=str, default="",
                         help="path to knowledge transferred model, ignored if empty string")
+    parser.add_argument("--transferred_model_num_layers_remove", type=int, default=0,
+                        help="number of layers to remove from transferred model (excluding prediction head that will always be removed)")
+    parser.add_argument("--transferred_model_num_layers_add", type=int, default=0,
+                        help="number of Dense layers to add to transferred model (includes a dropout after each)")
 
     # Explainability
     parser.add_argument("--explain", type=str2bool, nargs='?', const=True, default=False,
@@ -566,21 +570,36 @@ def main():
         del raw_validation_data, raw_validation_labels
         del raw_test_data, raw_test_labels
 
-        model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn, args.time_aggregation, args.trainable_base)
-        print('---------------------------model---------------------\n', args.architecture)
-
         if len(args.transferred_model) > 0:
             print("WARNING: using transferred model, assuming transformer")
             from pocovidnet.transformer import TransformerBlock
-            model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
-            # Remove head and add new heads
-            # model = Model(model.input, model.layers[-2].output)
-            # model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
+            transferred_model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
+
+            # Remove old prediction layer
+            model = Model(transferred_model.input, transferred_model.layers[-2].output)
+
+            # Remove additional layers
+            for i in range(args.transferred_model_num_layers_remove):
+                model = Model(model.input, model.layers[-2].output)
+
+            # Add additional hidden layers
+            for i in range(args.transferred_model_num_layers_add):
+                new_output = Dense(64, activation='relu')(model.output)
+                new_output = Dropout(0.5)(new_output)
+                model = Model(model.input, new_output)
+
+            # Add new prediction layer
+            model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
+
+            # Set trainable base
+            if args.trainable_base:
+                for layer in model.layers:
+                    layer.trainable = True
 
             if args.explain:
                 print("TESTING GRAD CAMS AND ATTENTION EXPLAINER")
-                explainer = VideoGradCAMAttention(model)
-                cam = VideoGradCAM(model)
+                explainer = VideoGradCAMAttention(transferred_model)
+                cam = VideoGradCAM(transferred_model)
                 # Run explainer on X examples
                 for example in tqdm(range(30)):
                     video = X_train[example]
@@ -611,7 +630,9 @@ def main():
                         old_output_video.write(old_images[i])
                     output_video.release()
                     old_output_video.release()
-
+        else:
+            model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn, args.time_aggregation, args.trainable_base)
+        print('---------------------------model---------------------\n', args.architecture)
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
         # evidential loss function
