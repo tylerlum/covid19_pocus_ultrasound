@@ -194,6 +194,10 @@ def main():
     parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False, help='video augmentation')
     parser.add_argument('--optimizer', type=str, default="adam", help='optimizer for training')
     parser.add_argument('--pretrained_cnn', type=str, default="vgg16", help='pretrained cnn architecture')
+    parser.add_argument('--trainable_base', type=str2bool, nargs='?', const=True, default=False,
+                        help='set if base model is trainable')
+    parser.add_argument('--time_aggregation', type=str, default="pooling",
+                        help='pooling or conv1d, aggregation across time for transformer')
 
     parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False,
                         help='use reduce learning rate callback')
@@ -231,6 +235,12 @@ def main():
     else:
         evidential = False
         print("This model does not use evidential")
+
+    if "transformer" not in args.architecture:
+        print("This model does not use time_aggregation")
+        args.time_aggregation = None
+    else:
+        print(f"This model uses time_aggregation {args.time_aggregation}")
 
     # Deterministic behavior
     set_random_seed(args.random_seed)
@@ -556,7 +566,7 @@ def main():
         del raw_validation_data, raw_validation_labels
         del raw_test_data, raw_test_labels
 
-        model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
+        model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn, args.time_aggregation, args.trainable_base)
         print('---------------------------model---------------------\n', args.architecture)
 
         if len(args.transferred_model) > 0:

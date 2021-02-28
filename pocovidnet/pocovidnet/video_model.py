@@ -13,10 +13,10 @@ from pocovidnet.transformer import TransformerBlock
 from .unet3d_genesis import unet_model_3d
 
 
-def get_model_remove_last_n_layers(input_shape, n_remove, nb_classes, pretrained_cnn):
+def get_model_remove_last_n_layers(input_shape, n_remove, nb_classes, pretrained_cnn, trainable_base=False):
     '''Helper function for getting base cnn_model'''
     # Use pretrained cnn_model
-    cnn_model = get_model(input_size=input_shape, log_softmax=False, num_classes=nb_classes, pretrained_cnn=pretrained_cnn)
+    cnn_model = get_model(input_size=input_shape, log_softmax=False, num_classes=nb_classes, pretrained_cnn=pretrained_cnn, trainable_base=trainable_base)
 
     # Remove the last n layers
     for _ in range(n_remove):
@@ -52,9 +52,10 @@ def get_baseline_model(input_shape, nb_classes, pretrained_cnn):
         return Model(inputs=input_tensor, outputs=average)
 
 
-def get_2D_CNN_average_model(input_shape, nb_classes, pretrained_cnn):
+def get_2D_CNN_average_model(input_shape, nb_classes, pretrained_cnn, time_aggregation, trainable_base):
     ''' Simple '''
-    return get_2D_CNN_average_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=False)
+    # Ignore time_aggregation
+    return get_2D_CNN_average_model_helper(input_shape, nb_classes, pretrained_cnn, trainable_base=trainable_base, evidential=False)
 
 
 def get_2D_CNN_average_evidential_model(input_shape, nb_classes, pretrained_cnn):
@@ -62,8 +63,8 @@ def get_2D_CNN_average_evidential_model(input_shape, nb_classes, pretrained_cnn)
     return get_2D_CNN_average_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=True)
 
 
-def get_2D_CNN_average_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=False):
-    cnn_model = get_model(input_size=input_shape[1:], evidential=evidential, num_classes=nb_classes, log_softmax=False, pretrained_cnn=pretrained_cnn)
+def get_2D_CNN_average_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=False, trainable_base=False):
+    cnn_model = get_model(input_size=input_shape[1:], evidential=evidential, num_classes=nb_classes, log_softmax=False, pretrained_cnn=pretrained_cnn, trainable_base=trainable_base)
 
     # Run cnn model on each frame
     input_tensor = Input(shape=(input_shape))
@@ -293,9 +294,9 @@ def get_2D_then_1D_model(input_shape, nb_classes, pretrained_cnn):
     return model
 
 
-def get_CNN_transformer_model(input_shape, nb_classes, pretrained_cnn):
+def get_CNN_transformer_model(input_shape, nb_classes, pretrained_cnn, time_aggregation, trainable_base):
     ''' Transformer '''
-    return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=True)
+    return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, time_aggregation=time_aggregation, trainable_base=trainable_base, positional_encoding=True)
 
 
 def get_CNN_transformer_no_pos_model(input_shape, nb_classes, pretrained_cnn):
@@ -306,10 +307,10 @@ def get_CNN_transformer_evidential_model(input_shape, nb_classes, pretrained_cnn
     return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=True, evidential=True)
 
 
-def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding, evidential=False):
+def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding, evidential=False, time_aggregation='pooling', trainable_base=False):
     # Use pretrained cnn_model
     # Remove all layers including flatten and avg pool
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=7, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=7, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn, trainable_base=trainable_base)
     tf.keras.utils.plot_model(cnn_model, "cnn_model_before_transformer.png", show_shapes=True)
 
     # Run CNN on each frame
@@ -334,7 +335,18 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
         transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps,
                                              positional_encoding=positional_encoding)
         model, attn_weights = transformer_block(model)
-    model = GlobalAveragePooling1D()(model)  # Change to Conv1D?
+
+    # Aggregate through time (batch_size, seq_len, embed_dim) => (batch_size, new_embed_dim)
+    if time_aggregation == 'pooling':
+        model = GlobalAveragePooling1D()(model)
+    elif time_aggregation == 'conv1d':
+        model = Conv1D(128, 3, activation='relu')(model)
+        model = Conv1D(64, 3, activation='relu')(model)
+        model = Flatten()(model)
+    else:
+        raise ValueError(f"Invalid time_aggregation {time_aggregation}")
+    print(f"Transformer used {time_aggregation}")
+
     model = Dense(256, activation='relu')(model)
     model = Dropout(0.5)(model)
     model = Dense(64, activation='relu')(model)
@@ -544,7 +556,7 @@ def get_2D_3D_model(input_shape, nb_classes, pretrained_cnn, evidential=False):
     base_model = tf.keras.applications.resnet_v2.ResNet50V2(include_top=False,
                                                             weights='imagenet',
                                                             pooling='max',  # Set this to None?
-                                                            input_tensor = Input(shape=(input_shape[1:]))
+                                                            input_tensor=Input(shape=(input_shape[1:]))
                                                             )
     layer = 'conv4_block3_out'
     base_model = tf.keras.Model(
@@ -553,17 +565,17 @@ def get_2D_3D_model(input_shape, nb_classes, pretrained_cnn, evidential=False):
     for layer in base_model.layers:
         layer.trainable = False
     print(base_model.summary())
-    tf.keras.utils.plot_model(base_model, f"2D_3D.png", show_shapes=True)
+
+    tf.keras.utils.plot_model(base_model, "2D_3D.png", show_shapes=True)
 
     # Setup layers
     conv_layers = [tf.keras.layers.Conv3D(64, 3, padding='same', activation='relu')
-                        for _ in range(2)]
-    pool_layers = [tf.keras.layers.MaxPooling3D(pool_size=(2,2,2), strides=(2,2,2))
-                        for _ in range(2)]
+                   for _ in range(2)]
+    pool_layers = [tf.keras.layers.MaxPooling3D(pool_size=(2, 2, 2), strides=(2, 2, 2))
+                   for _ in range(2)]
     bn_layers = [tf.keras.layers.BatchNormalization()
-                      for _ in range(2)]
-    fc_layers = [tf.keras.layers.Dense(64,
-                                            activation=tf.nn.relu) for _ in range(2)]
+                 for _ in range(2)]
+    fc_layers = [tf.keras.layers.Dense(64, activation=tf.nn.relu) for _ in range(2)]
     dropout = tf.keras.layers.Dropout(0.1)
 
     # Build model
@@ -584,7 +596,7 @@ def get_2D_3D_model(input_shape, nb_classes, pretrained_cnn, evidential=False):
 
     act_fn = 'softmax' if not evidential else 'relu'
     x = dropout(x)
-    x = tf.keras.layers.Dense(nb_classes, activation='softmax')(x)
+    x = tf.keras.layers.Dense(nb_classes, activation=act_fn)(x)
     model = Model(inputs=input_tensor, outputs=x)
     return model
 
