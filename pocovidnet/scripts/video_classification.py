@@ -238,209 +238,141 @@ def main():
         os.makedirs(SAVE_DIR)
 
     # Setup folds
-    args.validation_fold = (args.test_fold + 1) % args.num_folds  # Select validation fold
-    print()
-    print("===========================")
-    print(f"Performing k-fold splitting with validation fold {args.validation_fold} and test fold {args.test_fold}")
-    print("===========================")
-    # k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True) Doesn't work when not enough datapoints of each class
-    k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
-    def get_train_validation_test_split(k_fold_cross_validation, vid_files, labels):
-        for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
-            if i == args.validation_fold:
-                validation_indices = test_index
-            elif i == args.test_fold:
-                test_indices = test_index
-        train_indices = [i for i in range(len(vid_files))
-                         if i not in validation_indices and i not in test_indices]  # Need to use only remaining
+    train_true = []
+    train_pred = []
+    val_true = []
+    val_pred = []
+    test_true = []
+    test_pred = []
 
-        train_files = [vid_files[i] for i in train_indices]
-        train_labels = [labels[i] for i in train_indices]
-        validation_files = [vid_files[i] for i in validation_indices]
-        validation_labels = [labels[i] for i in validation_indices]
-        test_files = [vid_files[i] for i in test_indices]
-        test_labels = [labels[i] for i in test_indices]
-        return train_files, train_labels, validation_files, validation_labels, test_files, test_labels
-
-    # Use pocovid dataset
-    if not args.mat:
-        # Get videos and labels
-        class_short = ["cov", "pne", "reg"] # TODO, don't load pne this time see what happens
-        # class_short = ["cov", "reg"]
-        vid_files = [
-            v for v in os.listdir(args.videos) if v[:3].lower() in class_short
-        ]
-        labels = [vid[:3].lower() for vid in vid_files]
-
-        # Read in videos and transform to 3D
+    for test_fold in range(args.num_folds):
+        validation_fold = (test_fold + 1) % args.num_folds  # Select validation fold
         print()
         print("===========================")
-        print("Reading in videos, not from mat files")
+        print(f"Performing k-fold splitting with validation fold {validation_fold} and test fold {test_fold}")
         print("===========================")
+        # k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
-        train_files, train_labels, validation_files, validation_labels, test_files, test_labels = (
-            get_train_validation_test_split(k_fold_cross_validation, vid_files, labels)
-        )
-        vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
-                          framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type,
-                          pretrained_cnn=args.pretrained_cnn)
-        X_train, train_labels_text, train_files = vid3d.video3d(
-            train_files,
-            train_labels,
-            save=None
-        )
-        X_validation, validation_labels_text, validation_files = vid3d.video3d(
-            validation_files,
-            validation_labels,
-            save=None
-        )
-        X_test, test_labels_text, test_files = vid3d.video3d(
-            test_files,
-            test_labels,
-            save=None
-        )
+        k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed,
+                                                  shuffle=True)  # Doesn't work when not enough datapoints of each class
 
-        # One-hot encoding
-        lb = LabelBinarizer()
-        lb.fit(train_labels_text)
-        Y_train = lb.transform(train_labels_text)
-        Y_validation = np.array(lb.transform(validation_labels_text))
-        Y_test = np.array(lb.transform(test_labels_text))
+        def get_train_validation_test_split(validation_fold, test_fold,k_fold_cross_validation, vid_files, labels):
+            for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
+                if i == validation_fold:
+                    validation_indices = test_index
+                elif i == test_fold:
+                    test_indices = test_index
+            train_indices = [i for i in range(len(vid_files))
+                             if i not in validation_indices and i not in test_indices]  # Need to use only remaining
 
-        # Model genesis requires different dataset shape than other cnns.
-        if args.architecture == "model_genesis":
-            # Rearrange to put channels first and depth last
-            X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
-            X_validation = np.transpose(X_validation, [0, 4, 2, 3, 1])
-            X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
+            train_files = [vid_files[i] for i in train_indices]
+            train_labels = [labels[i] for i in train_indices]
+            validation_files = [vid_files[i] for i in validation_indices]
+            validation_labels = [labels[i] for i in validation_indices]
+            test_files = [vid_files[i] for i in test_indices]
+            test_labels = [labels[i] for i in test_indices]
+            return train_files, train_labels, validation_files, validation_labels, test_files, test_labels
 
-            # Repeat frames since depth of model is 32
-            required_depth = 32
-            num_repeats = required_depth // args.depth
-            extra = required_depth - args.depth * num_repeats
-            repeat_list = [num_repeats for _ in range(args.depth)]
-            for i in range(extra):
-                repeat_list[i] += 1
-            print(f"With depth = {args.depth} and required_depth = {required_depth}, will repeat frames like so " +
-                  f"{repeat_list} so the new depth is {sum(repeat_list)}")
-            X_train = np.repeat(X_train, repeat_list, axis=-1)
-            X_validation = np.repeat(X_validation, repeat_list, axis=-1)
-            X_test = np.repeat(X_test, repeat_list, axis=-1)
+        # Use pocovid dataset
+        if not args.mat:
+            # Get videos and labels
+            class_short = ["cov", "pne", "reg"] # TODO, don't load pne this time see what happens
+            # class_short = ["cov", "reg"]
+            vid_files = [
+                v for v in os.listdir(args.videos) if v[:3].lower() in class_short
+            ]
+            labels = [vid[:3].lower() for vid in vid_files]
 
-    # Use private lung dataset
-    else:
-        # Split up mat files to train/validation/test
-        all_patient_dirs = [os.path.join(args.videos, name) for name in os.listdir(args.videos)
-                            if os.path.isdir(os.path.join(args.videos, name))]
-        # Get all mat files
-        all_mat_files = []
-        for patient_dir in all_patient_dirs:
-            for mat_or_dir in os.listdir(patient_dir):
-                path_to_mat_or_dir = os.path.join(patient_dir, mat_or_dir)
+            # Read in videos and transform to 3D
+            print()
+            print("===========================")
+            print("Reading in videos, not from mat files")
+            print("===========================")
 
-                # Handle folders with mat files one level deeper
-                if os.path.isdir(path_to_mat_or_dir):
-                    for mat in os.listdir(path_to_mat_or_dir):
-                        all_mat_files.append(os.path.join(path_to_mat_or_dir, mat))
-                else:
-                    all_mat_files.append(path_to_mat_or_dir)
+            train_files, train_labels, validation_files, validation_labels, test_files, test_labels = (
+                get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels)
+            )
+            vid3d = Videoto3D(args.videos, width=args.width, height=args.height, depth=args.depth,
+                              framerate=args.frame_rate, grayscale=args.grayscale, optical_flow_type=args.optical_flow_type,
+                              pretrained_cnn=args.pretrained_cnn)
+            X_train, train_labels_text, train_files = vid3d.video3d(
+                train_files,
+                train_labels,
+                save=None
+            )
+            X_validation, validation_labels_text, validation_files = vid3d.video3d(
+                validation_files,
+                validation_labels,
+                save=None
+            )
+            X_test, test_labels_text, test_files = vid3d.video3d(
+                test_files,
+                test_labels,
+                save=None
+            )
 
-        def get_labels(mat_files):
-            labels = []
-            print("Getting labels for stratified k-fold splitting")
-            for mat_file in tqdm(mat_files):
-                mat = loadmat(mat_file)
+            # One-hot encoding
+            lb = LabelBinarizer()
+            lb.fit(train_labels_text)
+            Y_train = lb.transform(train_labels_text)
+            Y_validation = np.array(lb.transform(validation_labels_text))
+            Y_test = np.array(lb.transform(test_labels_text))
 
-                # Get labels
-                b_lines = mat['labels']['B-lines']
-                stop_frame = mat['labels']['stop_frame']
-                start_frame = mat['labels']['start_frame']
-                subpleural_consolidations = mat['labels']['Sub-pleural consolidations']
-                pleural_irregularities = mat['labels']['Pleural irregularities']
-                a_lines = mat['labels']['A-lines']
-                lobar_consolidations = mat['labels']['Lobar consolidations']
-                pleural_effusions = mat['labels']['Pleural effussions']
-                no_lung_sliding = mat['labels']['No lung sliding']
+            # Model genesis requires different dataset shape than other cnns.
+            if args.architecture == "model_genesis":
+                # Rearrange to put channels first and depth last
+                X_train = np.transpose(X_train, [0, 4, 2, 3, 1])
+                X_validation = np.transpose(X_validation, [0, 4, 2, 3, 1])
+                X_test = np.transpose(X_test, [0, 4, 2, 3, 1])
 
-                b = 0  # binary b_line label, for now
-                if b_lines >= 1:
-                    b = 1
-                # note: omitting the no_lung_sliding label because of the
-                # low numbers (5 in total cases) that all appeared in test set
-                labels.append({'head_0': b,
-                               'head_1': a_lines})
-                # if args.mat_task == 'a_lines':
-                #     labels.append(a_lines)
-                # elif args.mat_task == 'b_lines_binary':
-                #     labels.append(1 if b_lines > 0 else 0)
-                # elif args.mat_task == 'b_lines':
-                #     labels.append(b_lines)
-            return labels
+                # Repeat frames since depth of model is 32
+                required_depth = 32
+                num_repeats = required_depth // args.depth
+                extra = required_depth - args.depth * num_repeats
+                repeat_list = [num_repeats for _ in range(args.depth)]
+                for i in range(extra):
+                    repeat_list[i] += 1
+                print(f"With depth = {args.depth} and required_depth = {required_depth}, will repeat frames like so " +
+                      f"{repeat_list} so the new depth is {sum(repeat_list)}")
+                X_train = np.repeat(X_train, repeat_list, axis=-1)
+                X_validation = np.repeat(X_validation, repeat_list, axis=-1)
+                X_test = np.repeat(X_test, repeat_list, axis=-1)
 
-        all_labels = get_labels(all_mat_files)
+        # Use private lung dataset
+        else:
+            # Split up mat files to train/validation/test
+            all_patient_dirs = [os.path.join(args.videos, name) for name in os.listdir(args.videos)
+                                if os.path.isdir(os.path.join(args.videos, name))]
+            # Get all mat files
+            all_mat_files = []
+            for patient_dir in all_patient_dirs:
+                for mat_or_dir in os.listdir(patient_dir):
+                    path_to_mat_or_dir = os.path.join(patient_dir, mat_or_dir)
 
-        train_mats, train_labels, validation_mats, validation_labels, test_mats, test_labels = (
-            get_train_validation_test_split(k_fold_cross_validation, all_mat_files, all_labels)
-        )
+                    # Handle folders with mat files one level deeper
+                    if os.path.isdir(path_to_mat_or_dir):
+                        for mat in os.listdir(path_to_mat_or_dir):
+                            all_mat_files.append(os.path.join(path_to_mat_or_dir, mat))
+                    else:
+                        all_mat_files.append(path_to_mat_or_dir)
 
-        def get_video_clips_and_labels(mat_files):
-            video_clips = []
-            labels = []
+            def get_labels(mat_files):
+                labels = []
+                print("Getting labels for stratified k-fold splitting")
+                for mat_file in tqdm(mat_files):
+                    mat = loadmat(mat_file)
 
-            # Mat files
-            print("Collecting video clips and labels")
-            for mat_file in tqdm(mat_files):
-                mat = loadmat(os.path.join(patient_dir, mat_file))
-
-                # Get labels
-                b_lines = mat['labels']['B-lines']
-                stop_frame = mat['labels']['stop_frame']
-                start_frame = mat['labels']['start_frame']
-                subpleural_consolidations = mat['labels']['Sub-pleural consolidations']
-                pleural_irregularities = mat['labels']['Pleural irregularities']
-                a_lines = mat['labels']['A-lines']
-                lobar_consolidations = mat['labels']['Lobar consolidations']
-                pleural_effusions = mat['labels']['Pleural effussions']
-                no_lung_sliding = mat['labels']['No lung sliding']
-
-                # Calculate frequency of getting frames
-                # Some mat files are missing FrameTime
-                if 'FrameTime' not in mat['dicom_info']:
-                    time_between_frames_ms = 50  # Typically is 50 for linear and 30 for curved
-                else:
-                    time_between_frames_ms = mat['dicom_info']['FrameTime']
-                video_framerate = 1.0 / (time_between_frames_ms / 1000)
-                show_every = math.ceil(video_framerate / args.frame_rate)
-
-                # Get cine
-                if 'cropped' in mat.keys() and 'cleaned' in mat.keys():
-                    raise ValueError(f"{mat_file} has both cropped and cleaned")
-                if 'cropped' not in mat.keys() and 'cleaned' not in mat.keys():
-                    raise ValueError(f"{mat_file} has neither cropped or cleaned")
-                if 'cropped' in mat.keys():
-                    cine = mat['cropped']
-                if 'cleaned' in mat.keys():
-                    cine = mat['cleaned']
-
-                num_video_frames = (stop_frame - start_frame + 1) // show_every
-                num_clips = num_video_frames // args.depth
-
-                # Video clips
-                for i in range(num_clips):
-                    start, stop = start_frame + i * args.depth * show_every, start_frame + (
-                            i + 1) * args.depth * show_every
-                    clip_data = cine[:, :, start:stop:show_every]
-                    video_clip = []
-
-                    # Frames
-                    for frame_i in range(clip_data.shape[-1]):
-                        frame = cv2.resize(clip_data[:, :, frame_i], (args.width, args.height))
-                        frame = frame[:, :, np.newaxis]
-                        frame = cv2.merge([frame, frame, frame])
-                        video_clip.append(frame)
-
-                    video_clips.append(video_clip)
+                    # Get labels
+                    b_lines = mat['labels']['B-lines']
+                    stop_frame = mat['labels']['stop_frame']
+                    start_frame = mat['labels']['start_frame']
+                    subpleural_consolidations = mat['labels']['Sub-pleural consolidations']
+                    pleural_irregularities = mat['labels']['Pleural irregularities']
+                    a_lines = mat['labels']['A-lines']
+                    lobar_consolidations = mat['labels']['Lobar consolidations']
+                    pleural_effusions = mat['labels']['Pleural effussions']
+                    no_lung_sliding = mat['labels']['No lung sliding']
 
                     b = 0  # binary b_line label, for now
                     if b_lines >= 1:
@@ -455,398 +387,486 @@ def main():
                     #     labels.append(1 if b_lines > 0 else 0)
                     # elif args.mat_task == 'b_lines':
                     #     labels.append(b_lines)
+                return labels
 
-            X = np.array(video_clips)
-            Y = np.array(labels)
-            return X, Y
+            all_labels = get_labels(all_mat_files)
 
-        # Get video clips and labels
-        X_train, Y_train = get_video_clips_and_labels(train_mats)
-        X_validation, Y_validation = get_video_clips_and_labels(validation_mats)
-        X_test, Y_test = get_video_clips_and_labels(test_mats)
+            train_mats, train_labels, validation_mats, validation_labels, test_mats, test_labels = (
+                get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, all_mat_files, all_labels)
+            )
 
-        lb = LabelBinarizer()
-        # Onehot encode labels
-        if args.multitask == False:
-            train_labels_text = Y_train
-            validation_labels_text = Y_validation
-            test_labels_text = Y_test
-            lb.fit(train_labels_text)
-            Y_train = np.array(lb.transform(train_labels_text))
-            Y_validation = np.array(lb.transform(Y_validation))
-            Y_test = np.array(lb.transform(Y_test))
+            def get_video_clips_and_labels(mat_files):
+                video_clips = []
+                labels = []
+
+                # Mat files
+                print("Collecting video clips and labels")
+                for mat_file in tqdm(mat_files):
+                    mat = loadmat(os.path.join(patient_dir, mat_file))
+
+                    # Get labels
+                    b_lines = mat['labels']['B-lines']
+                    stop_frame = mat['labels']['stop_frame']
+                    start_frame = mat['labels']['start_frame']
+                    subpleural_consolidations = mat['labels']['Sub-pleural consolidations']
+                    pleural_irregularities = mat['labels']['Pleural irregularities']
+                    a_lines = mat['labels']['A-lines']
+                    lobar_consolidations = mat['labels']['Lobar consolidations']
+                    pleural_effusions = mat['labels']['Pleural effussions']
+                    no_lung_sliding = mat['labels']['No lung sliding']
+
+                    # Calculate frequency of getting frames
+                    # Some mat files are missing FrameTime
+                    if 'FrameTime' not in mat['dicom_info']:
+                        time_between_frames_ms = 50  # Typically is 50 for linear and 30 for curved
+                    else:
+                        time_between_frames_ms = mat['dicom_info']['FrameTime']
+                    video_framerate = 1.0 / (time_between_frames_ms / 1000)
+                    show_every = math.ceil(video_framerate / args.frame_rate)
+
+                    # Get cine
+                    if 'cropped' in mat.keys() and 'cleaned' in mat.keys():
+                        raise ValueError(f"{mat_file} has both cropped and cleaned")
+                    if 'cropped' not in mat.keys() and 'cleaned' not in mat.keys():
+                        raise ValueError(f"{mat_file} has neither cropped or cleaned")
+                    if 'cropped' in mat.keys():
+                        cine = mat['cropped']
+                    if 'cleaned' in mat.keys():
+                        cine = mat['cleaned']
+
+                    num_video_frames = (stop_frame - start_frame + 1) // show_every
+                    num_clips = num_video_frames // args.depth
+
+                    # Video clips
+                    for i in range(num_clips):
+                        start, stop = start_frame + i * args.depth * show_every, start_frame + (
+                                i + 1) * args.depth * show_every
+                        clip_data = cine[:, :, start:stop:show_every]
+                        video_clip = []
+
+                        # Frames
+                        for frame_i in range(clip_data.shape[-1]):
+                            frame = cv2.resize(clip_data[:, :, frame_i], (args.width, args.height))
+                            frame = frame[:, :, np.newaxis]
+                            frame = cv2.merge([frame, frame, frame])
+                            video_clip.append(frame)
+
+                        video_clips.append(video_clip)
+
+                        b = 0  # binary b_line label, for now
+                        if b_lines >= 1:
+                            b = 1
+                        # note: omitting the no_lung_sliding label because of the
+                        # low numbers (5 in total cases) that all appeared in test set
+                        labels.append({'head_0': b,
+                                       'head_1': a_lines})
+                        # if args.mat_task == 'a_lines':
+                        #     labels.append(a_lines)
+                        # elif args.mat_task == 'b_lines_binary':
+                        #     labels.append(1 if b_lines > 0 else 0)
+                        # elif args.mat_task == 'b_lines':
+                        #     labels.append(b_lines)
+
+                X = np.array(video_clips)
+                Y = np.array(labels)
+                return X, Y
+
+            # Get video clips and labels
+            X_train, Y_train = get_video_clips_and_labels(train_mats)
+            X_validation, Y_validation = get_video_clips_and_labels(validation_mats)
+            X_test, Y_test = get_video_clips_and_labels(test_mats)
+
+            lb = LabelBinarizer()
+            # Onehot encode labels
+            if args.multitask == False:
+                train_labels_text = Y_train
+                validation_labels_text = Y_validation
+                test_labels_text = Y_test
+                lb.fit(train_labels_text)
+                Y_train = np.array(lb.transform(train_labels_text))
+                Y_validation = np.array(lb.transform(Y_validation))
+                Y_test = np.array(lb.transform(Y_test))
+            else:
+                Y_train = np.array(Y_train)
+                Y_validation = np.array(Y_validation)
+                Y_test = np.array(Y_test)
+
+            # Workaround to get text class names
+            # lb.classes_ = ['b_lines', 'subpleural_consolidations',
+            #                'a_lines', 'pleural_irregularities', 'lobar_consolidations',
+            #                'pleural_effusions']
+            lb.classes_ = ['binary_b_line', 'a_line']
+
+        input_shape = X_train.shape[1:]
+        print(f"input_shape = {input_shape}")
+
+        # VISUALIZE
+        if args.visualize:
+            num_show = 100
+            print(f"Visualizing {num_show} video clips")
+            for i in range(X_train.shape[0]):
+                # End early
+                if i >= num_show:
+                    break
+
+                video_clip = X_train[i]
+                label = Y_train[i]
+                for j in range(video_clip.shape[0]):
+                    frame = video_clip[j]
+                    num_channels = frame.shape[2]
+                    if num_channels == 1 or num_channels == 3:
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255 * frame)
+                    elif num_channels == 6:
+                        rgb_frame = frame[:, :, :3]
+                        optical_flow_frame = frame[:, :, 3:]
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"),
+                                    255 * rgb_frame)
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
+                                    255 * optical_flow_frame)
+
+            print("Visualizing 1 batch of augmented video clips")
+            batchX, batchY = generator[0]
+            for i, (video_clip, label) in enumerate(zip(batchX, batchY)):
+                for j, frame in enumerate(video_clip):
+                    num_channels = frame.shape[2]
+                    if num_channels == 1 or num_channels == 3:
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
+                                    255 * frame)
+                    elif num_channels == 6:
+                        rgb_frame = frame[:, :, :3]
+                        optical_flow_frame = frame[:, :, 3:]
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
+                                    255 * rgb_frame)
+                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
+                                    255 * optical_flow_frame)
+
+        print()
+        print("===========================")
+        print("Removing pneumonia classes")
+        print("===========================")
+        train_pne_idx = np.where(np.argmax(Y_train, axis=1) == 1)
+        X_train = np.delete(X_train, train_pne_idx, axis=0)
+        Y_train = np.delete(Y_train, train_pne_idx, axis=0)
+        train_labels_text = np.delete(train_labels_text, train_pne_idx, axis=0)
+        Y_train = np.delete(Y_train, 1, 1)
+
+        test_pne_idx = np.where(np.argmax(Y_test, axis=1) == 1)
+        X_test = np.delete(X_test, test_pne_idx, axis=0)
+        Y_test = np.delete(Y_test, test_pne_idx, axis=0)
+        test_labels_text = np.delete(test_labels_text, test_pne_idx, axis=0)
+        Y_test = np.delete(Y_test, 1, 1)
+
+        val_pne_idx = np.where(np.argmax(Y_validation, axis=1) == 1)
+        X_validation = np.delete(X_validation, val_pne_idx, axis=0)
+        Y_validation = np.delete(Y_validation, val_pne_idx, axis=0)
+        validation_labels_text = np.delete(validation_labels_text, val_pne_idx, axis=0)
+        Y_validation = np.delete(Y_validation, 1, 1)
+
+        lb.classes_ = ['cov', 'reg']
+        generator = DataGenerator(X_train, Y_train, args.batch_size, input_shape, shuffle=True)
+
+        print()
+        print("===========================")
+        print("Printing details about dataset")
+        print("===========================")
+        print(f"X_train.shape, Y_train.shape = {X_train.shape}, {Y_train.shape}")
+        print(f"X_validation.shape, Y_validation.shape = {X_validation.shape}, {Y_validation.shape}")
+        print(f"X_test.shape, Y_test.shape = {X_test.shape}, {Y_test.shape}")
+        if not args.multitask:
+            nb_classes = len(np.unique(train_labels_text))
+            print(f"nb_classes, np.max(X_train) = {nb_classes}, {np.max(X_train)}")
+            train_uniques, train_counts = np.unique(train_labels_text, return_counts=True)
+            validation_uniques, validation_counts = np.unique(validation_labels_text, return_counts=True)
+            test_uniques, test_counts = np.unique(test_labels_text, return_counts=True)
+            print("unique labels in train", (train_uniques, train_counts))
+            print("unique labels in validation", (validation_uniques, validation_counts))
+            print("unique labels in test", (test_uniques, test_counts))
+            class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
+            print(f"class_weight = {class_weight}")
         else:
-            Y_train = np.array(Y_train)
-            Y_validation = np.array(Y_validation)
-            Y_test = np.array(Y_test)
-
-        # Workaround to get text class names
-        # lb.classes_ = ['b_lines', 'subpleural_consolidations',
-        #                'a_lines', 'pleural_irregularities', 'lobar_consolidations',
-        #                'pleural_effusions']
-        lb.classes_ = ['binary_b_line', 'a_line']
-
-    input_shape = X_train.shape[1:]
-    print(f"input_shape = {input_shape}")
-
-    # VISUALIZE
-    if args.visualize:
-        num_show = 100
-        print(f"Visualizing {num_show} video clips")
-        for i in range(X_train.shape[0]):
-            # End early
-            if i >= num_show:
-                break
-
-            video_clip = X_train[i]
-            label = Y_train[i]
-            for j in range(video_clip.shape[0]):
-                frame = video_clip[j]
-                num_channels = frame.shape[2]
-                if num_channels == 1 or num_channels == 3:
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"), 255 * frame)
-                elif num_channels == 6:
-                    rgb_frame = frame[:, :, :3]
-                    optical_flow_frame = frame[:, :, 3:]
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}.jpg"),
-                                255 * rgb_frame)
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
-                                255 * optical_flow_frame)
-
-        print("Visualizing 1 batch of augmented video clips")
-        batchX, batchY = generator[0]
-        for i, (video_clip, label) in enumerate(zip(batchX, batchY)):
-            for j, frame in enumerate(video_clip):
-                num_channels = frame.shape[2]
-                if num_channels == 1 or num_channels == 3:
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
-                                255 * frame)
-                elif num_channels == 6:
-                    rgb_frame = frame[:, :, :3]
-                    optical_flow_frame = frame[:, :, 3:]
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}.jpg"),
-                                255 * rgb_frame)
-                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f"Augment-Example-{i}_Frame-{j}_Label-{label}-opt.jpg"),
-                                255 * optical_flow_frame)
-
-    # print()
-    # print("===========================")
-    # print("Removing pneumonia classes")
-    # print("===========================")
-    # train_pne_idx = np.where(np.argmax(Y_train, axis=1) == 1)
-    # X_train = np.delete(X_train, train_pne_idx, axis=0)
-    # Y_train = np.delete(Y_train, train_pne_idx, axis=0)
-    # train_labels_text = np.delete(train_labels_text, train_pne_idx, axis=0)
-    # Y_train = np.delete(Y_train, 1, 1)
-    # print(Y_train)
-    #
-    # test_pne_idx = np.where(np.argmax(Y_test, axis=1) == 1)
-    # X_test = np.delete(X_test, test_pne_idx, axis=0)
-    # Y_test = np.delete(Y_test, test_pne_idx, axis=0)
-    # test_labels_text = np.delete(test_labels_text, test_pne_idx, axis=0)
-    # Y_test = np.delete(Y_test, 1, 1)
-    #
-    # val_pne_idx = np.where(np.argmax(Y_validation, axis=1) == 1)
-    # X_validation = np.delete(X_validation, val_pne_idx, axis=0)
-    # Y_validation = np.delete(Y_validation, val_pne_idx, axis=0)
-    # validation_labels_text = np.delete(validation_labels_text, val_pne_idx, axis=0)
-    # Y_validation = np.delete(Y_validation, 1, 1)
-    #
-    # lb.classes_ = ['cov', 'reg']
-    generator = DataGenerator(X_train, Y_train, args.batch_size, input_shape, shuffle=True)
-
-    print()
-    print("===========================")
-    print("Printing details about dataset")
-    print("===========================")
-    print(f"X_train.shape, Y_train.shape = {X_train.shape}, {Y_train.shape}")
-    print(f"X_validation.shape, Y_validation.shape = {X_validation.shape}, {Y_validation.shape}")
-    print(f"X_test.shape, Y_test.shape = {X_test.shape}, {Y_test.shape}")
-    if args.multitask == False:
-        nb_classes = len(np.unique(train_labels_text))
-        print(f"nb_classes, np.max(X_train) = {nb_classes}, {np.max(X_train)}")
-        train_uniques, train_counts = np.unique(train_labels_text, return_counts=True)
-        validation_uniques, validation_counts = np.unique(validation_labels_text, return_counts=True)
-        test_uniques, test_counts = np.unique(test_labels_text, return_counts=True)
-        print("unique labels in train", (train_uniques, train_counts))
-        print("unique labels in validation", (validation_uniques, validation_counts))
-        print("unique labels in test", (test_uniques, test_counts))
-        class_weight = {i: sum(train_counts) / train_counts[i] for i in range(len(train_counts))}
-        print(f"class_weight = {class_weight}")
-    else:
-        nb_classes = 2
-        print("num of classes: ", nb_classes)
+            nb_classes = 2
+            print("num of classes: ", nb_classes)
 
 
 
-    # tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
+        # tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
-    # evidential loss function
-    def KL(alpha, K):
-        beta = tf.constant(np.ones((1, K)), dtype=tf.float32)
-        S_alpha = tf.reduce_sum(alpha, axis=1, keepdims=True)
+        # evidential loss function
+        def KL(alpha, K):
+            beta = tf.constant(np.ones((1, K)), dtype=tf.float32)
+            S_alpha = tf.reduce_sum(alpha, axis=1, keepdims=True)
 
-        KL = tf.reduce_sum((alpha - beta) * (tf.math.digamma(alpha) - tf.math.digamma(S_alpha)), axis=1,
-                           keepdims=True) + \
-             tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha), axis=1, keepdims=True) + \
-             tf.reduce_sum(tf.math.lgamma(beta), axis=1, keepdims=True) - tf.math.lgamma(
-            tf.reduce_sum(beta, axis=1, keepdims=True))
-        return KL
+            KL = tf.reduce_sum((alpha - beta) * (tf.math.digamma(alpha) - tf.math.digamma(S_alpha)), axis=1,
+                               keepdims=True) + \
+                 tf.math.lgamma(S_alpha) - tf.reduce_sum(tf.math.lgamma(alpha), axis=1, keepdims=True) + \
+                 tf.reduce_sum(tf.math.lgamma(beta), axis=1, keepdims=True) - tf.math.lgamma(
+                tf.reduce_sum(beta, axis=1, keepdims=True))
+            return KL
 
-    def loss_eq5(actual, pred, K, global_step, annealing_step):
-        p = actual
-        p = tf.dtypes.cast(p, tf.float32)
-        alpha = pred + 1.
-        S = tf.reduce_sum(alpha, axis=1, keepdims=True)
-        loglikelihood = tf.reduce_sum((p - (alpha / S)) ** 2, axis=1, keepdims=True) + tf.reduce_sum(
-            alpha * (S - alpha) / (S * S * (S + 1)), axis=1, keepdims=True)
-        KL_reg = tf.minimum(1.0, tf.cast(global_step / annealing_step, tf.float32)) * KL((alpha - 1) * (1 - p) + 1, K)
-        return loglikelihood + KL_reg
+        def loss_eq5(actual, pred, K, global_step, annealing_step):
+            p = actual
+            p = tf.dtypes.cast(p, tf.float32)
+            alpha = pred + 1.
+            S = tf.reduce_sum(alpha, axis=1, keepdims=True)
+            loglikelihood = tf.reduce_sum((p - (alpha / S)) ** 2, axis=1, keepdims=True) + tf.reduce_sum(
+                alpha * (S - alpha) / (S * S * (S + 1)), axis=1, keepdims=True)
+            KL_reg = tf.minimum(1.0, tf.cast(global_step / annealing_step, tf.float32)) * KL((alpha - 1) * (1 - p) + 1, K)
+            return loglikelihood + KL_reg
 
-    ev_loss = (
-        lambda actual, pred: tf.reduce_mean(loss_eq5(actual, pred, nb_classes, 1, 100))
-    )
-
-    loss = categorical_crossentropy
-    if evidential:
-        loss = ev_loss
-
-    if args.optimizer == "adam":
-        opt = Adam(lr=args.learning_rate)
-    else:
-        print(f"WARNING: invalid optimizer {args.optimizer}")
-
-    if args.multitask:
-        print("compiling the multihead network")
-        from tensorflow.keras import metrics
-        losses = {
-            "head_0": [tfa.losses.SigmoidFocalCrossEntropy()],
-            "head_1": [tfa.losses.SigmoidFocalCrossEntropy()],
-        }
-        metrs = {
-            "head_0": 'AUC',
-            "head_1": 'AUC',
-        }
-        model = VIDEO_MODEL_FACTORY[args.architecture + '_multihead'](input_shape, 2, args.pretrained_cnn)
-        model.compile(optimizer=opt, loss=losses, metrics=metrs)
-
-    else:
-        model = VIDEO_MODEL_FACTORY[args.architecture + "_multihead"](input_shape, 2, args.pretrained_cnn)
-        losses = {
-            "head_0": [tfa.losses.SigmoidFocalCrossEntropy()],
-            "head_1": [tfa.losses.SigmoidFocalCrossEntropy()],
-        }
-        metrs = {
-            "head_0": 'AUC',
-            "head_1": 'AUC',
-        }
-        model.compile(optimizer=opt, loss=losses, metrics=metrs)
-        model.load_weights('transformer_conv1d')
-        print('loading done')
-        new_model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, 2, args.pretrained_cnn)
-        # now copying the weight Up until where it's applicable,
-        # the 4 last layers which are the heads have to be popped from model
-        # instead a  3-class classification head is added here
-
-        new_model.compile(
-            optimizer=opt, loss=tfa.losses.SigmoidFocalCrossEntropy(), metrics=['AUC']
+        ev_loss = (
+            lambda actual, pred: tf.reduce_mean(loss_eq5(actual, pred, nb_classes, 1, 100))
         )
-        for i in range(6):
-            wk0 = model.layers[i].get_weights()
-            new_model.layers[i].set_weights(wk0)
-        print("model source was copied into model target")
-        model = new_model
+
+        loss = categorical_crossentropy
+        if evidential:
+            loss = ev_loss
+
+        if args.optimizer == "adam":
+            opt = Adam(lr=args.learning_rate)
+        else:
+            print(f"WARNING: invalid optimizer {args.optimizer}")
 
 
-    wandb.init(entity='mobina', project=args.wandb_project)
-    wandb.config.update(args)
-    wandb.config.final_output_dir = FINAL_OUTPUT_DIR
+        # compiling model and or copying weights from one to another
+        if args.multitask:
+            print("compiling the multihead network")
+            from tensorflow.keras import metrics
+            losses = {
+                "head_0": [tfa.losses.SigmoidFocalCrossEntropy()],
+                "head_1": [tfa.losses.SigmoidFocalCrossEntropy()],
+            }
+            metrs = {
+                "head_0": 'AUC',
+                "head_1": 'AUC',
+            }
+            model = VIDEO_MODEL_FACTORY[args.architecture + '_multihead'](input_shape, 2, args.pretrained_cnn)
+            model.compile(optimizer=opt, loss=losses, metrics=metrs)
 
-    callbacks = [WandbCallback()]
-    if args.reduce_learning_rate:
-        reduce_learning_rate_loss = ReduceLROnPlateau(
-            monitor=args.reduce_learning_rate_monitor,
-            factor=args.reduce_learning_rate_factor,
-            patience=args.reduce_learning_rate_patience,
-            mode=args.reduce_learning_rate_mode,
-            verbose=1,
-            epsilon=1e-4,
-        )
-        callbacks.append(reduce_learning_rate_loss)
-    if args.confusion_matrix_each_epoch:
-        callbacks.append(ConfusionMatrixEachEpochCallback(X_validation, Y_validation, lb.classes_))
+        else:
+            model = VIDEO_MODEL_FACTORY[args.architecture + "_multihead"](input_shape, 2, args.pretrained_cnn)
+            losses = {
+                "head_0": [tfa.losses.SigmoidFocalCrossEntropy()],
+                "head_1": [tfa.losses.SigmoidFocalCrossEntropy()],
+            }
+            metrs = {
+                "head_0": 'AUC',
+                "head_1": 'AUC',
+            }
+            model.compile(optimizer=opt, loss=losses, metrics=metrs)
+            model.load_weights('transformer_conv1d_9')
+            print('loading done')
+            new_model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, 2, args.pretrained_cnn)
+            # now copying the weight Up until where it's applicable,
+            # the 4 last layers which are the heads have to be popped from model
+            # instead a  3-class classification head is added here
 
-    print()
-    print("===========================")
-    print("About to train model")
-    print("===========================")
-    print(model.summary())
+            new_model.compile(
+                optimizer=opt, loss=tfa.losses.SigmoidFocalCrossEntropy(), metrics=['AUC']
+            )
+            for i in range(5):
+                wk0 = model.layers[i].get_weights()
+                new_model.layers[i].set_weights(wk0)
+            print("model source was copied into model target")
+            model = new_model
 
-    print(X_validation.shape, Y_validation.shape)
-    if not args.multitask:
-        print("fitting normally")
-        H = model.fit(
-            generator,
-            validation_data=(X_validation, Y_validation),
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            verbose=1,
-            shuffle=True,
-            class_weight=class_weight,
-            callbacks=callbacks,
-        )
-    elif args.multitask:
-        print("fitting multihead")
-        H = model.fit(
-            X_train,
-            y={"head_0": np.array([t["head_0"] for t in Y_train]),
-               "head_1": np.array([t["head_1"] for t in Y_train]),
-               },
-            validation_data=(X_validation, {
-                "head_0": np.array([t["head_0"] for t in Y_validation]),
-                "head_1": np.array([t["head_1"] for t in Y_validation]),
-            }),
-            epochs=args.epochs,
-            batch_size=args.batch_size,
-            verbose=1,
-            shuffle=True,
-            callbacks=callbacks,
-        )
-    print()
-    print("===========================")
-    print("Evaluating network...")
-    print("===========================")
-    # Running inference on training set can cause out of memory issue when using larger framerate (OK on DGX)
-    if args.mat:
-        print("train set")
-        Y_train_pred = model.predict(X_train)
-        for i in range(len(Y_train_pred)):
-            print("result of head_{}".format(i))
 
-            gt = np.array([t["head_{}".format(i)] for t in Y_train])
-            fpr, tpr, thresholds = roc_curve(gt, Y_train_pred[i])
-            gmeans = np.sqrt(tpr * (1 - fpr))
-            ix = np.argmax(gmeans)
-            th = thresholds[ix]
-            raw = Y_train_pred[i]
-            print('best threshold was ', th)
-            raw[Y_train_pred[i] >= th] = 1
-            raw[Y_train_pred[i] < th] = 0
-            cm = confusion_matrix(gt, raw)
-            print(classification_report(gt, raw))
-            # show the confusion matrix, accuracy, sensitivity, and specificity
-            print(cm)
-        print("val set")
-        best_ths = []
-        Y_validation_pred = model.predict(X_validation)
-        for i in range(len(Y_validation_pred)):
-            print("result of head_{}".format(i))
+        wandb.init(entity='mobina', project=args.wandb_project)
+        wandb.config.update(args)
+        wandb.config.final_output_dir = FINAL_OUTPUT_DIR
 
-            gt = np.array([t["head_{}".format(i)] for t in Y_validation])
-            fpr, tpr, thresholds = roc_curve(gt, Y_validation_pred[i])
-            gmeans = np.sqrt(tpr * (1 - fpr))
-            ix = np.argmax(gmeans)
-            th = thresholds[ix]
-            best_ths.append(th)
-            raw = Y_validation_pred[i]
-            print('best threshold was ', th)
-            raw[Y_validation_pred[i] >= th] = 1
-            raw[Y_validation_pred[i] < th] = 0
-            cm = confusion_matrix(gt, raw)
-            print(classification_report(gt, raw))
-            # show the confusion matrix, accuracy, sensitivity, and specificity
-            print(cm)
-        print("Test set")
-        Y_test_pred = model.predict(X_test)
-        for i in range(len(Y_test_pred)):
-            print("result of head_{}".format(i))
-            gt = np.array([t["head_{}".format(i)] for t in Y_test])
-            th = best_ths[i]
-            print('best threshold was ', th)
-            raw = Y_test_pred[i]
-            raw[Y_test_pred[i] >= th] = 1
-            raw[Y_test_pred[i] < th] = 0
-            cm = confusion_matrix(gt, raw)
-            print(classification_report(gt, raw))
-            # show the confusion matrix, accuracy, sensitivity, and specificity
+        callbacks = [WandbCallback()]
+        if args.reduce_learning_rate:
+            reduce_learning_rate_loss = ReduceLROnPlateau(
+                monitor=args.reduce_learning_rate_monitor,
+                factor=args.reduce_learning_rate_factor,
+                patience=args.reduce_learning_rate_patience,
+                mode=args.reduce_learning_rate_mode,
+                verbose=1,
+                epsilon=1e-4,
+            )
+            callbacks.append(reduce_learning_rate_loss)
+        if args.confusion_matrix_each_epoch:
+            callbacks.append(ConfusionMatrixEachEpochCallback(X_validation, Y_validation, lb.classes_))
+
+        print()
+        print("===========================")
+        print("About to train model")
+        print("===========================")
+        print(model.summary())
+
+        if not args.multitask:
+            print("fitting normally with validation set {} and test set {}".format(validation_fold, test_fold))
+
+            H = model.fit(
+                generator,
+                validation_data=(X_validation, Y_validation),
+                epochs=args.epochs,
+                batch_size=args.batch_size,
+                verbose=1,
+                shuffle=True,
+                class_weight=class_weight,
+                callbacks=callbacks,
+            )
+        elif args.multitask:
+            print("fitting multihead")
+            H = model.fit(
+                X_train,
+                y={"head_0": np.array([t["head_0"] for t in Y_train]),
+                   "head_1": np.array([t["head_1"] for t in Y_train]),
+                   },
+                validation_data=(X_validation, {
+                    "head_0": np.array([t["head_0"] for t in Y_validation]),
+                    "head_1": np.array([t["head_1"] for t in Y_validation]),
+                }),
+                epochs=args.epochs,
+                batch_size=args.batch_size,
+                verbose=1,
+                shuffle=True,
+                callbacks=callbacks,
+            )
+        print()
+        print("===========================")
+        print("Evaluating network...")
+        print("===========================")
+        # Running inference on training set can cause out of memory issue when using larger framerate (OK on DGX)
+        if args.mat:
+            print("train set")
+            Y_train_pred = model.predict(X_train)
+            for i in range(len(Y_train_pred)):
+                print("result of head_{}".format(i))
+
+                gt = np.array([t["head_{}".format(i)] for t in Y_train])
+                fpr, tpr, thresholds = roc_curve(gt, Y_train_pred[i])
+                gmeans = np.sqrt(tpr * (1 - fpr))
+                ix = np.argmax(gmeans)
+                th = thresholds[ix]
+                raw = Y_train_pred[i]
+                print('best threshold was ', th)
+                raw[Y_train_pred[i] >= th] = 1
+                raw[Y_train_pred[i] < th] = 0
+                cm = confusion_matrix(gt, raw)
+                print(classification_report(gt, raw))
+                # show the confusion matrix, accuracy, sensitivity, and specificity
+                print(cm)
+            print("val set")
+            best_ths = []
+            Y_validation_pred = model.predict(X_validation)
+            for i in range(len(Y_validation_pred)):
+                print("result of head_{}".format(i))
+
+                gt = np.array([t["head_{}".format(i)] for t in Y_validation])
+                fpr, tpr, thresholds = roc_curve(gt, Y_validation_pred[i])
+                gmeans = np.sqrt(tpr * (1 - fpr))
+                ix = np.argmax(gmeans)
+                th = thresholds[ix]
+                best_ths.append(th)
+                raw = Y_validation_pred[i]
+                print('best threshold was ', th)
+                raw[Y_validation_pred[i] >= th] = 1
+                raw[Y_validation_pred[i] < th] = 0
+                cm = confusion_matrix(gt, raw)
+                print(classification_report(gt, raw))
+                # show the confusion matrix, accuracy, sensitivity, and specificity
+                print(cm)
+            print("Test set")
+            Y_test_pred = model.predict(X_test)
+            for i in range(len(Y_test_pred)):
+                print("result of head_{}".format(i))
+                gt = np.array([t["head_{}".format(i)] for t in Y_test])
+                th = best_ths[i]
+                print('best threshold was ', th)
+                raw = Y_test_pred[i]
+                raw[Y_test_pred[i] >= th] = 1
+                raw[Y_test_pred[i] < th] = 0
+                cm = confusion_matrix(gt, raw)
+                print(classification_report(gt, raw))
+                # show the confusion matrix, accuracy, sensitivity, and specificity
+                print(cm)
+
+        if not args.mat:
+            rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
+            rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size)
+            rawTestPredIdxs = model.predict(X_test, batch_size=args.batch_size)
+
+            def savePredictionsToCSV(rawPredIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
+                df = pd.DataFrame(rawPredIdxs)
+                df.to_csv(os.path.join(directory, csvFilename))
+
+            savePredictionsToCSV(rawTrainPredIdxs, "train_preds_last_epoch.csv")
+            savePredictionsToCSV(rawValidationPredIdxs, "validation_preds_last_epoch.csv")
+            savePredictionsToCSV(rawTestPredIdxs, "test_preds_last_epoch.csv")
+
+
+            # for each image in the testing set we need to find the index of the
+            # label with corresponding largest predicted probability
+
+            trainPredIdxs = np.argmax(rawTrainPredIdxs, axis=1)
+            validationPredIdxs = np.argmax(rawValidationPredIdxs, axis=1)
+            testPredIdxs = np.argmax(rawTestPredIdxs, axis=1)
+
+            trainTrueIdxs = np.argmax(Y_train, axis=1)
+            validationTrueIdxs = np.argmax(Y_validation, axis=1)
+            testTrueIdxs = np.argmax(Y_test, axis=1)
+
+            cm = confusion_matrix(trainTrueIdxs, trainPredIdxs)
+            print("train")
             print(cm)
 
-    if not args.mat:
-        rawTrainPredIdxs = model.predict(X_train, batch_size=args.batch_size)
-        rawValidationPredIdxs = model.predict(X_validation, batch_size=args.batch_size)
-        rawTestPredIdxs = model.predict(X_test, batch_size=args.batch_size)
+            cm = confusion_matrix(validationTrueIdxs, validationPredIdxs)
+            print("validation")
+            print(cm)
 
-        def savePredictionsToCSV(rawPredIdxs, csvFilename, directory=FINAL_OUTPUT_DIR):
-            df = pd.DataFrame(rawPredIdxs)
-            df.to_csv(os.path.join(directory, csvFilename))
+            cm = confusion_matrix(testTrueIdxs, testPredIdxs)
+            print("test")
+            print(cm)
 
-        savePredictionsToCSV(rawTrainPredIdxs, "train_preds_last_epoch.csv")
-        savePredictionsToCSV(rawValidationPredIdxs, "validation_preds_last_epoch.csv")
-        savePredictionsToCSV(rawTestPredIdxs, "test_preds_last_epoch.csv")
+            train_true.append(trainTrueIdxs)
+            train_pred.append(trainPredIdxs)
+            val_true.append(validationTrueIdxs)
+            val_pred.append(validationPredIdxs)
+            test_true.append(testTrueIdxs)
+            test_pred.append(testPredIdxs)
 
-
-        # for each image in the testing set we need to find the index of the
-        # label with corresponding largest predicted probability
-
-        trainPredIdxs = np.argmax(rawTrainPredIdxs, axis=1)
-        validationPredIdxs = np.argmax(rawValidationPredIdxs, axis=1)
-        testPredIdxs = np.argmax(rawTestPredIdxs, axis=1)
-
-        trainTrueIdxs = np.argmax(Y_train, axis=1)
-        validationTrueIdxs = np.argmax(Y_validation, axis=1)
-        testTrueIdxs = np.argmax(Y_test, axis=1)
-
-        # classes_with_validation = [f"{c} Validation" for c in lb.classes_]
-        # wandb.sklearn.plot_classifier(model, X_train, X_validation, trainTrueIdxs, validationTrueIdxs,
-        #                               validationPredIdxs,
-        #                               rawValidationPredIdxs, classes_with_validation, model_name=f"{args.architecture}")
-        # classes_with_test = [f"{c} Test" for c in lb.classes_]
-        # wandb.log({'Test Confusion Matrix': wandb.plots.HeatMap(classes_with_test, classes_with_test,
-        #                                                         matrix_values=confusion_matrix(testTrueIdxs,
-        #                                                                                        testPredIdxs),
-        #                                                         show_text=True)})
-
-        # compute the confusion matrix and and use it to derive the raw
-        # accuracy, sensitivity, and specificity
-        def printAndSaveClassificationReport(trueIdxs, predIdxs, classes, reportFilename, directory=FINAL_OUTPUT_DIR):
-            print(f'classification report sklearn for {reportFilename}')
-            print(
-                classification_report(
-                    trueIdxs, predIdxs, target_names=classes
+            def printAndSaveClassificationReport(trueIdxs, predIdxs, classes, reportFilename, directory=FINAL_OUTPUT_DIR):
+                print(f'classification report sklearn for {reportFilename}')
+                print(
+                    classification_report(
+                        trueIdxs, predIdxs, target_names=classes
+                    )
                 )
-            )
 
-            report = classification_report(
-                trueIdxs, predIdxs, target_names=classes, output_dict=True
-            )
-            reportDf = pd.DataFrame(report).transpose()
-            reportDf.to_csv(os.path.join(directory, reportFilename))
+                report = classification_report(
+                    trueIdxs, predIdxs, target_names=classes, output_dict=True
+                )
+                reportDf = pd.DataFrame(report).transpose()
+                reportDf.to_csv(os.path.join(directory, reportFilename))
 
-            # wandb_log_classification_table_and_plots(report, reportFilename)
+                # wandb_log_classification_table_and_plots(report, reportFilename)
 
-        printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainReport.csv")
-        printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationReport.csv")
-        printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, "testReport.csv")
+            printAndSaveClassificationReport(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainReport.csv")
+            printAndSaveClassificationReport(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationReport.csv")
+            printAndSaveClassificationReport(testTrueIdxs, testPredIdxs, lb.classes_, "testReport.csv")
 
-    def printAndSaveConfusionMatrix(trueIdxs, predIdxs, classes, confusionMatrixFilename, directory=FINAL_OUTPUT_DIR):
-        print(f'confusion matrix for {confusionMatrixFilename}')
+        def printAndSaveConfusionMatrix(trueIdxs, predIdxs, classes, confusionMatrixFilename, directory=FINAL_OUTPUT_DIR):
+            print(f'confusion matrix for {confusionMatrixFilename}')
 
-        cm = confusion_matrix(trueIdxs, predIdxs)
-        # show the confusion matrix, accuracy, sensitivity, and specificity
-        print(cm)
+            cm = confusion_matrix(trueIdxs, predIdxs)
+            # show the confusion matrix, accuracy, sensitivity, and specificity
+            print(cm)
 
-        plt.figure()
-        cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
-        cmDisplay.plot()
-        plt.savefig(os.path.join(directory, confusionMatrixFilename))
+            plt.figure()
+            cmDisplay = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=classes)
+            cmDisplay.plot()
+            plt.savefig(os.path.join(directory, confusionMatrixFilename))
 
-    # printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
-    # printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
-    # printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
+        # printAndSaveConfusionMatrix(trainTrueIdxs, trainPredIdxs, lb.classes_, "trainConfusionMatrix.png")
+        # printAndSaveConfusionMatrix(validationTrueIdxs, validationPredIdxs, lb.classes_, "validationConfusionMatrix.png")
+        # printAndSaveConfusionMatrix(testTrueIdxs, testPredIdxs, lb.classes_, "testConfusionMatrix.png")
 
-    if args.save_model:
-        # print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
-        model.save_weights('transformer_conv1d_9depth_5framerate_2blocks')
+        if args.save_model:
+            # print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
+            model.save_weights('covid_best')
+
 
     def calculate_patient_wise(files, x, y, model):
         # Calculate mean of video clips to predict patient-wise classification
@@ -944,6 +964,18 @@ def main():
     # plt.ylabel('Loss/Accuracy')
     # plt.legend(loc='lower left')
     # plt.savefig(os.path.join(FINAL_OUTPUT_DIR, 'loss.png'))
+    print('-------------------------------Aggregated Results-----------------------------------')
+    val_true = np.concatenate(val_true, axis=None)
+    val_pred = np.concatenate(val_pred, axis=None)
+    test_true = np.concatenate(test_true, axis=None)
+    test_pred = np.concatenate(test_pred, axis=None)
+    cm = confusion_matrix(val_true, val_pred)
+    print("validation")
+    print(cm)
+
+    cm = confusion_matrix(test_true, test_pred)
+    print("test")
+    print(cm)
 
 
 if __name__ == '__main__':
