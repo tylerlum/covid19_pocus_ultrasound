@@ -2,8 +2,8 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import (
     Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, MaxPooling2D, Input,
-    Lambda, GlobalAveragePooling3D, Average, ReLU, ZeroPadding3D,
-    Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, GlobalAveragePooling1D, Concatenate
+    Lambda, GlobalAveragePooling3D, Average, ReLU, ZeroPadding3D, Conv1D,
+    Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, GlobalAveragePooling1D, Concatenate, GlobalMaxPooling1D
 )
 from tensorflow.keras.layers import BatchNormalization
 from .utils import fix_layers
@@ -12,10 +12,10 @@ from pocovidnet.transformer import TransformerBlock
 from .unet3d_genesis import unet_model_3d
 
 
-def get_model_remove_last_n_layers(input_shape, n_remove, nb_classes, pretrained_cnn, trainable_layers):
+def get_model_remove_last_n_layers(input_shape, n_remove, nb_classes, pretrained_cnn):
     '''Helper function for getting base cnn_model'''
     # Use pretrained cnn_model
-    cnn_model = get_model(input_size=input_shape, log_softmax=False, num_classes=nb_classes, pretrained_cnn=pretrained_cnn, trainable_layers=trainable_layers)
+    cnn_model = get_model(input_size=input_shape, log_softmax=False, num_classes=nb_classes, pretrained_cnn=pretrained_cnn)
 
     # Remove the last n layers
     for _ in range(n_remove):
@@ -153,7 +153,7 @@ def get_CNN_recurrent_helper(input_shape, nb_classes, pretrained_cnn, rnn_class,
 def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn, bidirectional, evidential=False):
     # Use pretrained cnn_model
     # Remove the layers after convolution
-    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn, trainable_layers=8)
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=8, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn, trainable_layers=100)
     tf.keras.utils.plot_model(cnn_model, "cnn_model_before_LSTM.png", show_shapes=True)
 
     # Run LSTM over CNN outputs
@@ -192,7 +192,8 @@ def get_CNN_LSTM_integrated_model_helper(input_shape, nb_classes, pretrained_cnn
     # model = Dense(nb_classes, activation=act_fn)(model)
     outputs=[]
     for i in range(nb_classes):
-        outputs.append(Dense(1, activation='sigmoid', name='head_{}'.format(i))(model))
+        hidden = Dense(512, activation='relu', name='head_{}_hidden'.format(i))(model)
+        outputs.append(Dense(1, activation='sigmoid', name='head_{}'.format(i))(hidden))
     model = Model(inputs=input_tensor, outputs=outputs)
 
     return model
@@ -301,6 +302,9 @@ def get_CNN_transformer_model(input_shape, nb_classes, pretrained_cnn):
     ''' Transformer '''
     return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=True)
 
+def get_CNN_transformer_multihead_model(input_shape, nb_classes, pretrained_cnn):
+    return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=True, multi_head=True)
+
 
 def get_CNN_transformer_no_pos_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=False)
@@ -310,7 +314,7 @@ def get_CNN_transformer_evidential_model(input_shape, nb_classes, pretrained_cnn
     return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=True, evidential=True)
 
 
-def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding, evidential=False):
+def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding, evidential=False, multi_head=False):
     # Use pretrained cnn_model
     # Remove all layers until flatten
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=5, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn)
@@ -320,9 +324,9 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
     # timeDistributed_layer.shape = (batch_size, timesteps, embed_dim)
-    timesteps = timeDistributed_layer.shape[1]
-    embed_dim = timeDistributed_layer.shape[2]
-    num_heads = 4  # Requres embed_dim % num_heads == 0
+    timesteps = timeDistributed_layer.shape[1] # 5
+    embed_dim = timeDistributed_layer.shape[2] # 512
+    num_heads = 8  # Requres embed_dim % num_heads == 0
     number_of_hidden_units = 64
     num_blocks = 2
     model = timeDistributed_layer
@@ -330,16 +334,32 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
         transformer_block = TransformerBlock(embed_dim, num_heads, number_of_hidden_units, timesteps,
                                              positional_encoding=positional_encoding)
         model = transformer_block(model)
+    ### option 1
+    # model = GlobalAveragePooling1D()(model)
+    ### option 2
+    model = Conv1D(1024, 5, activation='relu')(model)
     model = GlobalAveragePooling1D()(model)
+
     model = Dense(256, activation='relu')(model)
     model = Dropout(0.5)(model)
-    model = Dense(64, activation='relu')(model)
-    model = Dropout(0.5)(model)
-    act_fn = 'softmax' if not evidential else 'relu'
-    model = Dense(nb_classes, activation=act_fn)(model)
-    model = Model(inputs=input_tensor, outputs=model)
+    if multi_head:
+        outputs = []
+        for i in range(nb_classes):
+            hidden = Dense(256, activation='relu', name='head_{}_hidden'.format(i))(model)
+            outputs.append(Dense(1, activation='sigmoid', name='head_{}'.format(i))(hidden))
+        model = Model(inputs=input_tensor, outputs=outputs)
+        return model
 
-    return model
+    if not multi_head:
+        # model = Dense(256, activation='relu')(model)
+        # model = Dropout(0.5)(model)
+        act_fn = 'softmax' if not evidential else 'relu'
+        model = Dense(nb_classes, activation=act_fn)(model)
+        model = Model(inputs=input_tensor, outputs=model)
+        return model
+
+
+
 
 
 def get_model_genesis_model(input_shape, nb_classes, pretrained_cnn):
