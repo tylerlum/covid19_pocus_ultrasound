@@ -64,26 +64,39 @@ def get_2D_CNN_average_evidential_model(input_shape, nb_classes, pretrained_cnn)
 
 
 def get_2D_CNN_average_model_helper(input_shape, nb_classes, pretrained_cnn, evidential=False, trainable_base=False):
-    cnn_model = get_model(input_size=input_shape[1:], evidential=evidential, num_classes=nb_classes, log_softmax=False, pretrained_cnn=pretrained_cnn, trainable_base=trainable_base)
+    # Use pretrained cnn_model
+    # Remove all layers including flatten and avg pool
+    cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=7, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn, trainable_base=trainable_base)
+    tf.keras.utils.plot_model(cnn_model, "cnn_model_before_average.png", show_shapes=True)
 
-    # Run cnn model on each frame
+    # Run CNN on each frame
     input_tensor = Input(shape=(input_shape))
+    timeDistributed_layer = TimeDistributed(cnn_model)(input_tensor)
 
-    num_frames = input_shape[0]
-    if num_frames == 1:
-        frame = Lambda(lambda x: x[:, 0, :, :, :])(input_tensor)
-        return Model(inputs=input_tensor, outputs=cnn_model(frame))
+    # Run avg pool and flatten on each frame
+    inp = Input(shape=(cnn_model.layers[-1].output_shape[1:]))
+    x = AveragePooling2D(pool_size=(4, 4))(inp)
+    x = Flatten(name="flatten")(x)
+    end_of_cnn_model = Model(inputs=inp, outputs=x)
+    timeDistributed_layer = TimeDistributed(end_of_cnn_model)(timeDistributed_layer)
 
-    else:
-        frame_predictions = []
-        for frame_i in range(num_frames):
-            frame = Lambda(lambda x: x[:, frame_i, :, :, :])(input_tensor)
-            frame_prediction = cnn_model(frame)
-            frame_predictions.append(frame_prediction)
+    # Run Dense layers
+    inp = Input(shape=(end_of_cnn_model.layers[-1].output_shape[1:]))
+    x = Dense(64)(inp)
+    x = BatchNormalization()(x)
+    x = ReLU()(x)
+    x = Dropout(0.5)(x)
+    end_of_cnn_model = Model(inputs=inp, outputs=x)
+    timeDistributed_layer = TimeDistributed(end_of_cnn_model)(timeDistributed_layer)
 
-        # Average activations
-        average = Average()(frame_predictions)
-        return Model(inputs=input_tensor, outputs=average)
+    # Run prediction layers
+    inp = Input(shape=(end_of_cnn_model.layers[-1].output_shape[1:]))
+    x = Dense(nb_classes, activation='softmax')(inp)
+    end_of_cnn_model = Model(inputs=inp, outputs=x)
+    timeDistributed_layer = TimeDistributed(end_of_cnn_model)(timeDistributed_layer)
+
+    average = GlobalAveragePooling1D()(timeDistributed_layer)
+    return Model(input_tensor, average)
 
 
 def get_CNN_LSTM_model(input_shape, nb_classes, pretrained_cnn):

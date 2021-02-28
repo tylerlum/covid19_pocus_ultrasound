@@ -400,7 +400,6 @@ def main():
                 # Mat files
                 print("Collecting video clips and labels")
                 for mat_file in tqdm(mat_files):
-                    print(f"mat_file = {mat_file}")
                     mat = loadmat(os.path.join(patient_dir, mat_file))
 
                     # Get labels
