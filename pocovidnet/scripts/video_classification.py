@@ -150,6 +150,8 @@ def main():
     # Transfer between tasks
     parser.add_argument("--transferred_model", type=str, default="",
                         help="path to knowledge transferred model, ignored if empty string")
+    parser.add_argument("--transferred_model2", type=str, default="",
+                        help="path to second knowledge transferred model, ignored if empty string")
     parser.add_argument("--transferred_model_num_layers_remove", type=int, default=0,
                         help="number of layers to remove from transferred model (excluding prediction head that will always be removed)")
     parser.add_argument("--transferred_model_num_layers_add", type=int, default=0,
@@ -580,8 +582,79 @@ def main():
         del raw_test_data, raw_test_labels
 
         if len(args.transferred_model) > 0:
+            if len(args.transferred_model2) > 0:
+                if "transformer" in args.architecture:
+                    print("WARNING: using 2 transferred models, assuming transformer")
+                    from pocovidnet.transformer import TransformerBlock
+                    transferred_model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
+                    transferred_model2 = tf.keras.models.load_model(args.transferred_model2, custom_objects={'TransformerBlock': TransformerBlock})
 
-            if "transformer" in args.architecture:
+                    # Remove old prediction layer
+                    # Find embedding layer
+                    for layer in transferred_model.layers:
+                        if len(layer.output_shape) == 2 and not isinstance(layer, TransformerBlock):  # (batch_size, embed_dim)
+                            layerName = layer.name
+                            break
+                    for layer in transferred_model2.layers:
+                        if len(layer.output_shape) == 2 and not isinstance(layer, TransformerBlock):  # (batch_size, embed_dim)
+                            layerName2 = layer.name
+                            break
+
+                    inp = Input(shape=(input_shape))
+                    model = Model(transferred_model.input, transferred_model.get_layer(layerName).output)
+                    model.summary()
+                    model2 = Model(transferred_model2.input, transferred_model2.get_layer(layerName2).output)
+                    model2.summary()
+                    x = model(inp)
+                    x2 = model2(inp)
+                    merged = Concatenate(axis=1)([x, x2])
+                    model = Model(inp, merged)
+
+                    # Add additional hidden layers
+                    for i in range(args.transferred_model_num_layers_add):
+                        new_output = Dense(256, activation='relu')(model.output)
+                        new_output = Dropout(0.5)(new_output)
+                        model = Model(model.input, new_output)
+
+                    # Add new prediction layer
+                    model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
+
+                    # Set trainable base
+                    if args.trainable_base:
+                        for layer in model.layers:
+                            layer.trainable = True
+                else:
+                    print("WARNING: using 2 transferred models, assuming 2D_CNN_average")
+                    transferred_model = tf.keras.models.load_model(args.transferred_model)
+                    transferred_model2 = tf.keras.models.load_model(args.transferred_model2)
+
+                    # Remove old average layer, prediction layer, and extra layer
+                    model = Model(transferred_model.input, transferred_model.layers[-4].output)
+                    model2 = Model(transferred_model2.input, transferred_model2.layers[-4].output)
+
+                    # Add additional hidden layers
+                    for i in range(args.transferred_model_num_layers_add):
+                        inp = Input(shape=(model.output.shape[2:]))
+                        x = Dense(64, activation='relu')(inp)
+                        x = Dropout(0.5)(x)
+                        end_of_cnn_model = Model(inputs=inp, outputs=x)
+                        model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
+
+                    # Add new prediction layer
+                    inp = Input(shape=(model.output.shape[2:]))
+                    x = Dense(nb_classes, activation='softmax')(inp)
+                    end_of_cnn_model = Model(inputs=inp, outputs=x)
+                    model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
+
+                    # Add new average layer
+                    model = Model(model.input, GlobalAveragePooling1D()(model.output))
+
+                    # Set trainable base
+                    if args.trainable_base:
+                        for layer in model.layers:
+                            layer.trainable = True
+
+            elif "transformer" in args.architecture:
                 print("WARNING: using transferred model, assuming transformer")
                 from pocovidnet.transformer import TransformerBlock
                 transferred_model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
