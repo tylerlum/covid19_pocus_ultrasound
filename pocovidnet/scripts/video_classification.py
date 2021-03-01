@@ -654,7 +654,7 @@ def main():
 
                 # Add additional hidden layers
                 for i in range(args.transferred_model_num_layers_add):
-                    inp = Input(shape=(model.output.shape[1:]))
+                    inp = Input(shape=(model.output.shape[2:]))
                     x = Dense(64, activation='relu')(inp)
                     x = Dropout(0.5)(x)
                     end_of_cnn_model = Model(inputs=inp, outputs=x)
