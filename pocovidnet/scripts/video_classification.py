@@ -34,7 +34,7 @@ from pocovidnet.video_grad_cam_attention import VideoGradCAMAttention
 from pocovidnet.video_grad_cam import VideoGradCAM
 from datetime import datetime
 from datetime import date
-from keras.layers import Dropout, Dense, TimeDistributed
+from keras.layers import Dropout, Dense, TimeDistributed, Input, GlobalAveragePooling1D, Concatenate
 from keras.models import Model
 
 
@@ -643,12 +643,6 @@ def main():
                         old_output_video.release()
 
             else:
-                from tensorflow.keras.layers import (
-                    Activation, Conv3D, Dropout, Flatten, MaxPooling3D, LSTM, MaxPooling2D, Input,
-                    Lambda, GlobalMaxPooling3D, GlobalAveragePooling3D, Average, ReLU, ZeroPadding3D,
-                    Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, GlobalAveragePooling1D, Concatenate,
-                    AveragePooling2D
-                )
                 print("WARNING: using transferred model, assuming 2D_CNN_average")
                 transferred_model = tf.keras.models.load_model(args.transferred_model)
 
