@@ -634,7 +634,7 @@ def main():
 
             else:
                 from tensorflow.keras.layers import (
-                    Activation, Conv3D, Dense, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, MaxPooling2D, Input,
+                    Activation, Conv3D, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, MaxPooling2D, Input,
                     Lambda, GlobalMaxPooling3D, GlobalAveragePooling3D, Average, ReLU, ZeroPadding3D,
                     Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, GlobalAveragePooling1D, Concatenate,
                     AveragePooling2D
