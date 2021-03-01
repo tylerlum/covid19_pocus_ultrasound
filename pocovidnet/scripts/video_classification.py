@@ -298,6 +298,8 @@ def main():
         if not args.mat:
             # Get videos and labels
             class_short = ["cov", "pne", "reg"]
+            if args.remove_pneumonia:
+                class_short = ["cov", "reg"]
             vid_files = [
                 v for v in os.listdir(args.videos) if v[:3].lower() in class_short
             ]
@@ -343,27 +345,11 @@ def main():
             Y_validation = np.array(lb.transform(raw_validation_labels))
             Y_test = np.array(lb.transform(raw_test_labels))
 
-            # Remove pneumonia class
-            if args.remove_pneumonia:
-                print("===========================")
-                print("Removing pneumonia classes")
-                print("===========================")
-                train_pne_idx = np.where(np.argmax(Y_train, axis=1) == 1)
-                X_train = np.delete(X_train, train_pne_idx, axis=0)
-                Y_train = np.delete(Y_train, train_pne_idx, axis=0)
-                raw_train_labels = np.delete(raw_train_labels, train_pne_idx, axis=0)
-                Y_train = np.delete(Y_train, 1, 1)
-                test_pne_idx = np.where(np.argmax(Y_test, axis=1) == 1)
-                X_test = np.delete(X_test, test_pne_idx, axis=0)
-                Y_test = np.delete(Y_test, test_pne_idx, axis=0)
-                raw_test_labels = np.delete(raw_test_labels, test_pne_idx, axis=0)
-                Y_test = np.delete(Y_test, 1, 1)
-                val_pne_idx = np.where(np.argmax(Y_validation, axis=1) == 1)
-                X_validation = np.delete(X_validation, val_pne_idx, axis=0)
-                Y_validation = np.delete(Y_validation, val_pne_idx, axis=0)
-                raw_validation_labels = np.delete(raw_validation_labels, val_pne_idx, axis=0)
-                Y_validation = np.delete(Y_validation, 1, 1)
-                lb.classes_ = ['cov', 'reg']
+            # Handle edge case of binary labels, generalize to softmax
+            if Y_train.shape[1] == 1:
+                Y_train = tf.keras.utils.to_categorical(Y_train, num_classes=2, dtype=Y_train.dtype)
+                Y_validation = tf.keras.utils.to_categorical(Y_validation, num_classes=2, dtype=Y_validation.dtype)
+                Y_test = tf.keras.utils.to_categorical(Y_test, num_classes=2, dtype=Y_test.dtype)
 
         # Use private lung dataset
         else:
@@ -658,7 +644,7 @@ def main():
 
             else:
                 from tensorflow.keras.layers import (
-                    Activation, Conv3D, Dropout, Flatten, MaxPooling3D, TimeDistributed, LSTM, MaxPooling2D, Input,
+                    Activation, Conv3D, Dropout, Flatten, MaxPooling3D, LSTM, MaxPooling2D, Input,
                     Lambda, GlobalMaxPooling3D, GlobalAveragePooling3D, Average, ReLU, ZeroPadding3D,
                     Conv1D, GRU, ConvLSTM2D, Reshape, SimpleRNN, Bidirectional, GlobalAveragePooling1D, Concatenate,
                     AveragePooling2D
