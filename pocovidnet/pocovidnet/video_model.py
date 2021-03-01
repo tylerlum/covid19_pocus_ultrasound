@@ -353,9 +353,8 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     if time_aggregation == 'pooling':
         model = GlobalAveragePooling1D()(model)
     elif time_aggregation == 'conv1d':
-        model = Conv1D(128, 3, activation='relu')(model)
-        model = Conv1D(64, 3, activation='relu')(model)
-        model = Flatten()(model)
+        model = Conv1D(512, 3, activation='relu')(model)
+        model = GlobalAveragePooling1D()(model)
     else:
         raise ValueError(f"Invalid time_aggregation {time_aggregation}")
     print(f"Transformer used {time_aggregation}")
