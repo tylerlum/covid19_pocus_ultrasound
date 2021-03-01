@@ -661,9 +661,7 @@ def main():
                     model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
 
                 # Add new prediction layer
-                print(model.output)
-                print(model.output.shape)
-                inp = Input(shape=(model.output.shape[1:]))
+                inp = Input(shape=(model.output.shape[2:]))
                 x = Dense(nb_classes, activation='softmax')(inp)
                 end_of_cnn_model = Model(inputs=inp, outputs=x)
                 model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
