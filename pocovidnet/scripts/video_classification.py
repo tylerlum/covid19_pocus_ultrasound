@@ -154,6 +154,8 @@ def main():
                         help="number of layers to remove from transferred model (excluding prediction head that will always be removed)")
     parser.add_argument("--transferred_model_num_layers_add", type=int, default=0,
                         help="number of Dense layers to add to transferred model (includes a dropout after each)")
+    parser.add_argument("--remove_pneumonia", type=str2bool, nargs='?', const=True, default=False,
+                        help="remove pneumonia class")
 
     # Explainability
     parser.add_argument("--explain", type=str2bool, nargs='?', const=True, default=False,
@@ -340,6 +342,28 @@ def main():
             Y_train = np.array(lb.transform(raw_train_labels))
             Y_validation = np.array(lb.transform(raw_validation_labels))
             Y_test = np.array(lb.transform(raw_test_labels))
+
+            # Remove pneumonia class
+            if args.remove_pneumonia:
+                print("===========================")
+                print("Removing pneumonia classes")
+                print("===========================")
+                train_pne_idx = np.where(np.argmax(Y_train, axis=1) == 1)
+                X_train = np.delete(X_train, train_pne_idx, axis=0)
+                Y_train = np.delete(Y_train, train_pne_idx, axis=0)
+                raw_train_labels = np.delete(raw_train_labels, train_pne_idx, axis=0)
+                Y_train = np.delete(Y_train, 1, 1)
+                test_pne_idx = np.where(np.argmax(Y_test, axis=1) == 1)
+                X_test = np.delete(X_test, test_pne_idx, axis=0)
+                Y_test = np.delete(Y_test, test_pne_idx, axis=0)
+                raw_test_labels = np.delete(raw_test_labels, test_pne_idx, axis=0)
+                Y_test = np.delete(Y_test, 1, 1)
+                val_pne_idx = np.where(np.argmax(Y_validation, axis=1) == 1)
+                X_validation = np.delete(X_validation, val_pne_idx, axis=0)
+                Y_validation = np.delete(Y_validation, val_pne_idx, axis=0)
+                raw_validation_labels = np.delete(raw_validation_labels, val_pne_idx, axis=0)
+                Y_validation = np.delete(Y_validation, 1, 1)
+                lb.classes_ = ['cov', 'reg']
 
         # Use private lung dataset
         else:
