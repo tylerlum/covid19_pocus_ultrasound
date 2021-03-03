@@ -444,6 +444,8 @@ def main():
                     if 'cleaned' in mat.keys():
                         cine = mat['cleaned']
 
+                    start_frame = 0
+                    stop_frame = cine.shape[2] - 1
                     num_video_frames = (stop_frame - start_frame + 1) // show_every
                     num_clips = num_video_frames // args.depth
 
