@@ -48,6 +48,8 @@ view_list = []
 frame_time_list = []
 
 a_line_b_line_tuple_list = []
+len_b_line_tuple_list = []
+full_len_b_line_tuple_list = []
 for mat_file in tqdm(all_mat_files):
     mat = loadmat(mat_file)
 
@@ -72,12 +74,14 @@ for mat_file in tqdm(all_mat_files):
     pleural_effusions_list.append(pleural_effusions)
     no_lung_sliding_list.append(no_lung_sliding)
     a_line_b_line_tuple_list.append((a_lines, b_lines))
+    len_b_line_tuple_list.append((stop_frame-start_frame, b_lines))
 
     # Check data
     cine = mat['cleaned']
     height_list.append(cine.shape[0])
     width_list.append(cine.shape[1])
     frames_list.append(cine.shape[2])
+    full_len_b_line_tuple_list.append((cine.shape[2], b_lines))
 
     # Check view
     view = mat['labels']['view']
@@ -89,19 +93,19 @@ for mat_file in tqdm(all_mat_files):
     else:
         frame_time_list.append(-100)
 
-print(f"b_lines_list = {np.unique(b_lines_list)}")
-print(f"stop_frame_list = {np.unique(stop_frame_list)}")
-print(f"start_frame_list = {np.unique(start_frame_list)}")
-print(f"subpleural_consolidations_list = {np.unique(subpleural_consolidations_list)}")
-print(f"pleural_irregularities_list = {np.unique(pleural_irregularities_list)}")
-print(f"a_lines_list = {np.unique(a_lines_list)}")
-print(f"lobar_consolidations_list = {np.unique(lobar_consolidations_list)}")
-print(f"pleural_effusions_list = {np.unique(pleural_effusions_list)}")
-print(f"no_lung_sliding_list = {np.unique(no_lung_sliding_list)}")
-print(f"width_list = {np.unique(width_list)}")
-print(f"height_list = {np.unique(height_list)}")
-print(f"frames_list = {np.unique(frames_list)}")
-print(f"view_list = {np.unique(view_list)}")
+print(f"b_lines_list = {np.unique(b_lines_list, return_counts=True)}")
+print(f"stop_frame_list = {np.unique(stop_frame_list, return_counts=True)}")
+print(f"start_frame_list = {np.unique(start_frame_list, return_counts=True)}")
+print(f"subpleural_consolidations_list = {np.unique(subpleural_consolidations_list, return_counts=True)}")
+print(f"pleural_irregularities_list = {np.unique(pleural_irregularities_list, return_counts=True)}")
+print(f"a_lines_list = {np.unique(a_lines_list, return_counts=True)}")
+print(f"lobar_consolidations_list = {np.unique(lobar_consolidations_list, return_counts=True)}")
+print(f"pleural_effusions_list = {np.unique(pleural_effusions_list, return_counts=True)}")
+print(f"no_lung_sliding_list = {np.unique(no_lung_sliding_list, return_counts=True)}")
+print(f"width_list = {np.unique(width_list, return_counts=True)}")
+print(f"height_list = {np.unique(height_list, return_counts=True)}")
+print(f"frames_list = {np.unique(frames_list, return_counts=True)}")
+print(f"view_list = {np.unique(view_list, return_counts=True)}")
 
 data_source = args.path_to_lung_dataset.split(os.sep)[-1]
 
@@ -189,7 +193,6 @@ plt.title("time between frames (ms) histogram")
 plt.ylabel("Frequency")
 plt.savefig(f"{data_source} frame_time_list.png")
 
-a_line_b_line_tuple_list.append((a_lines, b_lines))
 b_lines_with_a_lines = np.array([b for a, b in a_line_b_line_tuple_list if a == 1])
 b_lines_without_a_lines = np.array([b for a, b in a_line_b_line_tuple_list if a == 0])
 print(f"len(b_lines_without_a_lines) = {len(b_lines_without_a_lines)}")
@@ -213,3 +216,37 @@ plt.hist(stop_minus_start_list)
 plt.title("used number of frames (stop - start) histogram")
 plt.ylabel("Frequency")
 plt.savefig(f"{data_source} stop_minus_start_list.png")
+
+len_with_b_lines = np.array([len_ for len_, b in len_b_line_tuple_list if b != 0])
+len_without_b_lines = np.array([len_ for len_, b in len_b_line_tuple_list if b == 0])
+print(f"len(len_with_b_lines) = {len(len_with_b_lines)}")
+print(f"len(len_without_b_lines) = {len(len_without_b_lines)}")
+
+plt.figure()
+plt.hist(len_without_b_lines)
+plt.title("Len without b lines")
+plt.ylabel("Frequency")
+plt.savefig(f"{data_source} len_without_b_lines.png")
+
+plt.figure()
+plt.hist(len_with_b_lines)
+plt.title("Len with b lines")
+plt.ylabel("Frequency")
+plt.savefig(f"{data_source} len_with_b_lines.png")
+
+full_len_with_b_lines = np.array([len_ for len_, b in full_len_b_line_tuple_list if b != 0])
+full_len_without_b_lines = np.array([len_ for len_, b in full_len_b_line_tuple_list if b == 0])
+print(f"len(full_len_with_b_lines) = {len(full_len_with_b_lines)}")
+print(f"len(full_len_without_b_lines) = {len(full_len_without_b_lines)}")
+
+plt.figure()
+plt.hist(full_len_without_b_lines)
+plt.title("full_Len without b lines")
+plt.ylabel("Frequency")
+plt.savefig(f"{data_source} full_len_without_b_lines.png")
+
+plt.figure()
+plt.hist(full_len_with_b_lines)
+plt.title("full_Len with b lines")
+plt.ylabel("Frequency")
+plt.savefig(f"{data_source} full_len_with_b_lines.png")
