@@ -162,6 +162,8 @@ def main():
     # Explainability
     parser.add_argument("--explain", type=str2bool, nargs='?', const=True, default=False,
                         help="save explanation heatmaps for video classification. Requires setting transferred_model to a CNN_transformer model with a TimeDistributed layer output shape (batch, seq_len, height, width, channels) and an TransformerBlock output shape (batch, seq_len, embed_dim)")
+    parser.add_argument("--skip_data", type=str2bool, nargs='?', const=True, default=False,
+                        help="skip a bunch of data to save time")
 
     # Output files
     parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
@@ -275,9 +277,12 @@ def main():
         print("===========================")
         print(f"Performing k-fold splitting with validation fold {validation_fold} and test fold {test_fold}")
         print("===========================")
-        # StratifiedKFold Doesn't work when not enough datapoints of each class
         k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
         # k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+
+        # StratifiedKFold Doesn't work when not enough datapoints of each class
+        if args.skip_data:
+            k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
         def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
             for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
@@ -371,7 +376,8 @@ def main():
                     else:
                         all_mat_files.append(path_to_mat_or_dir)
 
-            # all_mat_files = all_mat_files[:len(all_mat_files)//5]  # only used to save time
+            if args.skip_data:
+                all_mat_files = all_mat_files[:len(all_mat_files)//5]  # only used to save time
 
             def get_labels(mat_files):
                 labels = []
@@ -687,11 +693,11 @@ def main():
                     explainer = VideoGradCAMAttention(transferred_model)
                     cam = VideoGradCAM(transferred_model)
                     # Run explainer on X examples
-                    for example in tqdm(range(30)):
+                    for example in tqdm(range(len(X_train))):
                         video = X_train[example]
 
                         # New explainer method
-                        (heatmaps, overlays) = explainer.compute_attention_maps(video)
+                        (heatmaps, overlays, attn_weights) = explainer.compute_attention_maps(video)
 
                         # Old explainer method
                         old_heatmaps = cam.compute_heatmaps(video)
@@ -706,6 +712,9 @@ def main():
 
                             cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg'), old_overlays[i])
                             old_images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg')))
+                        plt.figure()
+                        plt.imshow(attn_weights)
+                        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-attn-weights.jpg"))
 
                         # Save videos
                         slower_frame_rate = 1

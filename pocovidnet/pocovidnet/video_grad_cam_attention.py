@@ -28,4 +28,4 @@ class VideoGradCAMAttention:
         scaled_heatmaps = sigmoid(10 * (scaled_heatmaps - 0.5)) * 255
 
         (scaled_heatmaps, overlays) = self.video_grad_cam.overlay_heatmaps(scaled_heatmaps, video, alpha=0.5)
-        return scaled_heatmaps, overlays
+        return scaled_heatmaps, overlays, attn_weights
