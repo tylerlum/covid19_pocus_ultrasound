@@ -763,7 +763,10 @@ def main():
                         layer.trainable = True
 
         else:
-            model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn, args.time_aggregation, args.trainable_base)
+            if args.architecture in ["2D_CNN_average", "CNN_transformer"]:
+                model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn, args.time_aggregation, args.trainable_base)
+            else:
+                model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
         print('---------------------------model---------------------\n', args.architecture)
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
@@ -937,6 +940,10 @@ def main():
             # Convert to tesnorflow lite model
             print("About to make converter")
             converter = tf.lite.TFLiteConverter.from_saved_model(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'))
+            print("About to do new things")
+            converter.target_ops = [tf.lite.OpsSet.TFLITE_BUILTINS, tf.lite.OpsSet.SELECT_TF_OPS]
+            converter.allow_custom_ops = True
+            converter.experimental_new_converter = True
             print("About to convert")
             tflite_model = converter.convert()
             print("About to open file")
