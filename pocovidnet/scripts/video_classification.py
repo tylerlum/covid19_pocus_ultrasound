@@ -934,10 +934,9 @@ def main():
 
         if args.save_model:
             print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
-            # model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
             model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'))
 
-            # Convert to tesnorflow lite model
+            # Convert to tensorflow lite model
             print("About to make converter")
             converter = tf.lite.TFLiteConverter.from_saved_model(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'))
             print("About to do new things")
