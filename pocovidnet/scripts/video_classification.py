@@ -931,7 +931,17 @@ def main():
 
         if args.save_model:
             print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
-            model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
+            # model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
+            model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'))
+
+            # Convert to tesnorflow lite model
+            print("About to make converter")
+            converter = tf.lite.TFLiteConverter.from_saved_model(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'))
+            print("About to convert")
+            tflite_model = converter.convert()
+            print("About to open file")
+            open("converted_model.tflite", "wb").write(tflite_model)
+            print("DONE")
 
         def calculate_patient_wise(files, x, y, model, verbose=True):
             # Calculate mean of video clips to predict patient-wise classification
