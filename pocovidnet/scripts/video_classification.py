@@ -30,6 +30,7 @@ from pocovidnet.videoto3d import Videoto3D
 from pocovidnet.wandb import ConfusionMatrixEachEpochCallback, wandb_log_classification_table_and_plots
 from pocovidnet.read_mat import loadmat
 from pocovidnet.video_dataset_preprocess import preprocess_video_dataset
+from pocovidnet.optical_flow import get_optical_flow_data
 from pocovidnet.video_grad_cam_attention import VideoGradCAMAttention
 from pocovidnet.video_grad_cam import VideoGradCAM
 from datetime import datetime
@@ -478,6 +479,12 @@ def main():
                             labels.append(b_lines)
 
                 X = np.array(video_clips)
+
+                # Bring together optical flow if needed
+                if args.optical_flow_type is not None:
+                    optical_flow_data = get_optical_flow_data(video_clips, args.optical_flow_type)
+                    X = np.concatenate([X, optical_flow_data], axis=4)
+
                 Y = np.array(labels)
                 return X, Y
 
