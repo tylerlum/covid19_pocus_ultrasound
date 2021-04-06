@@ -15,11 +15,12 @@ def get_model(
     hidden_size: int = 64,
     dropout: float = 0.5,
     num_classes: int = 3,
-    trainable_layers: int = 2,
+    trainable_layers: int = 1,
     log_softmax: bool = True,
     mc_dropout: bool = False,
     evidential = False,
     pretrained_cnn: str = 'vgg16',
+    trainable_base: bool = False,
     **kwargs
 ):
     act_fn = tf.nn.softmax if not log_softmax else tf.nn.log_softmax
@@ -34,13 +35,23 @@ def get_model(
                     input_tensor = Input(shape=(input_size))
                 )
 
+    if pretrained_cnn.startswith("resnet"):
+        layer = 'conv4_block3_out'
+        baseModel = tf.keras.Model(
+            inputs=baseModel.input,
+            outputs=baseModel.get_layer(layer).output)
     tf.keras.utils.plot_model(baseModel, f"baseModel.png", show_shapes=True)
 
-    # Fix layers, then set trainable ones
-    for layer in baseModel.layers:
-        layer.trainable = False
-    for i in range(1, 1+trainable_layers):
-        baseModel.layers[-i].trainable = True
+    if trainable_base:
+        # All trainable
+        for layer in baseModel.layers:
+            layer.trainable = True
+    else:
+        # Fix layers, then set trainable ones
+        for layer in baseModel.layers:
+            layer.trainable = False
+        for i in range(1, 1+trainable_layers):
+            baseModel.layers[-i].trainable = True
 
     # construct the head of the model that will be placed on top of the
     # the base model

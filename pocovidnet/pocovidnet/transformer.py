@@ -6,17 +6,30 @@ import numpy as np
 
 # Source: https://keras.io/examples/nlp/text_classification_with_transformer/
 class MultiHeadSelfAttention(layers.Layer):
-    def __init__(self, embed_dim, num_heads=8):
-        super(MultiHeadSelfAttention, self).__init__()
+    def __init__(self, embed_dim, num_heads=8, **kwargs):
+        super(MultiHeadSelfAttention, self).__init__(**kwargs)
+
+        # Store input arguments
         self.embed_dim = embed_dim
         self.num_heads = num_heads
+
         if embed_dim % num_heads != 0:
             raise ValueError(f"embedding dimension = {embed_dim} should be divisible by number of heads = {num_heads}")
+
+        # Setup layers
         self.projection_dim = embed_dim // num_heads
         self.query_dense = layers.Dense(embed_dim)
         self.key_dense = layers.Dense(embed_dim)
         self.value_dense = layers.Dense(embed_dim)
         self.combine_heads = layers.Dense(embed_dim)
+
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            "embed_dim": self.embed_dim,
+            "num_heads": self.num_heads,
+        })
+        return config
 
     def attention(self, query, key, value):
         score = tf.matmul(query, key, transpose_b=True)
@@ -24,13 +37,13 @@ class MultiHeadSelfAttention(layers.Layer):
         scaled_score = score / tf.math.sqrt(dim_key)
         weights = tf.nn.softmax(scaled_score, axis=-1)
         output = tf.matmul(weights, value)
-        return output, weights
+        return output, weights  # Could also return scaled score instead
 
     def separate_heads(self, x, batch_size):
         x = tf.reshape(x, (batch_size, -1, self.num_heads, self.projection_dim))
         return tf.transpose(x, perm=[0, 2, 1, 3])
 
-    def call(self, inputs):
+    def call(self, inputs, return_weights=True):
         # inputs.shape = [batch_size, seq_len, embedding_dim]
         batch_size = tf.shape(inputs)[0]
         query = self.query_dense(inputs)
@@ -43,12 +56,24 @@ class MultiHeadSelfAttention(layers.Layer):
         attention = tf.transpose(attention, perm=[0, 2, 1, 3])
         concat_attention = tf.reshape(attention, (batch_size, -1, self.embed_dim))
         output = self.combine_heads(concat_attention)
+        if return_weights:
+            return output, weights
         return output
 
 
 class TransformerBlock(layers.Layer):
-    def __init__(self, embed_dim, num_heads, ff_dim, timesteps, positional_encoding, rate=0.1):
-        super(TransformerBlock, self).__init__()
+    def __init__(self, embed_dim, num_heads, ff_dim, timesteps, positional_encoding, rate=0.1, **kwargs):
+        super(TransformerBlock, self).__init__(**kwargs)
+
+        # Store input arguments
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.ff_dim = ff_dim
+        self.timesteps = timesteps
+        self.positional_encoding = positional_encoding
+        self.rate = rate
+
+        # Setup layers
         self.att = MultiHeadSelfAttention(embed_dim, num_heads)
 
         # self.att = MultiHeadAttention(num_heads, embed_dim) NEED tf-nightly for this package
@@ -63,19 +88,31 @@ class TransformerBlock(layers.Layer):
         self.dropout1 = layers.Dropout(rate)
         self.dropout2 = layers.Dropout(rate)
 
+    def get_config(self):
+        config = super().get_config().copy()
+        config.update({
+            "embed_dim": self.embed_dim,
+            "num_heads": self.num_heads,
+            "ff_dim": self.ff_dim,
+            "timesteps": self.timesteps,
+            "positional_encoding": self.positional_encoding,
+            "rate": self.rate,
+        })
+        return config
+
     def call(self, inputs):
         # Rescale inputs to be in [0, sqrt(embed_dim)] to ensure positional encoding is not too large, following
         # https://stackoverflow.com/questions/56930821/why-does-embedding-vector-multiplied-by-a-constant-in-transformer-model
         # inputs.shape = [batch_size, seq_len, embedding_dim]
-        scaled_input = (tf.math.divide_no_nan(inputs, tf.expand_dims(tf.math.reduce_max(inputs, axis=2), axis=2))
+        scaled_input = (tf.math.divide(inputs, tf.expand_dims(tf.math.reduce_max(inputs, axis=2), axis=2))
                         * tf.math.sqrt(tf.cast(self.att.embed_dim, tf.float32)))
         inputs_with_position = scaled_input + self.pos_encoding
-        attn_output = self.att(inputs_with_position)
+        attn_output, attn_weights = self.att(inputs_with_position)
         attn_output = self.dropout1(attn_output)
         out1 = self.layernorm1(inputs_with_position + attn_output)
         ffn_output = self.ffn(out1)
         ffn_output = self.dropout2(ffn_output)
-        return self.layernorm2(out1 + ffn_output)
+        return self.layernorm2(out1 + ffn_output), attn_weights
 
     def _positional_encoding(self, position, d_model):
         def get_angles(pos, i, d_model):

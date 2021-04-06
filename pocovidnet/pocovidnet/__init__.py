@@ -96,6 +96,7 @@ PRETRAINED_CNN_FACTORY = {
 
 PRETRAINED_CNN_PREPROCESS_FACTORY = {
     "vgg16": tensorflow.keras.applications.vgg16.preprocess_input,
+    # "vgg16": lambda x : x / 255.0,
     "efficientnet": tensorflow.keras.applications.efficientnet.preprocess_input,
     "resnet50": tensorflow.keras.applications.resnet.preprocess_input,
     "resnet50_v2": tensorflow.keras.applications.resnet_v2.preprocess_input,
