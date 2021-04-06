@@ -20,6 +20,7 @@ def get_model(
     mc_dropout: bool = False,
     evidential = False,
     pretrained_cnn: str = 'vgg16',
+    trainable_base: bool = False,
     **kwargs
 ):
     act_fn = tf.nn.softmax if not log_softmax else tf.nn.log_softmax
@@ -41,12 +42,16 @@ def get_model(
             outputs=baseModel.get_layer(layer).output)
     tf.keras.utils.plot_model(baseModel, f"baseModel.png", show_shapes=True)
 
-    # Fix layers, then set trainable ones
-    for layer in baseModel.layers:
-        # layer.trainable = False
-        layer.trainable = True
-    # for i in range(1, 1+trainable_layers):
-        # baseModel.layers[-i].trainable = True
+    if trainable_base:
+        # All trainable
+        for layer in baseModel.layers:
+            layer.trainable = True
+    else:
+        # Fix layers, then set trainable ones
+        for layer in baseModel.layers:
+            layer.trainable = False
+        for i in range(1, 1+trainable_layers):
+            baseModel.layers[-i].trainable = True
 
     # construct the head of the model that will be placed on top of the
     # the base model

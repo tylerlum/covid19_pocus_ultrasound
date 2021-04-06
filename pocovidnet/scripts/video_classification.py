@@ -34,7 +34,7 @@ from pocovidnet.video_grad_cam_attention import VideoGradCAMAttention
 from pocovidnet.video_grad_cam import VideoGradCAM
 from datetime import datetime
 from datetime import date
-from keras.layers import Dropout, Dense, TimeDistributed
+from keras.layers import Dropout, Dense, TimeDistributed, Input, GlobalAveragePooling1D, Concatenate
 from keras.models import Model
 
 
@@ -150,10 +150,20 @@ def main():
     # Transfer between tasks
     parser.add_argument("--transferred_model", type=str, default="",
                         help="path to knowledge transferred model, ignored if empty string")
+    parser.add_argument("--transferred_model2", type=str, default="",
+                        help="path to second knowledge transferred model, ignored if empty string")
+    parser.add_argument("--transferred_model_num_layers_remove", type=int, default=0,
+                        help="number of layers to remove from transferred model (excluding prediction head that will always be removed)")
+    parser.add_argument("--transferred_model_num_layers_add", type=int, default=0,
+                        help="number of Dense layers to add to transferred model (includes a dropout after each)")
+    parser.add_argument("--remove_pneumonia", type=str2bool, nargs='?', const=True, default=False,
+                        help="remove pneumonia class")
 
     # Explainability
     parser.add_argument("--explain", type=str2bool, nargs='?', const=True, default=False,
                         help="save explanation heatmaps for video classification. Requires setting transferred_model to a CNN_transformer model with a TimeDistributed layer output shape (batch, seq_len, height, width, channels) and an TransformerBlock output shape (batch, seq_len, embed_dim)")
+    parser.add_argument("--skip_data", type=str2bool, nargs='?', const=True, default=False,
+                        help="skip a bunch of data to save time")
 
     # Output files
     parser.add_argument('--save_model', type=str2bool, nargs='?', const=True, default=False, help='save final model')
@@ -194,6 +204,10 @@ def main():
     parser.add_argument('--augment', type=str2bool, nargs='?', const=True, default=False, help='video augmentation')
     parser.add_argument('--optimizer', type=str, default="adam", help='optimizer for training')
     parser.add_argument('--pretrained_cnn', type=str, default="vgg16", help='pretrained cnn architecture')
+    parser.add_argument('--trainable_base', type=str2bool, nargs='?', const=True, default=False,
+                        help='set if base model is trainable')
+    parser.add_argument('--time_aggregation', type=str, default="pooling",
+                        help='pooling or conv1d, aggregation across time for transformer')
 
     parser.add_argument('--reduce_learning_rate', type=str2bool, nargs='?', const=True, default=False,
                         help='use reduce learning rate callback')
@@ -232,6 +246,12 @@ def main():
         evidential = False
         print("This model does not use evidential")
 
+    if "transformer" not in args.architecture:
+        print("This model does not use time_aggregation")
+        args.time_aggregation = None
+    else:
+        print(f"This model uses time_aggregation {args.time_aggregation}")
+
     # Deterministic behavior
     set_random_seed(args.random_seed)
 
@@ -257,9 +277,12 @@ def main():
         print("===========================")
         print(f"Performing k-fold splitting with validation fold {validation_fold} and test fold {test_fold}")
         print("===========================")
-        # StratifiedKFold Doesn't work when not enough datapoints of each class
         k_fold_cross_validation = StratifiedKFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
         # k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+
+        # StratifiedKFold Doesn't work when not enough datapoints of each class
+        if args.skip_data:
+            k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
 
         def get_train_validation_test_split(validation_fold, test_fold, k_fold_cross_validation, vid_files, labels):
             for i, (train_index, test_index) in enumerate(k_fold_cross_validation.split(vid_files, labels)):
@@ -282,6 +305,8 @@ def main():
         if not args.mat:
             # Get videos and labels
             class_short = ["cov", "pne", "reg"]
+            if args.remove_pneumonia:
+                class_short = ["cov", "reg"]
             vid_files = [
                 v for v in os.listdir(args.videos) if v[:3].lower() in class_short
             ]
@@ -327,6 +352,12 @@ def main():
             Y_validation = np.array(lb.transform(raw_validation_labels))
             Y_test = np.array(lb.transform(raw_test_labels))
 
+            # Handle edge case of binary labels, generalize to softmax
+            if Y_train.shape[1] == 1:
+                Y_train = tf.keras.utils.to_categorical(Y_train, num_classes=2, dtype=Y_train.dtype)
+                Y_validation = tf.keras.utils.to_categorical(Y_validation, num_classes=2, dtype=Y_validation.dtype)
+                Y_test = tf.keras.utils.to_categorical(Y_test, num_classes=2, dtype=Y_test.dtype)
+
         # Use private lung dataset
         else:
             # Split up mat files to train/validation/test
@@ -345,7 +376,8 @@ def main():
                     else:
                         all_mat_files.append(path_to_mat_or_dir)
 
-            # all_mat_files = all_mat_files[:len(all_mat_files)//5]  # only used to save time
+            if args.skip_data:
+                all_mat_files = all_mat_files[:len(all_mat_files)//5]  # only used to save time
 
             def get_labels(mat_files):
                 labels = []
@@ -386,7 +418,6 @@ def main():
                 # Mat files
                 print("Collecting video clips and labels")
                 for mat_file in tqdm(mat_files):
-                    print(f"mat_file = {mat_file}")
                     mat = loadmat(os.path.join(patient_dir, mat_file))
 
                     # Get labels
@@ -419,6 +450,8 @@ def main():
                     if 'cleaned' in mat.keys():
                         cine = mat['cleaned']
 
+                    start_frame = 0
+                    stop_frame = cine.shape[2] - 1
                     num_video_frames = (stop_frame - start_frame + 1) // show_every
                     num_clips = num_video_frames // args.depth
 
@@ -556,52 +589,185 @@ def main():
         del raw_validation_data, raw_validation_labels
         del raw_test_data, raw_test_labels
 
-        model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
-        print('---------------------------model---------------------\n', args.architecture)
-
         if len(args.transferred_model) > 0:
-            print("WARNING: using transferred model, assuming transformer")
-            from pocovidnet.transformer import TransformerBlock
-            model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
-            # Remove head and add new heads
-            # model = Model(model.input, model.layers[-2].output)
-            # model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
+            if len(args.transferred_model2) > 0:
+                if "transformer" in args.architecture:
+                    print("WARNING: using 2 transferred models, assuming transformer")
+                    from pocovidnet.transformer import TransformerBlock
+                    transferred_model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
+                    transferred_model2 = tf.keras.models.load_model(args.transferred_model2, custom_objects={'TransformerBlock': TransformerBlock})
 
-            if args.explain:
-                print("TESTING GRAD CAMS AND ATTENTION EXPLAINER")
-                explainer = VideoGradCAMAttention(model)
-                cam = VideoGradCAM(model)
-                # Run explainer on X examples
-                for example in tqdm(range(30)):
-                    video = X_train[example]
+                    # Remove old prediction layer
+                    # Find embedding layer
+                    for layer in transferred_model.layers:
+                        if len(layer.output_shape) == 2 and not isinstance(layer, TransformerBlock):  # (batch_size, embed_dim)
+                            layerName = layer.name
+                            break
+                    for layer in transferred_model2.layers:
+                        if len(layer.output_shape) == 2 and not isinstance(layer, TransformerBlock):  # (batch_size, embed_dim)
+                            layerName2 = layer.name
+                            break
 
-                    # New explainer method
-                    (heatmaps, overlays) = explainer.compute_attention_maps(video)
+                    inp = Input(shape=(input_shape))
+                    model = Model(transferred_model.input, transferred_model.get_layer(layerName).output)
+                    model.summary()
+                    model2 = Model(transferred_model2.input, transferred_model2.get_layer(layerName2).output)
+                    model2.summary()
+                    x = model(inp)
+                    x2 = model2(inp)
+                    merged = Concatenate(axis=1)([x, x2])
+                    model = Model(inp, merged)
 
-                    # Old explainer method
-                    old_heatmaps = cam.compute_heatmaps(video)
-                    (old_heatmaps, old_overlays) = cam.overlay_heatmaps(old_heatmaps, video)
+                    # Add additional hidden layers
+                    for i in range(args.transferred_model_num_layers_add):
+                        new_output = Dense(256, activation='relu')(model.output)
+                        new_output = Dropout(0.5)(new_output)
+                        model = Model(model.input, new_output)
 
-                    # Save heatmaps overlayed on images
-                    images = []
-                    old_images = []
-                    for i in range(len(overlays)):
-                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg'), overlays[i])
-                        images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg')))
+                    # Add new prediction layer
+                    model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
 
-                        cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg'), old_overlays[i])
-                        old_images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg')))
+                    # Set trainable base
+                    if args.trainable_base:
+                        for layer in model.layers:
+                            layer.trainable = True
+                else:
+                    print("WARNING: using 2 transferred models, assuming 2D_CNN_average")
+                    transferred_model = tf.keras.models.load_model(args.transferred_model)
+                    transferred_model2 = tf.keras.models.load_model(args.transferred_model2)
 
-                    # Save videos
-                    slower_frame_rate = 1
-                    output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
-                    old_output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'old-video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
-                    for i in range(len(images)):
-                        output_video.write(images[i])
-                        old_output_video.write(old_images[i])
-                    output_video.release()
-                    old_output_video.release()
+                    # Remove old average layer, prediction layer, and extra layer
+                    model = Model(transferred_model.input, transferred_model.layers[-4].output)
+                    model2 = Model(transferred_model2.input, transferred_model2.layers[-4].output)
 
+                    # Add additional hidden layers
+                    for i in range(args.transferred_model_num_layers_add):
+                        inp = Input(shape=(model.output.shape[2:]))
+                        x = Dense(64, activation='relu')(inp)
+                        x = Dropout(0.5)(x)
+                        end_of_cnn_model = Model(inputs=inp, outputs=x)
+                        model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
+
+                    # Add new prediction layer
+                    inp = Input(shape=(model.output.shape[2:]))
+                    x = Dense(nb_classes, activation='softmax')(inp)
+                    end_of_cnn_model = Model(inputs=inp, outputs=x)
+                    model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
+
+                    # Add new average layer
+                    model = Model(model.input, GlobalAveragePooling1D()(model.output))
+
+                    # Set trainable base
+                    if args.trainable_base:
+                        for layer in model.layers:
+                            layer.trainable = True
+
+            elif "transformer" in args.architecture:
+                print("WARNING: using transferred model, assuming transformer")
+                from pocovidnet.transformer import TransformerBlock
+                transferred_model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
+
+                # Remove old prediction layer
+                model = Model(transferred_model.input, transferred_model.layers[-2].output)
+
+                # Remove additional layers
+                for i in range(args.transferred_model_num_layers_remove):
+                    model = Model(model.input, model.layers[-2].output)
+
+                # Add additional hidden layers
+                for i in range(args.transferred_model_num_layers_add):
+                    new_output = Dense(64, activation='relu')(model.output)
+                    new_output = Dropout(0.5)(new_output)
+                    model = Model(model.input, new_output)
+
+                # Add new prediction layer
+                model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
+
+                # Set trainable base
+                if args.trainable_base:
+                    for layer in model.layers:
+                        layer.trainable = True
+
+                if args.explain:
+                    print("TESTING GRAD CAMS AND ATTENTION EXPLAINER")
+                    explainer = VideoGradCAMAttention(transferred_model)
+                    cam = VideoGradCAM(transferred_model)
+                    # Run explainer on X examples
+                    for example in tqdm(range(len(X_train))):
+                        video = X_train[example]
+
+                        # New explainer method
+                        (heatmaps, overlays, attn_weights) = explainer.compute_attention_maps(video)
+
+                        # Old explainer method
+                        old_heatmaps = cam.compute_heatmaps(video)
+                        (old_heatmaps, old_overlays) = cam.overlay_heatmaps(old_heatmaps, video)
+
+                        # Save heatmaps overlayed on images
+                        images = []
+                        old_images = []
+                        for i in range(len(overlays)):
+                            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg'), overlays[i])
+                            images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg')))
+
+                            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg'), old_overlays[i])
+                            old_images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg')))
+                        plt.figure()
+                        plt.imshow(attn_weights)
+                        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-attn-weights.jpg"))
+
+                        # Save videos
+                        slower_frame_rate = 1
+                        output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
+                        old_output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'old-video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
+                        for i in range(len(images)):
+                            output_video.write(images[i])
+                            old_output_video.write(old_images[i])
+                        output_video.release()
+                        old_output_video.release()
+
+            else:
+                print("WARNING: using transferred model, assuming 2D_CNN_average")
+                transferred_model = tf.keras.models.load_model(args.transferred_model)
+
+                # Remove old average layer
+                model = Model(transferred_model.input, transferred_model.layers[-2].output)
+
+                # Remove old prediction layer
+                model = Model(model.input, model.layers[-2].output)
+
+                # Remove additional layers
+                for i in range(args.transferred_model_num_layers_remove):
+                    model = Model(model.input, model.layers[-2].output)
+
+                # Add additional hidden layers
+                for i in range(args.transferred_model_num_layers_add):
+                    inp = Input(shape=(model.output.shape[2:]))
+                    x = Dense(64, activation='relu')(inp)
+                    x = Dropout(0.5)(x)
+                    end_of_cnn_model = Model(inputs=inp, outputs=x)
+                    model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
+
+                # Add new prediction layer
+                inp = Input(shape=(model.output.shape[2:]))
+                x = Dense(nb_classes, activation='softmax')(inp)
+                end_of_cnn_model = Model(inputs=inp, outputs=x)
+                model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
+
+                # Add new average layer
+                model = Model(model.input, GlobalAveragePooling1D()(model.output))
+
+                # Set trainable base
+                if args.trainable_base:
+                    for layer in model.layers:
+                        layer.trainable = True
+
+        else:
+            if args.architecture in ["2D_CNN_average", "CNN_transformer"]:
+                model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn, args.time_aggregation, args.trainable_base)
+            else:
+                model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
+        print('---------------------------model---------------------\n', args.architecture)
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
         # evidential loss function
@@ -768,7 +934,20 @@ def main():
 
         if args.save_model:
             print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
-            model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'), save_format='h5')
+            model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'))
+
+            # Convert to tensorflow lite model
+            print("About to make converter")
+            converter = tf.lite.TFLiteConverter.from_saved_model(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'))
+            print("About to do new things")
+            converter.target_ops = [tf.lite.OpsSet.TFLITE_BUILTINS, tf.lite.OpsSet.SELECT_TF_OPS]
+            converter.allow_custom_ops = True
+            converter.experimental_new_converter = True
+            print("About to convert")
+            tflite_model = converter.convert()
+            print("About to open file")
+            open("converted_model.tflite", "wb").write(tflite_model)
+            print("DONE")
 
         def calculate_patient_wise(files, x, y, model, verbose=True):
             # Calculate mean of video clips to predict patient-wise classification

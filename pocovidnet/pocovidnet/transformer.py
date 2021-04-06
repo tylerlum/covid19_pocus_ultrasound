@@ -104,7 +104,7 @@ class TransformerBlock(layers.Layer):
         # Rescale inputs to be in [0, sqrt(embed_dim)] to ensure positional encoding is not too large, following
         # https://stackoverflow.com/questions/56930821/why-does-embedding-vector-multiplied-by-a-constant-in-transformer-model
         # inputs.shape = [batch_size, seq_len, embedding_dim]
-        scaled_input = (tf.math.divide_no_nan(inputs, tf.expand_dims(tf.math.reduce_max(inputs, axis=2), axis=2))
+        scaled_input = (tf.math.divide(inputs, tf.expand_dims(tf.math.reduce_max(inputs, axis=2), axis=2))
                         * tf.math.sqrt(tf.cast(self.att.embed_dim, tf.float32)))
         inputs_with_position = scaled_input + self.pos_encoding
         attn_output, attn_weights = self.att(inputs_with_position)
