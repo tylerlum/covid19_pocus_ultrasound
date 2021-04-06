@@ -941,19 +941,17 @@ def main():
 
         if args.save_model:
             print(f'Saving COVID-19 detector model on {FINAL_OUTPUT_DIR} data...')
-            model.save(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'))
+            model_save_path = os.path.join(FINAL_OUTPUT_DIR, 'last_epoch')
+            model.save(model_save_path)
 
             # Convert to tensorflow lite model
             print("About to make converter")
-            converter = tf.lite.TFLiteConverter.from_saved_model(os.path.join(FINAL_OUTPUT_DIR, 'last_epoch'))
-            print("About to do new things")
-            converter.target_ops = [tf.lite.OpsSet.TFLITE_BUILTINS, tf.lite.OpsSet.SELECT_TF_OPS]
-            converter.allow_custom_ops = True
-            converter.experimental_new_converter = True
+            converter = tf.lite.TFLiteConverter.from_saved_model(model_save_path)
             print("About to convert")
             tflite_model = converter.convert()
-            print("About to open file")
-            open("converted_model.tflite", "wb").write(tflite_model)
+            tflite_model_path = "converted_model.tflite"
+            print(f"About to write to file {tflite_model_path}")
+            open(tflite_model_path, "wb").write(tflite_model)
             print("DONE")
 
         def calculate_patient_wise(files, x, y, model, verbose=True):
