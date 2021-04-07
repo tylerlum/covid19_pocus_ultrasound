@@ -33,6 +33,7 @@ from pocovidnet.video_dataset_preprocess import preprocess_video_dataset
 from pocovidnet.optical_flow import get_optical_flow_data
 from pocovidnet.video_grad_cam_attention import VideoGradCAMAttention
 from pocovidnet.video_grad_cam import VideoGradCAM
+from pocovidnet.transfer_model import transferred_model_transformer, transferred_model_average, two_transferred_models
 from datetime import datetime
 from datetime import date
 from keras.layers import Dropout, Dense, TimeDistributed, Input, GlobalAveragePooling1D, Concatenate
@@ -145,6 +146,8 @@ def main():
     parser.add_argument('--mat', type=str2bool, nargs='?', const=True, default=False,
                         help=('for pocovidnet dataset, do not use. Only used for reading mat files,' +
                               'pass in the lung/labelled folder to --videos'))
+    parser.add_argument('--multitask', type=str2bool, nargs='?', const=True, default=False,
+                        help='perform prediction on a_lines and b_lines_binary tasks. If set, ignores mat_task.')
     parser.add_argument('--mat_task', type=str, default=False,
                         help='perform prediction on this task: a_lines, b_lines, b_lines_binary')
 
@@ -252,6 +255,11 @@ def main():
         args.time_aggregation = None
     else:
         print(f"This model uses time_aggregation {args.time_aggregation}")
+
+    if args.multitask:
+        print('this is a multitask network')
+    else:
+        print('this is a regular network, not a multitask one')
 
     # Deterministic behavior
     set_random_seed(args.random_seed)
@@ -397,12 +405,16 @@ def main():
                     pleural_effusions = mat['labels']['Pleural effussions']
                     no_lung_sliding = mat['labels']['No lung sliding']
 
-                    if args.mat_task == 'a_lines':
-                        labels.append(a_lines)
-                    elif args.mat_task == 'b_lines_binary':
-                        labels.append(1 if b_lines > 0 else 0)
-                    elif args.mat_task == 'b_lines':
-                        labels.append(b_lines)
+                    if args.multitask:
+                        labels.append({'head_0': 1 if b_lines > 0 else 0,
+                                       'head_1': a_lines})
+                    else:
+                        if args.mat_task == 'a_lines':
+                            labels.append(a_lines)
+                        elif args.mat_task == 'b_lines_binary':
+                            labels.append(1 if b_lines > 0 else 0)
+                        elif args.mat_task == 'b_lines':
+                            labels.append(b_lines)
                 return labels
 
             all_labels = get_labels(all_mat_files)
@@ -471,12 +483,16 @@ def main():
 
                         video_clips.append(video_clip)
 
-                        if args.mat_task == 'a_lines':
-                            labels.append(a_lines)
-                        elif args.mat_task == 'b_lines_binary':
-                            labels.append(1 if b_lines > 0 else 0)
-                        elif args.mat_task == 'b_lines':
-                            labels.append(b_lines)
+                        if args.multitask:
+                            labels.append({'head_0': 1 if b_lines > 0 else 0,
+                                           'head_1': a_lines})
+                        else:
+                            if args.mat_task == 'a_lines':
+                                labels.append(a_lines)
+                            elif args.mat_task == 'b_lines_binary':
+                                labels.append(1 if b_lines > 0 else 0)
+                            elif args.mat_task == 'b_lines':
+                                labels.append(b_lines)
 
                 X = np.array(video_clips)
 
@@ -500,24 +516,32 @@ def main():
 
             # Onehot encode labels
             lb = LabelBinarizer()
-            lb.fit(np.concatenate([raw_train_labels, raw_validation_labels, raw_test_labels], axis=None))
-            Y_train = np.array(lb.transform(raw_train_labels))
-            Y_validation = np.array(lb.transform(raw_validation_labels))
-            Y_test = np.array(lb.transform(raw_test_labels))
+            if args.multitask:
+                Y_train = np.array(raw_train_labels)
+                Y_validation = np.array(raw_validation_labels)
+                Y_test = np.array(raw_test_labels)
+            else:
+                lb.fit(np.concatenate([raw_train_labels, raw_validation_labels, raw_test_labels], axis=None))
+                Y_train = np.array(lb.transform(raw_train_labels))
+                Y_validation = np.array(lb.transform(raw_validation_labels))
+                Y_test = np.array(lb.transform(raw_test_labels))
 
             # Handle edge case of binary labels, generalize to softmax
-            if Y_train.shape[1] == 1:
+            if not args.multitask and Y_train.shape[1] == 1:
                 Y_train = tf.keras.utils.to_categorical(Y_train, num_classes=2, dtype=Y_train.dtype)
                 Y_validation = tf.keras.utils.to_categorical(Y_validation, num_classes=2, dtype=Y_validation.dtype)
                 Y_test = tf.keras.utils.to_categorical(Y_test, num_classes=2, dtype=Y_test.dtype)
 
             # Workaround to get text class names instead of numbers
-            if args.mat_task == 'a_lines':
-                lb.classes_ = ['No A-lines', 'A-lines']
-            elif args.mat_task == 'b_lines_binary':
-                lb.classes_ = ['No B-lines', 'B-lines']
-            elif args.mat_task == 'b_lines':
-                lb.classes_ = ['No B-lines', '1-2 B-lines', '3+ B-lines', 'Confluent B-lines']
+            if args.multitask:
+                lb.classes_ = ['B-lines', 'A-lines']
+            else:
+                if args.mat_task == 'a_lines':
+                    lb.classes_ = ['No A-lines', 'A-lines']
+                elif args.mat_task == 'b_lines_binary':
+                    lb.classes_ = ['No B-lines', 'B-lines']
+                elif args.mat_task == 'b_lines':
+                    lb.classes_ = ['No B-lines', '1-2 B-lines', '3+ B-lines', 'Confluent B-lines']
 
         input_shape = X_train.shape[1:]
         print(f"input_shape = {input_shape}")
@@ -578,202 +602,89 @@ def main():
         print(f"X_train.shape, Y_train.shape = {X_train.shape}, {Y_train.shape}")
         print(f"X_validation.shape, Y_validation.shape = {X_validation.shape}, {Y_validation.shape}")
         print(f"X_test.shape, Y_test.shape = {X_test.shape}, {Y_test.shape}")
-        uniques, counts = np.unique(np.concatenate([raw_train_labels, raw_validation_labels, raw_test_labels], axis=None), return_counts=True)
-        nb_classes = len(uniques)
-        print(f"nb_classes, np.mean(X_train), np.mean(np.std(X_train, axis=(1,2,3,4))), np.max(X_train) = {nb_classes}, {np.mean(X_train)}, {np.mean(np.std(X_train, axis=(1,2,3,4)))}, {np.max(X_train)}")
-        train_uniques, train_counts = np.unique(raw_train_labels, return_counts=True)
-        validation_uniques, validation_counts = np.unique(raw_validation_labels, return_counts=True)
-        test_uniques, test_counts = np.unique(raw_test_labels, return_counts=True)
-        print("unique labels in train", (train_uniques, train_counts))
-        print("unique labels in validation", (validation_uniques, validation_counts))
-        print("unique labels in test", (test_uniques, test_counts))
-
-        class_weight = dict(zip(np.arange(len(uniques)), cw.compute_class_weight('balanced', uniques, raw_train_labels)))
-        print(f"class_weight = {class_weight}")
+        if not args.multitask:
+            uniques, counts = np.unique(np.concatenate([raw_train_labels, raw_validation_labels, raw_test_labels], axis=None), return_counts=True)
+            nb_classes = len(uniques)
+            print(f"nb_classes, np.mean(X_train), np.mean(np.std(X_train, axis=(1,2,3,4))), np.max(X_train) = {nb_classes}, {np.mean(X_train)}, {np.mean(np.std(X_train, axis=(1,2,3,4)))}, {np.max(X_train)}")
+            train_uniques, train_counts = np.unique(raw_train_labels, return_counts=True)
+            validation_uniques, validation_counts = np.unique(raw_validation_labels, return_counts=True)
+            test_uniques, test_counts = np.unique(raw_test_labels, return_counts=True)
+            print("unique labels in train", (train_uniques, train_counts))
+            print("unique labels in validation", (validation_uniques, validation_counts))
+            print("unique labels in test", (test_uniques, test_counts))
+            class_weight = dict(zip(np.arange(len(uniques)), cw.compute_class_weight('balanced', uniques, raw_train_labels)))
+            print(f"class_weight = {class_weight}")
+        else:
+            nb_classes = len(lb.classes_)
+            print(f'nb_classes = {nb_classes}')
 
         # Delete raw data we will not use (save RAM)
         del raw_train_data, raw_train_labels
         del raw_validation_data, raw_validation_labels
         del raw_test_data, raw_test_labels
 
+        # Use transferred models
         if len(args.transferred_model) > 0:
             if len(args.transferred_model2) > 0:
-                if "transformer" in args.architecture:
-                    print("WARNING: using 2 transferred models, assuming transformer")
-                    from pocovidnet.transformer import TransformerBlock
-                    transferred_model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
-                    transferred_model2 = tf.keras.models.load_model(args.transferred_model2, custom_objects={'TransformerBlock': TransformerBlock})
-
-                    # Remove old prediction layer
-                    # Find embedding layer
-                    for layer in transferred_model.layers:
-                        if len(layer.output_shape) == 2 and not isinstance(layer, TransformerBlock):  # (batch_size, embed_dim)
-                            layerName = layer.name
-                            break
-                    for layer in transferred_model2.layers:
-                        if len(layer.output_shape) == 2 and not isinstance(layer, TransformerBlock):  # (batch_size, embed_dim)
-                            layerName2 = layer.name
-                            break
-
-                    inp = Input(shape=(input_shape))
-                    model = Model(transferred_model.input, transferred_model.get_layer(layerName).output)
-                    model.summary()
-                    model2 = Model(transferred_model2.input, transferred_model2.get_layer(layerName2).output)
-                    model2.summary()
-                    x = model(inp)
-                    x2 = model2(inp)
-                    merged = Concatenate(axis=1)([x, x2])
-                    model = Model(inp, merged)
-
-                    # Add additional hidden layers
-                    for i in range(args.transferred_model_num_layers_add):
-                        new_output = Dense(256, activation='relu')(model.output)
-                        new_output = Dropout(0.5)(new_output)
-                        model = Model(model.input, new_output)
-
-                    # Add new prediction layer
-                    model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
-
-                    # Set trainable base
-                    if args.trainable_base:
-                        for layer in model.layers:
-                            layer.trainable = True
-                else:
-                    print("WARNING: using 2 transferred models, assuming 2D_CNN_average")
-                    transferred_model = tf.keras.models.load_model(args.transferred_model)
-                    transferred_model2 = tf.keras.models.load_model(args.transferred_model2)
-
-                    # Remove old average layer, prediction layer, and extra layer
-                    model = Model(transferred_model.input, transferred_model.layers[-4].output)
-                    model2 = Model(transferred_model2.input, transferred_model2.layers[-4].output)
-
-                    # Add additional hidden layers
-                    for i in range(args.transferred_model_num_layers_add):
-                        inp = Input(shape=(model.output.shape[2:]))
-                        x = Dense(64, activation='relu')(inp)
-                        x = Dropout(0.5)(x)
-                        end_of_cnn_model = Model(inputs=inp, outputs=x)
-                        model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
-
-                    # Add new prediction layer
-                    inp = Input(shape=(model.output.shape[2:]))
-                    x = Dense(nb_classes, activation='softmax')(inp)
-                    end_of_cnn_model = Model(inputs=inp, outputs=x)
-                    model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
-
-                    # Add new average layer
-                    model = Model(model.input, GlobalAveragePooling1D()(model.output))
-
-                    # Set trainable base
-                    if args.trainable_base:
-                        for layer in model.layers:
-                            layer.trainable = True
-
+                model = two_transferred_models(args.transferred_model, args.transferred_model2, args.architecture,
+                                               input_shape, args.transferred_model_num_layers_add, args.trainable_base,
+                                               nb_classes)
             elif "transformer" in args.architecture:
-                print("WARNING: using transferred model, assuming transformer")
-                from pocovidnet.transformer import TransformerBlock
-                transferred_model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
-
-                # Remove old prediction layer
-                model = Model(transferred_model.input, transferred_model.layers[-2].output)
-
-                # Remove additional layers
-                for i in range(args.transferred_model_num_layers_remove):
-                    model = Model(model.input, model.layers[-2].output)
-
-                # Add additional hidden layers
-                for i in range(args.transferred_model_num_layers_add):
-                    new_output = Dense(64, activation='relu')(model.output)
-                    new_output = Dropout(0.5)(new_output)
-                    model = Model(model.input, new_output)
-
-                # Add new prediction layer
-                model = Model(model.input, Dense(nb_classes, activation='softmax')(model.output))
-
-                # Set trainable base
-                if args.trainable_base:
-                    for layer in model.layers:
-                        layer.trainable = True
-
-                if args.explain:
-                    print("TESTING GRAD CAMS AND ATTENTION EXPLAINER")
-                    explainer = VideoGradCAMAttention(transferred_model)
-                    cam = VideoGradCAM(transferred_model)
-                    # Run explainer on X examples
-                    for example in tqdm(range(len(X_train))):
-                        video = X_train[example]
-
-                        # New explainer method
-                        (heatmaps, overlays, attn_weights) = explainer.compute_attention_maps(video)
-
-                        # Old explainer method
-                        old_heatmaps = cam.compute_heatmaps(video)
-                        (old_heatmaps, old_overlays) = cam.overlay_heatmaps(old_heatmaps, video)
-
-                        # Save heatmaps overlayed on images
-                        images = []
-                        old_images = []
-                        for i in range(len(overlays)):
-                            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg'), overlays[i])
-                            images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg')))
-
-                            cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg'), old_overlays[i])
-                            old_images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg')))
-                        plt.figure()
-                        plt.imshow(attn_weights)
-                        plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-attn-weights.jpg"))
-
-                        # Save videos
-                        slower_frame_rate = 1
-                        output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
-                        old_output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'old-video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
-                        for i in range(len(images)):
-                            output_video.write(images[i])
-                            old_output_video.write(old_images[i])
-                        output_video.release()
-                        old_output_video.release()
-
+                model = transferred_model_transformer(args.transferred_model, args.transferred_model_num_layers_remove,
+                                                      args.transferred_model_num_layers_add, args.trainable_base,
+                                                      nb_classes)
             else:
-                print("WARNING: using transferred model, assuming 2D_CNN_average")
-                transferred_model = tf.keras.models.load_model(args.transferred_model)
-
-                # Remove old average layer
-                model = Model(transferred_model.input, transferred_model.layers[-2].output)
-
-                # Remove old prediction layer
-                model = Model(model.input, model.layers[-2].output)
-
-                # Remove additional layers
-                for i in range(args.transferred_model_num_layers_remove):
-                    model = Model(model.input, model.layers[-2].output)
-
-                # Add additional hidden layers
-                for i in range(args.transferred_model_num_layers_add):
-                    inp = Input(shape=(model.output.shape[2:]))
-                    x = Dense(64, activation='relu')(inp)
-                    x = Dropout(0.5)(x)
-                    end_of_cnn_model = Model(inputs=inp, outputs=x)
-                    model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
-
-                # Add new prediction layer
-                inp = Input(shape=(model.output.shape[2:]))
-                x = Dense(nb_classes, activation='softmax')(inp)
-                end_of_cnn_model = Model(inputs=inp, outputs=x)
-                model = Model(model.input, TimeDistributed(end_of_cnn_model)(model.output))
-
-                # Add new average layer
-                model = Model(model.input, GlobalAveragePooling1D()(model.output))
-
-                # Set trainable base
-                if args.trainable_base:
-                    for layer in model.layers:
-                        layer.trainable = True
-
+                model = transferred_model_average(args.transferred_model, args.transferred_model_num_layers_remove,
+                                                  args.transferred_model_num_layers_add, args.trainable_base,
+                                                  args.nb_classes)
+        # Not use transferred models
         else:
             if args.architecture in ["2D_CNN_average", "CNN_transformer"]:
                 model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn, args.time_aggregation, args.trainable_base)
             else:
                 model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, nb_classes, args.pretrained_cnn)
+
+        # Use explainer
+        if args.explain:
+            print("TESTING GRAD CAMS AND ATTENTION EXPLAINER")
+            from pocovidnet.transformer import TransformerBlock
+            transferred_model = tf.keras.models.load_model(args.transferred_model, custom_objects={'TransformerBlock': TransformerBlock})
+            explainer = VideoGradCAMAttention(transferred_model)
+            cam = VideoGradCAM(transferred_model)
+            # Run explainer on X examples
+            for example in tqdm(range(len(X_train))):
+                video = X_train[example]
+
+                # New explainer method
+                (heatmaps, overlays, attn_weights) = explainer.compute_attention_maps(video)
+
+                # Old explainer method
+                old_heatmaps = cam.compute_heatmaps(video)
+                (old_heatmaps, old_overlays) = cam.overlay_heatmaps(old_heatmaps, video)
+
+                # Save heatmaps overlayed on images
+                images = []
+                old_images = []
+                for i in range(len(overlays)):
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg'), overlays[i])
+                    images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-overlays-{i}.jpg')))
+
+                    cv2.imwrite(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg'), old_overlays[i])
+                    old_images.append(cv2.imread(os.path.join(FINAL_OUTPUT_DIR, f'ex-{example}-old_overlays-{i}.jpg')))
+                plt.figure()
+                plt.imshow(attn_weights)
+                plt.savefig(os.path.join(FINAL_OUTPUT_DIR, f"ex-{example}-attn-weights.jpg"))
+
+                # Save videos
+                slower_frame_rate = 1
+                output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
+                old_output_video = cv2.VideoWriter(os.path.join(FINAL_OUTPUT_DIR, f'old-video-{example}.avi'), 0, slower_frame_rate, (args.width, args.height))
+                for i in range(len(images)):
+                    output_video.write(images[i])
+                    old_output_video.write(old_images[i])
+                output_video.release()
+                old_output_video.release()
+
         print('---------------------------model---------------------\n', args.architecture)
         tf.keras.utils.plot_model(model, os.path.join(FINAL_OUTPUT_DIR, f"{args.architecture}.png"), show_shapes=True)
 
