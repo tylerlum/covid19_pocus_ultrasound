@@ -35,6 +35,7 @@ from pocovidnet.video_grad_cam_attention import VideoGradCAMAttention
 from pocovidnet.video_grad_cam import VideoGradCAM
 from pocovidnet.transfer_model import transferred_model_transformer, transferred_model_average, two_transferred_models
 from pocovidnet.evidential import evidential_loss
+from pocovidnet.weighted_class_weights import weighted_categorical_crossentropy
 from datetime import datetime
 from datetime import date
 from keras.layers import Dropout, Dense, TimeDistributed, Input, GlobalAveragePooling1D, Concatenate
@@ -699,6 +700,63 @@ def main():
         else:
             print(f"WARNING: invalid optimizer {args.optimizer}")
 
+        # compiling model and or copying weights from one to another
+        if args.multitask:
+
+            gt_0 = np.array([t["head_{}".format(0)] for t in Y_train])
+            gt_1 = np.array([t["head_{}".format(1)] for t in Y_train])
+
+            gt_0 = np.argmax(gt_0, axis=1)
+            gt_1 = np.argmax(gt_1, axis=1)
+
+            n_samples_0 = gt_0.shape[0]
+            n_samples_1 = gt_1.shape[0]
+
+            weights_0 = [n_samples_0/(2*(n_samples_0 - np.sum(gt_0))), n_samples_0/(2*np.sum(gt_0))]
+            weights_1 = [n_samples_1/(2*(n_samples_1 - np.sum(gt_1))), n_samples_1/(2*np.sum(gt_1))]
+            print(weights_1, weights_0)
+            print("compiling the multihead network")
+            from tensorflow.keras import metrics
+            losses = {
+                "head_0": weighted_categorical_crossentropy(np.array(weights_0)),
+                "head_1": weighted_categorical_crossentropy(np.array(weights_1)),
+            }
+            metrs = {
+                "head_0": 'accuracy',
+                "head_1": 'accuracy',
+            }
+            model = VIDEO_MODEL_FACTORY[args.architecture + '_multihead'](input_shape, 2, args.pretrained_cnn)
+            model.compile(optimizer=opt, loss=losses, metrics=metrs)
+
+        else:
+            model = VIDEO_MODEL_FACTORY[args.architecture + "_multihead"](input_shape, 2, args.pretrained_cnn)
+            losses = {
+                "head_0": [tfa.losses.SigmoidFocalCrossEntropy()],
+                "head_1": [tfa.losses.SigmoidFocalCrossEntropy()],
+            }
+            metrs = {
+                "head_0": 'AUC',
+                "head_1": 'AUC',
+            }
+            model.compile(optimizer=opt, loss=losses, metrics=metrs)
+            model.load_weights('transformer_conv1d_9')
+            print('loading done')
+            new_model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, 3, args.pretrained_cnn)
+            # now copying the weight Up until where it's applicable,
+            # the 4 last layers which are the heads have to be popped from model
+            # instead a  3-class classification head is added here
+
+            new_model.compile(
+                # tfa.losses.SigmoidFocalCrossEntropy()
+                optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
+            )
+            for i in range(5):
+                wk0 = model.layers[i].get_weights()
+                new_model.layers[i].set_weights(wk0)
+            print("model source was copied into model target")
+            model = new_model
+
+
         model.compile(
             optimizer=opt, loss=loss, metrics=['accuracy']
         )
@@ -727,27 +785,44 @@ def main():
         print("===========================")
         print(model.summary())
 
-        if args.augment:
-            H = model.fit(
-                generator,
-                validation_data=(X_validation, Y_validation),
-                epochs=args.epochs,
-                batch_size=args.batch_size,
-                verbose=1,
-                shuffle=True,
-                class_weight=class_weight,
-                callbacks=callbacks,
-            )
+        if not args.multitask:
+            if args.augment:
+                H = model.fit(
+                    generator,
+                    validation_data=(X_validation, Y_validation),
+                    epochs=args.epochs,
+                    batch_size=args.batch_size,
+                    verbose=1,
+                    shuffle=True,
+                    class_weight=class_weight,
+                    callbacks=callbacks,
+                )
+            else:
+                H = model.fit(
+                    X_train, Y_train,
+                    validation_data=(X_validation, Y_validation),
+                    epochs=args.epochs,
+                    batch_size=args.batch_size,
+                    verbose=1,
+                    shuffle=True,
+                    class_weight=class_weight,
+                    callbacks=callbacks,
+                )
         else:
             H = model.fit(
-                X_train, Y_train,
-                validation_data=(X_validation, Y_validation),
+                X_train,
+                y={"head_0": np.array([t["head_0"] for t in Y_train]),
+                   "head_1": np.array([t["head_1"] for t in Y_train]),
+                   },
+                validation_data=(X_validation, {
+                    "head_0": np.array([t["head_0"] for t in Y_validation]),
+                    "head_1": np.array([t["head_1"] for t in Y_validation]),
+                }),
                 epochs=args.epochs,
                 batch_size=args.batch_size,
                 verbose=1,
                 shuffle=True,
-                class_weight=class_weight,
-                callbacks=callbacks,
+                callbacks=callbacks
             )
 
         print()
