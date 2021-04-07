@@ -39,7 +39,7 @@ def get_model(
     # Fix layers, then set trainable ones
     for layer in baseModel.layers:
         layer.trainable = True
-    # for i in range(1, 1+trainable_layers):
+    # for i in range(1, len(baseModel.layers)//2):
     #     baseModel.layers[-i].trainable = True
 
     # construct the head of the model that will be placed on top of the

@@ -326,7 +326,7 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     # timeDistributed_layer.shape = (batch_size, timesteps, embed_dim)
     timesteps = timeDistributed_layer.shape[1] # 5
     embed_dim = timeDistributed_layer.shape[2] # 512
-    num_heads = 8  # Requres embed_dim % num_heads == 0
+    num_heads = 4  # Requres embed_dim % num_heads == 0
     number_of_hidden_units = 64
     num_blocks = 2
     model = timeDistributed_layer
@@ -337,16 +337,23 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     ### option 1
     # model = GlobalAveragePooling1D()(model)
     ### option 2
+    # model = Conv1D(1024, 3, activation='relu')(model)
+    # model = GlobalAveragePooling1D()(model)
+
     model = Conv1D(1024, 5, activation='relu')(model)
     model = GlobalAveragePooling1D()(model)
 
-    model = Dense(256, activation='relu')(model)
-    model = Dropout(0.5)(model)
     if multi_head:
         outputs = []
         for i in range(nb_classes):
-            hidden = Dense(256, activation='relu', name='head_{}_hidden'.format(i))(model)
-            outputs.append(Dense(1, activation='sigmoid', name='head_{}'.format(i))(hidden))
+            # hidden = Conv1D(1024, 5, activation='relu')(model)
+            # hidden = GlobalAveragePooling1D()(hidden)
+            # hidden = Dropout(0.5)(hidden)
+            hidden = Dense(512, activation='relu', name='head_{}_hidden_0'.format(i))(model)
+            hidden = Dropout(0.5)(hidden)
+            hidden = Dense(256, activation='relu', name='head_{}_hidden_1'.format(i))(hidden)
+            hidden = Dropout(0.5)(hidden)
+            outputs.append(Dense(2, activation='softmax', name='head_{}'.format(i))(hidden))
         model = Model(inputs=input_tensor, outputs=outputs)
         return model
 
