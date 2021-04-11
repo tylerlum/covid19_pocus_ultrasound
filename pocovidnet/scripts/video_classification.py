@@ -408,7 +408,9 @@ def main():
                     no_lung_sliding = mat['labels']['No lung sliding']
 
                     if args.multitask:
-                        labels.append({'head_0': 1 if b_lines > 0 else 0,
+                        b_lines = tf.keras.utils.to_categorical(int(b_lines > 0), num_classes=2)
+                        a_lines = tf.keras.utils.to_categorical(a_lines, num_classes=2)
+                        labels.append({'head_0': b_lines,
                                        'head_1': a_lines})
                     else:
                         if args.mat_task == 'a_lines':
@@ -486,8 +488,10 @@ def main():
                         video_clips.append(video_clip)
 
                         if args.multitask:
-                            labels.append({'head_0': 1 if b_lines > 0 else 0,
-                                           'head_1': a_lines})
+                            b_lines_one_hot = tf.keras.utils.to_categorical(int(b_lines > 0), num_classes=2)
+                            a_lines_one_hot = tf.keras.utils.to_categorical(a_lines, num_classes=2)
+                            labels.append({'head_0': b_lines_one_hot,
+                                           'head_1': a_lines_one_hot})
                         else:
                             if args.mat_task == 'a_lines':
                                 labels.append(a_lines)
