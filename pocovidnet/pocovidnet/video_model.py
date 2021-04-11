@@ -316,11 +316,15 @@ def get_CNN_transformer_no_pos_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=False)
 
 
+def get_CNN_transformer_multihead_model(input_shape, nb_classes, pretrained_cnn):
+    return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=True, multihead=True)
+
+
 def get_CNN_transformer_evidential_model(input_shape, nb_classes, pretrained_cnn):
     return get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding=True, evidential=True)
 
 
-def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding, evidential=False, time_aggregation='pooling', trainable_base=False):
+def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, positional_encoding, evidential=False, time_aggregation='pooling', trainable_base=False, multihead=False):
     # Use pretrained cnn_model
     # Remove all layers including flatten and avg pool
     cnn_model = get_model_remove_last_n_layers(input_shape[1:], n_remove=7, nb_classes=nb_classes, pretrained_cnn=pretrained_cnn, trainable_base=trainable_base)
@@ -359,14 +363,25 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
         raise ValueError(f"Invalid time_aggregation {time_aggregation}")
     print(f"Transformer used {time_aggregation}")
 
-    model = Dense(256, activation='relu')(model)
-    model = Dropout(0.5)(model)
-    model = Dense(64, activation='relu')(model)
-    model = Dropout(0.5)(model)
-    act_fn = 'softmax' if not evidential else 'relu'
-    model = Dense(nb_classes, activation=act_fn)(model)
-    model = Model(inputs=input_tensor, outputs=model)
-
+    if not multihead:
+        model = Dense(256, activation='relu')(model)
+        model = Dropout(0.5)(model)
+        model = Dense(64, activation='relu')(model)
+        model = Dropout(0.5)(model)
+        act_fn = 'softmax' if not evidential else 'relu'
+        model = Dense(nb_classes, activation=act_fn)(model)
+        model = Model(inputs=input_tensor, outputs=model)
+    else:
+        outputs = []
+        for i in range(nb_classes):
+            hidden = Dense(256, activation='relu', name=f'head_{i}_hidden_0')(model)
+            hidden = Dropout(0.5)(hidden)
+            hidden = Dense(64, activation='relu', name=f'head_{i}_hidden_1')(hidden)
+            hidden = Dropout(0.5)(hidden)
+            act_fn = 'softmax' if not evidential else 'relu'
+            hidden = Dense(nb_classes, activation=act_fn, name=f'head_{i}')(hidden)
+            outputs.append(hidden)
+        model = Model(inputs=input_tensor, outputs=outputs)
     return model
 
 

@@ -13,7 +13,7 @@ from .video_model import (
     get_2stream_LSTM_integrated_bidirectional_model, get_2stream_transformer_model,
     get_2D_CNN_average_evidential_model, get_CNN_LSTM_integrated_bidirectional_evidential_model,
     get_CNN_transformer_evidential_model, get_2stream_LSTM_integrated_bidirectional_evidential_model,
-    get_2D_3D_model,
+    get_2D_3D_model, get_CNN_transformer_multihead_model,
 )
 import tensorflow
 from tensorflow.keras.applications import VGG16, MobileNetV2, NASNetMobile, EfficientNetB0, ResNet50, ResNet50V2
@@ -58,6 +58,7 @@ VIDEO_MODEL_FACTORY = {
 
     # Transformer
     "CNN_transformer": get_CNN_transformer_model,
+    "CNN_transformer_multihead": get_CNN_transformer_multihead_model,
     "CNN_transformer_no_pos": get_CNN_transformer_no_pos_model,
 
     # Model Genesis
