@@ -732,33 +732,33 @@ def main():
             model = VIDEO_MODEL_FACTORY[args.architecture + '_multihead'](input_shape, 2, args.pretrained_cnn)
             model.compile(optimizer=opt, loss=losses, metrics=metrs)
 
-        else:
-            model = VIDEO_MODEL_FACTORY[args.architecture + "_multihead"](input_shape, 2, args.pretrained_cnn)
-            losses = {
-                "head_0": [tfa.losses.SigmoidFocalCrossEntropy()],
-                "head_1": [tfa.losses.SigmoidFocalCrossEntropy()],
-            }
-            metrs = {
-                "head_0": 'AUC',
-                "head_1": 'AUC',
-            }
-            model.compile(optimizer=opt, loss=losses, metrics=metrs)
-            model.load_weights('transformer_conv1d_9')
-            print('loading done')
-            new_model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, 3, args.pretrained_cnn)
-            # now copying the weight Up until where it's applicable,
-            # the 4 last layers which are the heads have to be popped from model
-            # instead a  3-class classification head is added here
-
-            new_model.compile(
-                # tfa.losses.SigmoidFocalCrossEntropy()
-                optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
-            )
-            for i in range(5):
-                wk0 = model.layers[i].get_weights()
-                new_model.layers[i].set_weights(wk0)
-            print("model source was copied into model target")
-            model = new_model
+#         else:
+#             model = VIDEO_MODEL_FACTORY[args.architecture + "_multihead"](input_shape, 2, args.pretrained_cnn)
+#             losses = {
+#                 "head_0": [tfa.losses.SigmoidFocalCrossEntropy()],
+#                 "head_1": [tfa.losses.SigmoidFocalCrossEntropy()],
+#             }
+#             metrs = {
+#                 "head_0": 'AUC',
+#                 "head_1": 'AUC',
+#             }
+#             model.compile(optimizer=opt, loss=losses, metrics=metrs)
+#             model.load_weights('transformer_conv1d_9')
+#             print('loading done')
+#             new_model = VIDEO_MODEL_FACTORY[args.architecture](input_shape, 3, args.pretrained_cnn)
+#             # now copying the weight Up until where it's applicable,
+#             # the 4 last layers which are the heads have to be popped from model
+#             # instead a  3-class classification head is added here
+# 
+#             new_model.compile(
+#                 # tfa.losses.SigmoidFocalCrossEntropy()
+#                 optimizer=opt, loss=categorical_crossentropy, metrics=['accuracy']
+#             )
+#             for i in range(5):
+#                 wk0 = model.layers[i].get_weights()
+#                 new_model.layers[i].set_weights(wk0)
+#             print("model source was copied into model target")
+#             model = new_model
 
 
         model.compile(
