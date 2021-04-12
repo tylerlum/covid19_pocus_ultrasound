@@ -339,17 +339,17 @@ def get_CNN_transformer_model_helper(input_shape, nb_classes, pretrained_cnn, po
     ### option 2
     # model = Conv1D(1024, 3, activation='relu')(model)
     # model = GlobalAveragePooling1D()(model)
-
-    model = Conv1D(1024, 5, activation='relu')(model)
-    model = GlobalAveragePooling1D()(model)
+    #
+    # model = Conv1D(1024, 5, activation='relu')(model)
+    # model = GlobalAveragePooling1D()(model)
 
     if multi_head:
         outputs = []
         for i in range(nb_classes):
-            # hidden = Conv1D(1024, 5, activation='relu')(model)
-            # hidden = GlobalAveragePooling1D()(hidden)
-            # hidden = Dropout(0.5)(hidden)
-            hidden = Dense(512, activation='relu', name='head_{}_hidden_0'.format(i))(model)
+            hidden = Conv1D(1024, 5, activation='relu')(model)
+            hidden = GlobalAveragePooling1D()(hidden)
+            hidden = Dropout(0.5)(hidden)
+            hidden = Dense(512, activation='relu', name='head_{}_hidden_0'.format(i))(hidden)
             hidden = Dropout(0.5)(hidden)
             hidden = Dense(256, activation='relu', name='head_{}_hidden_1'.format(i))(hidden)
             hidden = Dropout(0.5)(hidden)

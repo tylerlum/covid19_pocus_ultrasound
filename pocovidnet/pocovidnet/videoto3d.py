@@ -4,12 +4,12 @@ import pickle
 import os
 import math
 from tqdm import tqdm
-from pocovidnet import OPTICAL_FLOW_ALGORITHM_FACTORY, PRETRAINED_CNN_PREPROCESS_FACTORY
+from pocovidnet import OPTICAL_FLOW_ALGORITHM_FACTORY
 
 
 class Videoto3D:
 
-    def __init__(self, vid_path, width=224, height=224, depth=5, framerate=5, grayscale=False, optical_flow_type=None, pretrained_cnn='vgg16'):
+    def __init__(self, vid_path, width=224, height=224, depth=5, framerate=5, grayscale=False, optical_flow_type=None):
         self.vid_path = vid_path
         self.width = width
         self.height = height
@@ -19,7 +19,6 @@ class Videoto3D:
         self.max_vid = {"cov": 100, "pne": 100, "reg": 100}
         self.grayscale = grayscale
         self.optical_flow_type = optical_flow_type
-        self.pretrained_cnn = pretrained_cnn
 
     def save_data(self, data_3d, labels_3d, files_3d, save_path):
         print("SAVE DATA", data_3d.shape, np.max(data_3d))
@@ -52,9 +51,6 @@ class Videoto3D:
                 image = frame if not self.grayscale else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 image = cv2.resize(image, (self.width, self.height))
 
-                # Pretrained specific preprocessing
-                image = PRETRAINED_CNN_PREPROCESS_FACTORY[self.pretrained_cnn](image)
-
                 # Grab image every X frames
                 if frame_id % show_every == 0:
                     current_data.append(image)
@@ -68,9 +64,10 @@ class Videoto3D:
                     video_clips_counter += 1
 
                 # Got max number of clips for this video
-                if video_clips_counter >= self.max_vid[label]:
-                    print(f"already {video_clips_counter} clips taken from this video")
-                    break
+                # print('****', label, self.max_vid)
+                # if video_clips_counter >= self.max_vid[label]:
+                #     print(f"already {video_clips_counter} clips taken from this video")
+                #     break
 
             cap.release()
 

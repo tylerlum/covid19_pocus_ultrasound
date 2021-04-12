@@ -183,9 +183,12 @@ def main():
     test_true = [[], []]
     test_pred = [[], []]
 
-    k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+    # k_fold_cross_validation = KFold(n_splits=args.num_folds, random_state=args.random_seed, shuffle=True)
+    k_fold_cross_validation = KFold(n_splits=50, random_state=args.random_seed, shuffle=True)
 
-    for test_fold in range(args.num_folds):
+
+    # for test_fold in range(args.num_folds):
+    for test_fold in range(1):
         validation_fold = (test_fold + 1) % args.num_folds  # Select validation fold
         print()
         print("===========================")
@@ -589,7 +592,7 @@ def main():
             n_samples_0 = gt_0.shape[0]
             n_samples_1 = gt_1.shape[0]
 
-            weights_0 = [n_samples_0/(2*(n_samples_0 - np.sum(gt_0))), n_samples_0/(2*np.sum(gt_0))]
+            weights_0 = [2*n_samples_0/(2*(n_samples_0 - np.sum(gt_0))), 2*n_samples_0/(2*np.sum(gt_0))]
             weights_1 = [n_samples_1/(2*(n_samples_1 - np.sum(gt_1))), n_samples_1/(2*np.sum(gt_1))]
             print(weights_1, weights_0)
             print("compiling the multihead network")
@@ -693,7 +696,7 @@ def main():
                 batch_size=args.batch_size,
                 verbose=1,
                 shuffle=True,
-                callbacks=callbacks
+                # callbacks=callbacks
             )
         print()
         print("===========================")
@@ -746,7 +749,7 @@ def main():
                 test_pred[i].append(raw)
             if args.save_model:
                 print(f'Saving multihead model  fold {test_fold} on {FINAL_OUTPUT_DIR} ...')
-                model.save_weights(os.path.join(FINAL_OUTPUT_DIR, 'multihead_best_fold_{}'.format(test_fold)))
+                model.save(os.path.join(FINAL_OUTPUT_DIR, 'multihead_best_fold_{}'.format(test_fold)))
 
 
         if not args.mat:
