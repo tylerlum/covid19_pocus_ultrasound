@@ -16,7 +16,8 @@ class Videoto3D:
         self.depth = depth
         self.framerate = framerate
         # self.max_vid = {"cov": 10, "pne": 10, "reg": 10}
-        self.max_vid = {"cov": 100, "pne": 100, "reg": 100}
+        # self.max_vid = {"cov": 100, "pne": 100, "reg": 100}
+        self.max_vid = {1: 100, 0: 100}
         self.grayscale = grayscale
         self.optical_flow_type = optical_flow_type
         self.verbose = verbose
